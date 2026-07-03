@@ -153,6 +153,7 @@ const els = {
   connectBtn: document.querySelector("#connectBtn"),
   startBtn: document.querySelector("#startBtn"),
   resetBtn: document.querySelector("#resetBtn"),
+  browseGalleryBtn: document.querySelector("#browseGalleryBtn"),
   progress: document.querySelector("#progress"),
   progressLabel: document.querySelector("#progressLabel"),
   profile: document.querySelector("#profile"),
@@ -176,6 +177,7 @@ async function startApp() {
   bindEvents();
   restoreSavedRide();
   void reconnectSavedTrainer();
+  void initGallery();
 }
 
 function getStoredMapsApiKey() {
@@ -315,6 +317,17 @@ async function loadGpxFile(event) {
   if (!file) return;
 
   const text = await file.text();
+  applyGpxText(text);
+}
+
+async function loadGpxFromUrl(url) {
+  const response = await fetch(url);
+  const text = await response.text();
+  applyGpxText(text);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function applyGpxText(text) {
   const route = parseGpx(text);
 
   if (route.length < 2) {
@@ -334,6 +347,71 @@ async function loadGpxFile(event) {
 
   els.startBtn.disabled = false;
   els.resetBtn.disabled = false;
+}
+
+async function initGallery() {
+  try {
+    const response = await fetch("./gallery.json");
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data.routes?.length) return;
+    renderGallery(data.routes);
+  } catch {
+    // gallery.json not present — gallery stays hidden
+  }
+}
+
+function renderGallery(routes) {
+  const section = document.getElementById("gallery");
+  const grid = document.getElementById("galleryGrid");
+
+  for (const route of routes) {
+    const card = document.createElement("article");
+    card.className = "gallery-card";
+
+    if (route.screenshot) {
+      const img = document.createElement("img");
+      img.src = route.screenshot;
+      img.alt = route.title;
+      img.className = "gallery-card-img";
+      img.loading = "lazy";
+      card.appendChild(img);
+    }
+
+    const body = document.createElement("div");
+    body.className = "gallery-card-body";
+
+    const title = document.createElement("h3");
+    title.className = "gallery-card-title";
+    title.textContent = route.title;
+
+    const desc = document.createElement("p");
+    desc.className = "gallery-card-desc";
+    desc.innerHTML = route.description
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\n/g, "<br>");
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "gallery-card-btn";
+    btn.textContent = "Load ride";
+    btn.addEventListener("click", () => loadGpxFromUrl(route.gpx));
+
+    body.appendChild(title);
+    body.appendChild(desc);
+    body.appendChild(btn);
+    card.appendChild(body);
+    grid.appendChild(card);
+  }
+
+  section.hidden = false;
+  els.browseGalleryBtn.hidden = false;
+  els.browseGalleryBtn.addEventListener("click", () => {
+    section.scrollIntoView({ behavior: "smooth" });
+  });
 }
 
 function parseGpx(text) {
