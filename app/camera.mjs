@@ -49,11 +49,11 @@ export function applyCameraOffset(position, routeHeading, forwardMeters, rightMe
   return destinationPoint(position, normalizeHeading(routeHeading + offsetAngle), distance);
 }
 
-// Distance from the camera eye to a point on the ground. Map3DElement only
-// exposes the look-at center plus range/tilt/heading, so the eye position is
-// reconstructed from those: it sits `range` away from the center, pulled back
-// along the opposite heading and lifted by the tilt.
-export function cameraDistanceToPoint({ center, range, tilt, heading }, point) {
+// The camera eye position. Map3DElement only exposes the look-at center plus
+// range/tilt/heading, so the eye is reconstructed from those: it sits `range`
+// away from the center, pulled back along the opposite heading and lifted by
+// the tilt.
+export function cameraEyePosition({ center, range, tilt, heading }) {
   const safeRange = Number(range);
   const lat = Number(center?.lat);
   const lng = Number(center?.lng);
@@ -68,11 +68,40 @@ export function cameraDistanceToPoint({ center, range, tilt, heading }, point) {
     normalizeHeading((Number(heading) || 0) + 180),
     horizontalStandoff,
   );
-  const eyeAltitude = (Number(center?.altitude) || 0) + safeRange * Math.cos(toRad(safeTilt));
+  return {
+    ...eyeGround,
+    altitude: (Number(center?.altitude) || 0) + safeRange * Math.cos(toRad(safeTilt)),
+  };
+}
 
-  const horizontalDistance = haversine(eyeGround, point);
-  const verticalDistance = eyeAltitude - (Number(point.ele) || 0);
+// Distance from the camera eye to a point on the ground.
+export function cameraDistanceToPoint(camera, point) {
+  const eye = cameraEyePosition(camera);
+  if (!eye) return null;
+
+  const horizontalDistance = haversine(eye, point);
+  const verticalDistance = eye.altitude - (Number(point.ele) || 0);
   return Math.hypot(horizontalDistance, verticalDistance);
+}
+
+// Lift the camera eye by `liftMeters` while keeping the same range, by tilting
+// toward overhead — the view stays locked on the rider, the eye rises and
+// tucks in over whatever terrain was in the way. If the tilt limit cannot
+// deliver the full lift, the remainder is reported as extra look-at altitude
+// (which raises eye and center together when applied).
+export function applyCameraLift({ tiltDegrees, rangeMeters, liftMeters, minTiltDegrees = 5 }) {
+  const tilt = clamp(Number(tiltDegrees) || 0, MIN_3D_CAMERA_TILT_DEGREES, MAX_3D_CAMERA_TILT_DEGREES);
+  const range = Math.max(1, Number(rangeMeters) || 0);
+  const lift = Math.max(0, Number(liftMeters) || 0);
+  if (lift === 0) return { tilt, extraCenterAltitude: 0 };
+
+  const minTilt = clamp(Number(minTiltDegrees) || MIN_3D_CAMERA_TILT_DEGREES, MIN_3D_CAMERA_TILT_DEGREES, tilt);
+  const desiredEyeHeight = range * Math.cos(toRad(tilt)) + lift;
+  const liftedCos = Math.min(desiredEyeHeight / range, Math.cos(toRad(minTilt)));
+  return {
+    tilt: clamp(Math.acos(liftedCos) * 180 / Math.PI, minTilt, tilt),
+    extraCenterAltitude: Math.max(0, desiredEyeHeight - range * liftedCos),
+  };
 }
 
 export function measureCameraOffset(riderPosition, centerPosition, routeHeading) {

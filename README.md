@@ -36,6 +36,12 @@ If that sounds useful, contributions are very welcome — see
 - 📍 **GPX import** — drag in any route with track points and elevation.
 - 🛰️ **Photorealistic 3D map** — a forward-facing follow camera tracks your
   position and heading along the route, with a satellite minimap overlay.
+  A translucent **rider beacon** (a tall cylinder above the rider) keeps
+  your position visible behind trees and buildings, and the camera
+  automatically **lifts over terrain** when a hillside would otherwise
+  block the view, easing back down as the terrain allows. Both are
+  adjustable in the **Rendering** settings (beacon size/color/opacity,
+  terrain clearance) and remembered locally.
 - 🚴 **Bluetooth FTMS trainer control** — connects to Wahoo KICKR and other
   FTMS-compatible trainers over Web Bluetooth and pushes live simulation
   grade as you ride. Start pedaling and the map moves with your real
@@ -56,6 +62,12 @@ If that sounds useful, contributions are very welcome — see
   elevation chart. Switch between km/mi and kcal/kJ display units.
 - 🖥️ **Fullscreen ride HUD** — a distraction-free overlay for pairing with a
   smart TV or tablet on the handlebars.
+- 📷 **One-click ride screenshots** — the `📷 Screenshot` button on the map
+  saves a JPG of the exact view including the HUD, minimap, elevation
+  profile, and the Google attribution (Chrome asks to share the tab — pick
+  “This Tab”). Shots are center-cropped to a configurable aspect ratio
+  (16:9 by default) and scaled to a fixed width, so every ride screenshot
+  comes out at the same resolution — e.g. 1920×1080.
 - 🔑 **Bring your own API key** — your Google Maps key is typed into the app
   and saved only in your browser's `localStorage`; it's never sent anywhere
   but Google.
@@ -91,7 +103,8 @@ supports bicycle routing, displays an elevation profile, and exports routes
 as GPX files ready to load into GPX Rider.
 
 1. Open the page in Chrome and paste in your Google Maps API key (saved
-   locally, one-time setup).
+   locally, one-time setup). The settings dialog opens by itself on first
+   run; later it's behind the ⚙ icon at the top right.
 2. Choose a GPX file with track points and elevation, or pick one from the
    ride gallery.
 3. Click `Connect KICKR` and select your trainer. Optionally click
@@ -107,9 +120,13 @@ as GPX files ready to load into GPX Rider.
    the ride as a `.fit` file tagged as a virtual ride for Strava, Garmin
    Connect, etc.; afterwards the app offers to clear the collected data.
 7. The map follows the route with a forward-facing camera based on GPX
-   bearing; tune `Zoom`, `Camera angle`, and `Camera behind` to taste —
-   those settings are remembered locally, as are the km/mi and kcal/kJ
-   display-unit switches.
+   bearing. Everything configurable lives in the ⚙ settings dialog: camera
+   tuning (`Zoom`, `Camera angle`, `Camera behind`), km/mi and kcal/kJ
+   display units, the trainer grade update interval, and the **Rendering**
+   section — the rider beacon (the translucent cylinder that marks your
+   position above the trees — on/off, diameter, height, opacity, color)
+   and the *keep camera above terrain* behavior with its clearance margin.
+   All of it is remembered locally.
 
 ## Hosting your own copy
 
@@ -145,6 +162,10 @@ own.
 - Rider and bike weight are normally configured in the trainer ecosystem
   rather than sent with the FTMS grade command; this app currently sends
   slope, wind, rolling resistance, and drag-area values.
+- Camera terrain avoidance estimates the ground from the route's own
+  elevation points (no Elevation API calls), so it works best where the
+  road itself climbs the hill — switchbacks, mountain passes. An off-route
+  ridge with no track points nearby is not detected.
 - This is a young project. Test resistance changes at low speed and keep
   the bike/trainer clear before a real workout.
 
