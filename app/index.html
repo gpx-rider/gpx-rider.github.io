@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GPX Rider</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="map-pane">
+        <div id="mapViewport" class="map-viewport">
+          <div id="map" aria-label="Route map"></div>
+          <div id="minimap" aria-label="Minimap showing rider position on the route"></div>
+          <button id="fullscreenBtn" type="button" class="fullscreen-btn">⛶ Fullscreen</button>
+
+          <div id="fullscreenOverlayBottom" class="fullscreen-overlay-bottom" hidden>
+            <div id="fullscreenHud" class="fullscreen-hud" aria-live="polite">
+              <div>
+                <span>Power</span>
+                <strong id="hudPowerStat">--</strong>
+              </div>
+              <div>
+                <span>Speed</span>
+                <strong id="hudSpeedStat">--</strong>
+              </div>
+              <div>
+                <span>Grade</span>
+                <strong id="hudGradeStat">--</strong>
+              </div>
+              <div>
+                <span>Ridden</span>
+                <strong id="hudRiddenStat">--</strong>
+              </div>
+              <div>
+                <span>Remaining</span>
+                <strong id="hudRemainingStat">--</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+        <canvas id="profile" aria-label="Elevation profile"></canvas>
+      </section>
+
+      <aside class="control-pane">
+        <header>
+          <p class="eyebrow">GPX Rider</p>
+          <h1>Route trainer</h1>
+        </header>
+
+        <div class="api-key-control">
+          <label for="mapsApiKeyInput">Google Maps API key</label>
+          <div class="api-key-row">
+            <input id="mapsApiKeyInput" type="text" autocomplete="off" spellcheck="false" placeholder="Paste your Google Maps API key">
+            <button id="mapsApiKeySaveBtn" type="button">Save</button>
+          </div>
+          <p class="api-key-hint">
+            Stored only in this browser's local storage. Needs the Maps JavaScript API and Photorealistic 3D Maps enabled.
+          </p>
+        </div>
+
+        <label class="file-picker">
+          <input id="gpxFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml">
+          <span>Choose GPX</span>
+        </label>
+
+        <div class="stats-grid" aria-live="polite">
+          <div>
+            <span>Distance</span>
+            <strong id="distanceStat">--</strong>
+          </div>
+          <div>
+            <span>Grade</span>
+            <strong id="gradeStat">--</strong>
+          </div>
+          <div>
+            <span>Altitude</span>
+            <strong id="altitudeStat">--</strong>
+          </div>
+          <div>
+            <span>Power</span>
+            <strong id="powerStat">--</strong>
+          </div>
+          <div>
+            <span>Speed</span>
+            <strong id="speedStat">--</strong>
+          </div>
+          <div>
+            <span>Trainer</span>
+            <strong id="trainerStat">Idle</strong>
+          </div>
+        </div>
+
+        <div class="speed-control">
+          <label for="speedInput">Simulation speed</label>
+          <input id="speedInput" type="range" min="8" max="55" step="1" value="24">
+          <output id="speedOutput" for="speedInput">24 km/h</output>
+        </div>
+
+        <div class="speed-control">
+          <label for="gradeIntervalInput">Trainer grade update interval</label>
+          <input id="gradeIntervalInput" type="range" min="1" max="5" step="1" value="2">
+          <output id="gradeIntervalOutput" for="gradeIntervalInput">2 s</output>
+        </div>
+
+        <div class="camera-controls">
+          <div>
+            <label for="cameraZoomInput">Zoom</label>
+            <input id="cameraZoomInput" type="range" min="0.5" max="3" step="0.1" value="1">
+            <output id="cameraZoomOutput" for="cameraZoomInput">1.0x</output>
+          </div>
+          <div>
+            <label for="cameraAngleInput">Camera angle</label>
+            <input id="cameraAngleInput" type="range" min="25" max="80" step="1" value="67">
+            <output id="cameraAngleOutput" for="cameraAngleInput">67 deg</output>
+          </div>
+          <div>
+            <label for="cameraBehindInput">Camera behind</label>
+            <input id="cameraBehindInput" type="range" min="20" max="2000" step="20" value="300">
+            <output id="cameraBehindOutput" for="cameraBehindInput">300 m</output>
+          </div>
+          <label class="camera-center-toggle">
+            <input id="centerRiderInput" type="checkbox" checked>
+            <span>Keep rider centered</span>
+          </label>
+          <button id="resetCameraBtn" type="button">Reset camera</button>
+          <output id="cameraReadout" class="camera-readout" aria-live="polite">Camera --</output>
+        </div>
+
+        <div class="button-row">
+          <button id="connectBtn" type="button">Connect KICKR</button>
+          <button id="startBtn" type="button" disabled>Start</button>
+          <button id="resetBtn" type="button" disabled>Reset</button>
+        </div>
+
+        <div class="progress-wrap">
+          <progress id="progress" max="1" value="0"></progress>
+          <span id="progressLabel">Load a route to begin</span>
+        </div>
+
+        <details>
+          <summary>Saved ride</summary>
+          <p>
+            The last GPX route, ride position, and fallback speed are saved in
+            this browser. Chrome may also reconnect to a previously permitted
+            trainer when Web Bluetooth allows it.
+          </p>
+        </details>
+      </aside>
+    </main>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
