@@ -38,16 +38,30 @@ If that sounds useful, contributions are very welcome — see
   position and heading along the route, with a satellite minimap overlay.
 - 🚴 **Bluetooth FTMS trainer control** — connects to Wahoo KICKR and other
   FTMS-compatible trainers over Web Bluetooth and pushes live simulation
-  grade as you ride.
+  grade as you ride. Start pedaling and the map moves with your real
+  trainer speed; stop pedaling and it stops.
+- ❤️ **BLE heart rate straps** — pair any standard Bluetooth heart-rate
+  sensor (Polar, Garmin, Wahoo TICKR, …) and see live BPM in the stats and
+  ride HUD.
+- 📥 **FIT export** — every ride is recorded transparently in your browser
+  (distance, time, GPS track, power, heart rate, calories) and can be
+  downloaded at any time as a `.fit` file correctly tagged as a *virtual
+  ride*, ready for Strava, Garmin Connect, or intervals.icu. After the
+  download the app offers to clear the collected data.
+- ▶️ **Simulation mode** — a "Start simulation" button rides the route at a
+  chosen slider speed for previewing without pedaling; real pedaling
+  automatically takes over and stops the simulation.
 - 📈 **Live stats & elevation profile** — distance, grade, altitude, power,
-  and speed, plus a full-route elevation chart.
+  speed, heart rate, and calories (from the trainer), plus a full-route
+  elevation chart. Switch between km/mi and kcal/kJ display units.
 - 🖥️ **Fullscreen ride HUD** — a distraction-free overlay for pairing with a
   smart TV or tablet on the handlebars.
 - 🔑 **Bring your own API key** — your Google Maps key is typed into the app
   and saved only in your browser's `localStorage`; it's never sent anywhere
   but Google.
-- 💾 **Remembers your session** — last route, ride progress, fallback speed,
-  camera settings, and previously paired trainer all persist locally.
+- 💾 **Remembers your session** — last route, ride progress, recorded ride
+  data, fallback speed, camera settings, and previously paired trainer and
+  heart-rate sensor all persist locally.
 - 🧩 **No build step** — plain HTML/CSS/JS ES modules, no bundler, no
   framework, no `node_modules` to run it.
 
@@ -78,15 +92,24 @@ as GPX files ready to load into GPX Rider.
 
 1. Open the page in Chrome and paste in your Google Maps API key (saved
    locally, one-time setup).
-2. Choose a GPX file with track points and elevation.
-3. Click `Connect KICKR`, select your trainer, then hit `Start`.
-4. GPX Rider converts local route grade into FTMS indoor-bike simulation
-   parameters in real time.
-5. Once the trainer reports FTMS Indoor Bike Data, the app shows live power
-   and speed and uses trainer speed to advance you along the route.
-6. The map follows the route with a forward-facing camera based on GPX
+2. Choose a GPX file with track points and elevation, or pick one from the
+   ride gallery.
+3. Click `Connect KICKR` and select your trainer. Optionally click
+   `Connect HR` to pair a Bluetooth heart-rate strap.
+4. Just start pedaling — the map follows your real trainer speed and stops
+   when you stop. GPX Rider converts local route grade into FTMS
+   indoor-bike simulation parameters in real time.
+5. Not on the bike? `Start simulation` rides the route at the slider speed
+   instead; pedaling automatically stops the simulation and takes over.
+6. While you ride, the **Ride recording** panel shows exactly what has been
+   collected (distance, time, track points, heart rate, calories) — all of
+   it stored only in your browser. Hit `Download FIT` at any time to export
+   the ride as a `.fit` file tagged as a virtual ride for Strava, Garmin
+   Connect, etc.; afterwards the app offers to clear the collected data.
+7. The map follows the route with a forward-facing camera based on GPX
    bearing; tune `Zoom`, `Camera angle`, and `Camera behind` to taste —
-   those settings are remembered locally.
+   those settings are remembered locally, as are the km/mi and kcal/kJ
+   display-unit switches.
 
 ## Hosting your own copy
 
@@ -107,10 +130,15 @@ own.
   JavaScript API** and the **Photorealistic 3D Maps** feature for your
   Google Cloud project, or the map fails to load instead of falling back to
   another renderer.
-- Route and ride progress are stored in browser `localStorage`. Very large
-  GPX files may exceed browser storage limits.
-- Trainer reconnect relies on Chrome's remembered Web Bluetooth devices. If
-  Chrome doesn't expose the saved device, click `Connect KICKR` again.
+- Route, ride progress, and the recorded ride data are stored in browser
+  `localStorage`. Very large GPX files or very long rides may exceed
+  browser storage limits (recording then continues in memory only).
+- Calories are shown and exported only if the trainer reports FTMS
+  Expended Energy; heart rate comes from a paired strap or, as a fallback,
+  from the trainer's own HR field.
+- Trainer and heart-rate reconnect rely on Chrome's remembered Web
+  Bluetooth devices. If Chrome doesn't expose the saved device, click
+  `Connect KICKR` / `Connect HR` again.
 - Target hardware is FTMS-compatible trainers (e.g. Wahoo KICKR). Older
   firmware or proprietary-only control paths may need trainer-specific
   protocol work.

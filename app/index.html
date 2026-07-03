@@ -25,6 +25,10 @@
                 <strong id="hudSpeedStat">--</strong>
               </div>
               <div>
+                <span>HR</span>
+                <strong id="hudHeartRateStat">--</strong>
+              </div>
+              <div>
                 <span>Grade</span>
                 <strong id="hudGradeStat">--</strong>
               </div>
@@ -91,6 +95,31 @@
             <span>Trainer</span>
             <strong id="trainerStat">Idle</strong>
           </div>
+          <div>
+            <span>Heart rate</span>
+            <strong id="heartRateStat">--</strong>
+          </div>
+          <div>
+            <span>Calories</span>
+            <strong id="caloriesStat">--</strong>
+          </div>
+        </div>
+
+        <div class="unit-toggles">
+          <label>
+            <span>Distance units</span>
+            <select id="distanceUnitSelect">
+              <option value="metric">km</option>
+              <option value="imperial">mi</option>
+            </select>
+          </label>
+          <label>
+            <span>Energy units</span>
+            <select id="energyUnitSelect">
+              <option value="kcal">kcal</option>
+              <option value="kj">kJ</option>
+            </select>
+          </label>
         </div>
 
         <div class="speed-control">
@@ -131,7 +160,11 @@
 
         <div class="button-row">
           <button id="connectBtn" type="button">Connect KICKR</button>
-          <button id="startBtn" type="button" disabled>Start</button>
+          <button id="connectHrBtn" type="button">Connect HR</button>
+        </div>
+
+        <div class="button-row">
+          <button id="startBtn" type="button" disabled>Start simulation</button>
           <button id="resetBtn" type="button" disabled>Reset</button>
         </div>
 
@@ -140,12 +173,32 @@
           <span id="progressLabel">Load a route to begin</span>
         </div>
 
+        <div class="ride-recording">
+          <h2>Ride recording</h2>
+          <p class="ride-recording-hint">
+            Collected automatically while you ride and stored in this browser,
+            so you can see exactly what the FIT download will contain.
+          </p>
+          <dl class="ride-recording-stats">
+            <div><dt>Distance</dt><dd id="recDistanceStat">--</dd></div>
+            <div><dt>Riding time</dt><dd id="recTimeStat">--</dd></div>
+            <div><dt>Track points</dt><dd id="recPointsStat">0</dd></div>
+            <div><dt>Heart rate</dt><dd id="recHeartRateStat">--</dd></div>
+            <div><dt>Calories</dt><dd id="recCaloriesStat">--</dd></div>
+          </dl>
+          <div class="button-row">
+            <button id="downloadFitBtn" type="button" disabled>Download FIT</button>
+            <button id="clearRideDataBtn" type="button" disabled>Clear data</button>
+          </div>
+        </div>
+
         <details>
           <summary>Saved ride</summary>
           <p>
-            The last GPX route, ride position, and fallback speed are saved in
-            this browser. Chrome may also reconnect to a previously permitted
-            trainer when Web Bluetooth allows it.
+            The last GPX route, ride position, fallback speed, and the ride
+            recording above are saved in this browser. Chrome may also
+            reconnect to a previously permitted trainer or heart rate sensor
+            when Web Bluetooth allows it.
           </p>
         </details>
       </aside>
