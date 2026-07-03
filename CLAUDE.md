@@ -37,6 +37,7 @@ module:
 | `app/recorder.mjs` | Ride "bucket": accumulates samples while moving, persists to localStorage |
 | `app/fit.mjs` | Minimal FIT activity encoder — tags rides as sport=cycling, sub_sport=virtual_activity (tested) |
 | `app/units.mjs` | km/mi + kcal/kJ display formatting; internal state is always metric (tested) |
+| `app/screenshot.mjs` | One-click JPG of the map viewport via tab capture (`getDisplayMedia`) — the 3D map canvas sits in a closed shadow root and cannot be read directly |
 | `app/gallery.mjs` | Ride gallery cards from `app/gallery.json` |
 | `app/storage.mjs` | localStorage JSON helpers |
 
@@ -74,7 +75,16 @@ state and talk back to `app.js` only through `init*()` callbacks.
   dot use `RELATIVE_TO_GROUND` a couple of meters up, with the path
   densified (`densifyRoute`) so elevated segments follow the terrain. The
   rider dot's ground radius scales with the camera-eye distance
-  (`cameraDistanceToPoint`) to keep a constant apparent size.
+  (`cameraDistanceToPoint`) to keep a constant apparent size. The rider
+  beacon is a real-world-sized extruded `Polygon3DElement` cylinder with
+  `drawsOccludedSegments` so trees never hide the rider's position.
+- **Camera terrain avoidance** lifts the follow camera when its eye would
+  sink below terrain + clearance and eases it back down as terrain allows
+  (`currentTerrainLift` in `app.js`; pure math in `camera.mjs`'s
+  `applyCameraLift`). The terrain estimate is `maxElevationNear` over the
+  route's own elevation points — deliberately **not** the Google Elevation
+  API, which would cost real money at follow-camera query rates. Keep it
+  that way.
 
 ## Persistence (localStorage keys)
 

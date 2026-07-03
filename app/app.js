@@ -4,15 +4,17 @@
 // the simulation slider.
 
 import {
+  applyCameraLift,
   cameraDistanceToPoint,
+  cameraEyePosition,
   computeFollowCamera,
   measureCameraOffset,
   normalizeHeading,
   rangeForBehind,
   signedHeadingDelta,
 } from "./camera.mjs";
-import { bearing, clamp, destinationPoint, haversine, roundCoordinate, toRad } from "./geo.mjs";
-import { densifyRoute, enrichRoute, gradeAt, interpolateRoutePoint, parseGpx, routeTotalDistance } from "./route.mjs";
+import { bearing, clamp, destinationPoint, haversine, lerp, roundCoordinate, toRad } from "./geo.mjs";
+import { densifyRoute, enrichRoute, gradeAt, interpolateRoutePoint, maxElevationNear, parseGpx, routeTotalDistance } from "./route.mjs";
 import { distanceAtProfileX, drawEmptyProfile, drawProfile } from "./profile.mjs";
 import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatSpeed } from "./units.mjs";
 import { readJson, removeStored, writeJson } from "./storage.mjs";
@@ -40,6 +42,7 @@ import {
 } from "./recorder.mjs";
 import { encodeFitActivity } from "./fit.mjs";
 import { initGallery } from "./gallery.mjs";
+import { captureViewportJpeg, parseAspectRatio, screenshotSupported } from "./screenshot.mjs";
 
 const MAPS_API_KEY_STORAGE_KEY = "gpx-rider:maps-api-key";
 const SETTINGS_STORAGE_KEY = "gpx-rider:settings";
@@ -50,13 +53,45 @@ const DEFAULT_CAMERA_ANGLE_DEGREES = 75;
 const DEFAULT_CAMERA_BEHIND_METERS = 800;
 const HEADING_SAMPLE_METERS = 4;
 const INTERACTION_SETTLE_MS = 600;
-const CAMERA_ZOOM_MIN = 0.05;
-const CAMERA_ZOOM_MAX = 20;
-const CAMERA_PAN_LIMIT_METERS = 5000;
-const CAMERA_CENTER_ALTITUDE_LIMIT_METERS = 3000;
+// Deliberately huge bounds: they exist only to keep corrupted saved settings
+// from wedging the camera, not to restrict framing — wide shots for
+// screenshots need extreme zoom-outs and pans.
+const CAMERA_ZOOM_MIN = 0.001;
+const CAMERA_ZOOM_MAX = 1000;
+const CAMERA_PAN_LIMIT_METERS = 100000;
+const CAMERA_CENTER_ALTITUDE_LIMIT_METERS = 20000;
 const CAMERA_TILT_MIN = 1;
 const CAMERA_TILT_MAX = 89;
 const DEFAULT_GRADE_INTERVAL_SECONDS = 2;
+
+// Rider beacon: a translucent extruded cylinder standing on the rider so the
+// position stays visible when trees or buildings hide the ground dot.
+const DEFAULT_BEACON_ENABLED = true;
+const DEFAULT_BEACON_DIAMETER_METERS = 5;
+const DEFAULT_BEACON_HEIGHT_METERS = 20;
+const DEFAULT_BEACON_OPACITY = 0.35;
+const DEFAULT_BEACON_COLOR = "#ffffff";
+const BEACON_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+
+// Camera terrain avoidance: lift the camera when the eye would sink into a
+// hillside (typically when the route turns in front of rising terrain), then
+// ease back down once the terrain allows. Route elevations within
+// TERRAIN_SAMPLE_RADIUS_METERS of the eye act as the terrain estimate — no
+// Elevation API calls, which would cost real money at follow-camera rates.
+const DEFAULT_TERRAIN_AVOID_ENABLED = true;
+const DEFAULT_TERRAIN_CLEARANCE_METERS = 20;
+
+// Ride screenshots come out at a constant size so gallery shots line up.
+const DEFAULT_SCREENSHOT_ASPECT = "16:9";
+const DEFAULT_SCREENSHOT_WIDTH = 1920;
+const SCREENSHOT_WIDTH_MIN = 640;
+const SCREENSHOT_WIDTH_MAX = 3840;
+const TERRAIN_SAMPLE_RADIUS_METERS = 120;
+const TERRAIN_LIFT_RECOMPUTE_MS = 250;
+// Rise fast enough to clear an approaching hill, settle back slowly so the
+// camera does not pump up and down on rolling terrain.
+const TERRAIN_LIFT_RISE_TAU_SECONDS = 0.5;
+const TERRAIN_LIFT_FALL_TAU_SECONDS = 4;
 
 // Pedaling detection with hysteresis so a spinning-down flywheel does not
 // flap the movement source on/off around a single threshold.
@@ -84,10 +119,10 @@ const state = {
   tickTimeout: null,
   lastTick: 0,
   line: null,
-  routeOutline: null,
   riderDot: null,
   riderDotOutline: null,
   riderHalo: null,
+  riderBeacon: null,
   map: null,
   mapProvider: null,
   maps3d: null,
@@ -116,12 +151,29 @@ const state = {
   cameraOffsetRightMeters: 0,
   cameraCenterAltitudeOffsetMeters: 0,
   centerRider: true,
+  screenshotInProgress: false,
+  screenshotAspect: DEFAULT_SCREENSHOT_ASPECT,
+  screenshotWidth: DEFAULT_SCREENSHOT_WIDTH,
+  beaconEnabled: DEFAULT_BEACON_ENABLED,
+  beaconDiameterMeters: DEFAULT_BEACON_DIAMETER_METERS,
+  beaconHeightMeters: DEFAULT_BEACON_HEIGHT_METERS,
+  beaconOpacity: DEFAULT_BEACON_OPACITY,
+  beaconColor: DEFAULT_BEACON_COLOR,
+  terrainAvoidEnabled: DEFAULT_TERRAIN_AVOID_ENABLED,
+  terrainClearanceMeters: DEFAULT_TERRAIN_CLEARANCE_METERS,
+  cameraLiftMeters: 0,
+  cameraLiftTargetMeters: 0,
+  lastLiftComputeMs: 0,
+  lastLiftSmoothMs: 0,
   mapFullscreen: false,
   distanceUnits: "metric",
   energyUnits: "kcal",
 };
 
 const els = {
+  settingsBtn: document.querySelector("#settingsBtn"),
+  settingsDialog: document.querySelector("#settingsDialog"),
+  settingsCloseBtn: document.querySelector("#settingsCloseBtn"),
   mapsApiKeyInput: document.querySelector("#mapsApiKeyInput"),
   mapsApiKeySaveBtn: document.querySelector("#mapsApiKeySaveBtn"),
   gpxFile: document.querySelector("#gpxFile"),
@@ -148,6 +200,18 @@ const els = {
   cameraReadout: document.querySelector("#cameraReadout"),
   centerRiderInput: document.querySelector("#centerRiderInput"),
   resetCameraBtn: document.querySelector("#resetCameraBtn"),
+  beaconEnabledInput: document.querySelector("#beaconEnabledInput"),
+  beaconDiameterInput: document.querySelector("#beaconDiameterInput"),
+  beaconDiameterOutput: document.querySelector("#beaconDiameterOutput"),
+  beaconHeightInput: document.querySelector("#beaconHeightInput"),
+  beaconHeightOutput: document.querySelector("#beaconHeightOutput"),
+  beaconOpacityInput: document.querySelector("#beaconOpacityInput"),
+  beaconOpacityOutput: document.querySelector("#beaconOpacityOutput"),
+  beaconColorInput: document.querySelector("#beaconColorInput"),
+  terrainAvoidInput: document.querySelector("#terrainAvoidInput"),
+  terrainClearanceInput: document.querySelector("#terrainClearanceInput"),
+  terrainClearanceOutput: document.querySelector("#terrainClearanceOutput"),
+  resetRenderingBtn: document.querySelector("#resetRenderingBtn"),
   connectBtn: document.querySelector("#connectBtn"),
   connectHrBtn: document.querySelector("#connectHrBtn"),
   startBtn: document.querySelector("#startBtn"),
@@ -158,6 +222,9 @@ const els = {
   mapViewport: document.querySelector("#mapViewport"),
   minimap: document.querySelector("#minimap"),
   fullscreenBtn: document.querySelector("#fullscreenBtn"),
+  screenshotBtn: document.querySelector("#screenshotBtn"),
+  screenshotAspectSelect: document.querySelector("#screenshotAspectSelect"),
+  screenshotWidthSelect: document.querySelector("#screenshotWidthSelect"),
   fullscreenOverlayBottom: document.querySelector("#fullscreenOverlayBottom"),
   hudPowerStat: document.querySelector("#hudPowerStat"),
   hudSpeedStat: document.querySelector("#hudSpeedStat"),
@@ -217,7 +284,9 @@ function saveMapsApiKey() {
 async function initMap() {
   const apiKey = getStoredMapsApiKey();
   if (!apiKey) {
-    updateProgressLabel("Add your Google Maps API key above to load the map.");
+    updateProgressLabel("Add your Google Maps API key in Settings (⚙, top right) to load the map.");
+    // First run: the key input now lives in the settings dialog, so open it.
+    els.settingsDialog.showModal();
     return;
   }
 
@@ -277,6 +346,11 @@ async function initGooglePhotorealistic3DMap() {
     mode: MapMode?.SATELLITE,
     range: camera.range,
     tilt: camera.tilt,
+    // Hide the default UI buttons (compass, zoom); gestures still work and
+    // the view stays clean for riding and screenshots. Never touch
+    // googleLogoDisabled/legalNoticesDisabled — attribution must stay
+    // visible under the Google Maps ToS.
+    defaultUIDisabled: true,
   });
   mapEl.append(state.map);
   bindManualCameraCapture();
@@ -300,6 +374,12 @@ function loadGoogleMaps(apiKey) {
 }
 
 function bindEvents() {
+  els.settingsBtn.addEventListener("click", () => els.settingsDialog.showModal());
+  els.settingsCloseBtn.addEventListener("click", () => els.settingsDialog.close());
+  els.settingsDialog.addEventListener("click", (event) => {
+    // A click on the dialog element itself (not its content) is the backdrop.
+    if (event.target === els.settingsDialog) els.settingsDialog.close();
+  });
   els.mapsApiKeySaveBtn.addEventListener("click", saveMapsApiKey);
   els.mapsApiKeyInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -320,6 +400,14 @@ function bindEvents() {
   els.cameraBehindInput.addEventListener("input", updateCameraSettingsFromControls);
   els.centerRiderInput.addEventListener("change", updateCenterRiderFromControl);
   els.resetCameraBtn.addEventListener("click", resetCameraToDefaults);
+  els.beaconEnabledInput.addEventListener("change", updateRenderingSettingsFromControls);
+  els.beaconDiameterInput.addEventListener("input", updateRenderingSettingsFromControls);
+  els.beaconHeightInput.addEventListener("input", updateRenderingSettingsFromControls);
+  els.beaconOpacityInput.addEventListener("input", updateRenderingSettingsFromControls);
+  els.beaconColorInput.addEventListener("input", updateRenderingSettingsFromControls);
+  els.terrainAvoidInput.addEventListener("change", updateRenderingSettingsFromControls);
+  els.terrainClearanceInput.addEventListener("input", updateRenderingSettingsFromControls);
+  els.resetRenderingBtn.addEventListener("click", resetRenderingToDefaults);
   els.connectBtn.addEventListener("click", connectTrainer);
   els.connectHrBtn.addEventListener("click", connectHeartRate);
   els.startBtn.addEventListener("click", toggleSimulation);
@@ -330,10 +418,16 @@ function bindEvents() {
   els.profile.addEventListener("mouseleave", handleProfileLeave);
   els.profile.addEventListener("click", handleProfileClick);
   els.fullscreenBtn.addEventListener("click", toggleMapFullscreen);
+  els.screenshotBtn.addEventListener("click", takeMapScreenshot);
+  if (!screenshotSupported()) els.screenshotBtn.hidden = true;
+  els.screenshotAspectSelect.addEventListener("change", updateScreenshotSettingsFromControls);
+  els.screenshotWidthSelect.addEventListener("change", updateScreenshotSettingsFromControls);
   document.addEventListener("fullscreenchange", handleFullscreenChange);
   document.addEventListener("visibilitychange", handleVisibilityChange);
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && state.mapFullscreen) exitMapFullscreen();
+    // When the settings dialog is open, Escape closes it (natively) and must
+    // not also kick the rider out of fullscreen.
+    if (event.key === "Escape" && state.mapFullscreen && !els.settingsDialog.open) exitMapFullscreen();
   });
   window.addEventListener("beforeunload", () => {
     saveRide();
@@ -451,20 +545,17 @@ function renderGoogle3DRoute(currentPoint) {
   }));
 
   if (Polyline3DElement) {
-    // The outline sits a touch lower than the line so the two never z-fight.
-    state.routeOutline = new Polyline3DElement({
-      altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
-      path: pathAt(ROUTE_LINE_ALTITUDE_METERS - 0.4),
-      strokeColor: "rgba(255, 255, 255, 0.72)",
-      strokeWidth: 14,
-    });
-    state.map.append(state.routeOutline);
-
+    // One polyline with the built-in casing (outerColor/outerWidth), never a
+    // second stacked line for the outline: separate geometries a fraction of
+    // a meter apart z-fight once the camera is far enough that their altitude
+    // gap falls below depth precision, leaving only the outline visible.
     state.line = new Polyline3DElement({
       altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
       path: pathAt(ROUTE_LINE_ALTITUDE_METERS),
       strokeColor: "#0a84ff",
-      strokeWidth: 9,
+      strokeWidth: 14,
+      outerColor: "rgba(255, 255, 255, 0.72)",
+      outerWidth: 0.35,
     });
     state.map.append(state.line);
   }
@@ -475,6 +566,8 @@ function renderGoogle3DRoute(currentPoint) {
 
 function renderRiderDot(point) {
   const { AltitudeMode, Polygon3DElement, Polyline3DElement } = state.maps3d;
+
+  renderRiderBeacon();
 
   if (Polygon3DElement) {
     const styles = [
@@ -513,6 +606,33 @@ function renderRiderDot(point) {
   state.map.append(state.riderDot);
 }
 
+function renderRiderBeacon() {
+  if (state.riderBeacon) {
+    state.riderBeacon.remove();
+    state.riderBeacon = null;
+  }
+
+  const { AltitudeMode, Polygon3DElement } = state.maps3d ?? {};
+  if (!state.beaconEnabled || !Polygon3DElement || !state.map) return;
+
+  // Extruded from the ground up to the path altitude, with occluded segments
+  // drawn so nearby trees and buildings never hide the rider's position.
+  state.riderBeacon = new Polygon3DElement({
+    altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
+    extruded: true,
+    drawsOccludedSegments: true,
+    fillColor: beaconFillColor(),
+    strokeWidth: 0,
+  });
+  state.map.append(state.riderBeacon);
+}
+
+function beaconFillColor() {
+  const hex = BEACON_COLOR_PATTERN.test(state.beaconColor) ? state.beaconColor : DEFAULT_BEACON_COLOR;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, ${state.beaconOpacity})`;
+}
+
 function riderDotRadiusMeters(position) {
   // The dot is ground geometry sized in meters, so to read like a fixed-size
   // GPS marker its radius must track the camera-eye distance to the dot
@@ -529,17 +649,17 @@ function riderDotRadiusMeters(position) {
 }
 
 function clearRouteFromMap() {
-  if (state.routeOutline) state.routeOutline.remove();
   if (state.line) state.line.remove();
   if (state.riderHalo) state.riderHalo.remove();
   if (state.riderDotOutline) state.riderDotOutline.remove();
   if (state.riderDot) state.riderDot.remove();
+  if (state.riderBeacon) state.riderBeacon.remove();
 
-  state.routeOutline = null;
   state.line = null;
   state.riderHalo = null;
   state.riderDotOutline = null;
   state.riderDot = null;
+  state.riderBeacon = null;
   state.lastRiderDot = null;
 }
 
@@ -947,6 +1067,17 @@ function updateRiderDot(position) {
   }
   state.lastRiderDot = { lat: position.lat, lng: position.lng, radius };
 
+  if (state.riderBeacon) {
+    // Real-world-sized geometry, so a coarse circle keeps the extruded
+    // cylinder cheap to re-tessellate as it follows the rider.
+    state.riderBeacon.path = riderCircleCoordinates(
+      position,
+      state.beaconDiameterMeters / 2,
+      state.beaconHeightMeters,
+      15,
+    );
+  }
+
   if (state.riderHalo) {
     // Stacked a little apart above the ground so the three fills don't z-fight.
     state.riderHalo.path = riderCircleCoordinates(position, radius * 2.2, 0.5);
@@ -959,9 +1090,9 @@ function updateRiderDot(position) {
   if (state.riderDot) state.riderDot.path = riderCircleCoordinates(position, radius, 1.2);
 }
 
-function riderCircleCoordinates(center, radiusMeters, altitude = 0) {
+function riderCircleCoordinates(center, radiusMeters, altitude = 0, stepDegrees = 6) {
   const points = [];
-  for (let angle = 0; angle < 360; angle += 6) {
+  for (let angle = 0; angle < 360; angle += stepDegrees) {
     const point = destinationPoint(center, angle, radiusMeters);
     points.push({ ...point, altitude });
   }
@@ -989,10 +1120,85 @@ function updateMapCamera(position) {
   // range/tilt Google reports back is measured against that buried point.
   const groundAltitude = Number(position.ele) || 0;
   const centerAltitude = Math.max(0, groundAltitude + state.cameraCenterAltitudeOffsetMeters);
-  state.map.center = { lat: camera.center.lat, lng: camera.center.lng, altitude: centerAltitude };
+
+  let tilt = camera.tilt;
+  let liftedCenterAltitude = centerAltitude;
+  const liftMeters = currentTerrainLift(camera, centerAltitude);
+  if (liftMeters > 0) {
+    const lifted = applyCameraLift({
+      tiltDegrees: camera.tilt,
+      rangeMeters: camera.range,
+      liftMeters,
+    });
+    tilt = lifted.tilt;
+    liftedCenterAltitude = centerAltitude + lifted.extraCenterAltitude;
+  }
+
+  state.map.center = { lat: camera.center.lat, lng: camera.center.lng, altitude: liftedCenterAltitude };
   state.map.heading = camera.heading;
   state.map.range = camera.range;
-  state.map.tilt = camera.tilt;
+  state.map.tilt = tilt;
+}
+
+// --- Terrain avoidance ---------------------------------------------------------
+//
+// The follow camera can end up inside a hillside when the rider turns in
+// front of rising terrain. Check the ground under the camera eye (and the
+// midpoint of the view ray) against nearby route elevations, and when the eye
+// would dip below terrain + clearance, lift the camera; the lift eases back to
+// zero once the terrain allows. The lift is always computed from the
+// configured (unlifted) camera, so it never feeds back on itself.
+
+function currentTerrainLift(camera, centerAltitude) {
+  if (!state.terrainAvoidEnabled) {
+    state.cameraLiftMeters = 0;
+    state.cameraLiftTargetMeters = 0;
+    return 0;
+  }
+
+  const now = performance.now();
+  if (now - state.lastLiftComputeMs >= TERRAIN_LIFT_RECOMPUTE_MS) {
+    state.lastLiftComputeMs = now;
+    state.cameraLiftTargetMeters = computeTerrainLiftTarget(camera, centerAltitude);
+  }
+
+  // Time-based smoothing, since frames tick at 60 fps in front and ~2 fps in
+  // a hidden tab.
+  const dt = clamp((now - state.lastLiftSmoothMs) / 1000, 0, 1);
+  state.lastLiftSmoothMs = now;
+  const tau = state.cameraLiftTargetMeters > state.cameraLiftMeters
+    ? TERRAIN_LIFT_RISE_TAU_SECONDS
+    : TERRAIN_LIFT_FALL_TAU_SECONDS;
+  state.cameraLiftMeters += (state.cameraLiftTargetMeters - state.cameraLiftMeters) * (1 - Math.exp(-dt / tau));
+  if (state.cameraLiftMeters < 0.5 && state.cameraLiftTargetMeters === 0) state.cameraLiftMeters = 0;
+  return state.cameraLiftMeters;
+}
+
+function computeTerrainLiftTarget(camera, centerAltitude) {
+  const eye = cameraEyePosition({
+    center: { lat: camera.center.lat, lng: camera.center.lng, altitude: centerAltitude },
+    range: camera.range,
+    tilt: camera.tilt,
+    heading: camera.heading,
+  });
+  if (!eye) return 0;
+
+  // Sample the view ray at the eye and halfway to the rider (a ridge between
+  // the two hides the rider just as badly as terrain at the eye itself). The
+  // required clearance tapers toward the rider, who genuinely is on the ground.
+  let target = 0;
+  for (const fraction of [0, 0.5]) {
+    const samplePoint = {
+      lat: lerp(eye.lat, camera.center.lat, fraction),
+      lng: lerp(eye.lng, camera.center.lng, fraction),
+    };
+    const terrainEle = maxElevationNear(state.route, samplePoint, TERRAIN_SAMPLE_RADIUS_METERS);
+    if (terrainEle === null) continue;
+    const rayAltitude = lerp(eye.altitude, centerAltitude, fraction);
+    const clearance = state.terrainClearanceMeters * (1 - fraction);
+    target = Math.max(target, terrainEle + clearance - rayAltitude);
+  }
+  return target;
 }
 
 function bindManualCameraCapture() {
@@ -1048,6 +1254,12 @@ function scheduleInteractionEnd() {
 function endUserInteraction() {
   captureManualCameraSettings();
   state.userInteracting = false;
+
+  // The capture bakes whatever the user sees — including any active terrain
+  // lift — into the camera settings, so the lift restarts from zero against
+  // that new baseline instead of stacking on top of it.
+  state.cameraLiftMeters = 0;
+  state.cameraLiftTargetMeters = 0;
 
   updateRideUi();
 }
@@ -1142,8 +1354,8 @@ function syncCameraControls() {
 
 function updateCameraSettingsLabels() {
   els.cameraZoomOutput.value = `${state.cameraZoom.toFixed(1)}x`;
-  els.cameraAngleOutput.value = `${state.cameraAngleDegrees} deg`;
-  els.cameraBehindOutput.value = `${state.cameraBehindMeters} m`;
+  els.cameraAngleOutput.value = `${Math.round(state.cameraAngleDegrees)} deg`;
+  els.cameraBehindOutput.value = `${Math.round(state.cameraBehindMeters)} m`;
   const range = Number(state.map?.range);
   const heading = Number(state.map?.heading);
   els.cameraReadout.value = [
@@ -1211,6 +1423,70 @@ function resetCameraToDefaults() {
   updateRideUi();
 }
 
+function updateRenderingSettingsFromControls() {
+  state.beaconEnabled = els.beaconEnabledInput.checked;
+  state.beaconDiameterMeters = Number(els.beaconDiameterInput.value);
+  state.beaconHeightMeters = Number(els.beaconHeightInput.value);
+  state.beaconOpacity = Number(els.beaconOpacityInput.value);
+  state.beaconColor = els.beaconColorInput.value;
+  state.terrainAvoidEnabled = els.terrainAvoidInput.checked;
+  state.terrainClearanceMeters = Number(els.terrainClearanceInput.value);
+  updateRenderingSettingsLabels();
+  saveSettings();
+  rebuildRiderBeacon();
+  updateRideUi();
+}
+
+function resetRenderingToDefaults() {
+  state.beaconEnabled = DEFAULT_BEACON_ENABLED;
+  state.beaconDiameterMeters = DEFAULT_BEACON_DIAMETER_METERS;
+  state.beaconHeightMeters = DEFAULT_BEACON_HEIGHT_METERS;
+  state.beaconOpacity = DEFAULT_BEACON_OPACITY;
+  state.beaconColor = DEFAULT_BEACON_COLOR;
+  state.terrainAvoidEnabled = DEFAULT_TERRAIN_AVOID_ENABLED;
+  state.terrainClearanceMeters = DEFAULT_TERRAIN_CLEARANCE_METERS;
+  syncRenderingControls();
+  updateRenderingSettingsLabels();
+  saveSettings();
+  rebuildRiderBeacon();
+  updateRideUi();
+}
+
+function rebuildRiderBeacon() {
+  renderRiderBeacon();
+  if (!state.route.length || !state.riderBeacon) return;
+  state.lastRiderDot = null;
+  updateRiderDot(interpolateRoutePoint(state.route, state.progressMeters));
+}
+
+function syncRenderingControls() {
+  els.beaconEnabledInput.checked = state.beaconEnabled;
+  els.beaconDiameterInput.value = String(state.beaconDiameterMeters);
+  els.beaconHeightInput.value = String(state.beaconHeightMeters);
+  els.beaconOpacityInput.value = String(state.beaconOpacity);
+  els.beaconColorInput.value = state.beaconColor;
+  els.terrainAvoidInput.checked = state.terrainAvoidEnabled;
+  els.terrainClearanceInput.value = String(state.terrainClearanceMeters);
+}
+
+function updateRenderingSettingsLabels() {
+  els.beaconDiameterOutput.value = `${state.beaconDiameterMeters} m`;
+  els.beaconHeightOutput.value = `${state.beaconHeightMeters} m`;
+  els.beaconOpacityOutput.value = `${Math.round(state.beaconOpacity * 100)}%`;
+  els.terrainClearanceOutput.value = `${state.terrainClearanceMeters} m`;
+}
+
+function updateScreenshotSettingsFromControls() {
+  const aspect = els.screenshotAspectSelect.value;
+  state.screenshotAspect = aspect === "viewport" || parseAspectRatio(aspect) ? aspect : DEFAULT_SCREENSHOT_ASPECT;
+  state.screenshotWidth = clamp(
+    Math.round(Number(els.screenshotWidthSelect.value)) || DEFAULT_SCREENSHOT_WIDTH,
+    SCREENSHOT_WIDTH_MIN,
+    SCREENSHOT_WIDTH_MAX,
+  );
+  saveSettings();
+}
+
 function updateCenterRiderFromControl() {
   state.centerRider = els.centerRiderInput.checked;
   if (state.centerRider) {
@@ -1222,6 +1498,25 @@ function updateCenterRiderFromControl() {
   updateCameraSettingsLabels();
 
   updateRideUi();
+}
+
+// --- Screenshots -----------------------------------------------------------------
+
+async function takeMapScreenshot() {
+  if (state.screenshotInProgress) return;
+  state.screenshotInProgress = true;
+  // Hide our own buttons for the shot; the map's Google attribution stays.
+  els.mapViewport.classList.add("capturing");
+  updateProgressLabel("Choose “This Tab” in the share dialog to save the screenshot…");
+  try {
+    await captureViewportJpeg(els.mapViewport, updateProgressLabel, {
+      aspectRatio: parseAspectRatio(state.screenshotAspect),
+      outputWidth: state.screenshotWidth,
+    });
+  } finally {
+    els.mapViewport.classList.remove("capturing");
+    state.screenshotInProgress = false;
+  }
 }
 
 // --- Fullscreen ----------------------------------------------------------------
@@ -1331,6 +1626,48 @@ function restoreSettings() {
   if (settings?.distanceUnits === "imperial") state.distanceUnits = "imperial";
   if (settings?.energyUnits === "kj") state.energyUnits = "kj";
 
+  if (typeof settings?.beaconEnabled === "boolean") {
+    state.beaconEnabled = settings.beaconEnabled;
+  }
+
+  const beaconDiameter = Number(settings?.beaconDiameterMeters);
+  if (Number.isFinite(beaconDiameter)) {
+    state.beaconDiameterMeters = clamp(beaconDiameter, Number(els.beaconDiameterInput.min), Number(els.beaconDiameterInput.max));
+  }
+
+  const beaconHeight = Number(settings?.beaconHeightMeters);
+  if (Number.isFinite(beaconHeight)) {
+    state.beaconHeightMeters = clamp(beaconHeight, Number(els.beaconHeightInput.min), Number(els.beaconHeightInput.max));
+  }
+
+  const beaconOpacity = Number(settings?.beaconOpacity);
+  if (Number.isFinite(beaconOpacity)) {
+    state.beaconOpacity = clamp(beaconOpacity, Number(els.beaconOpacityInput.min), Number(els.beaconOpacityInput.max));
+  }
+
+  if (typeof settings?.beaconColor === "string" && BEACON_COLOR_PATTERN.test(settings.beaconColor)) {
+    state.beaconColor = settings.beaconColor;
+  }
+
+  if (typeof settings?.terrainAvoidEnabled === "boolean") {
+    state.terrainAvoidEnabled = settings.terrainAvoidEnabled;
+  }
+
+  const terrainClearance = Number(settings?.terrainClearanceMeters);
+  if (Number.isFinite(terrainClearance)) {
+    state.terrainClearanceMeters = clamp(terrainClearance, Number(els.terrainClearanceInput.min), Number(els.terrainClearanceInput.max));
+  }
+
+  const savedAspect = settings?.screenshotAspect;
+  if (savedAspect === "viewport" || parseAspectRatio(savedAspect)) {
+    state.screenshotAspect = savedAspect;
+  }
+
+  const savedShotWidth = Number(settings?.screenshotWidth);
+  if (Number.isFinite(savedShotWidth)) {
+    state.screenshotWidth = clamp(Math.round(savedShotWidth), SCREENSHOT_WIDTH_MIN, SCREENSHOT_WIDTH_MAX);
+  }
+
   els.centerRiderInput.checked = state.centerRider;
   els.gradeIntervalInput.value = String(state.gradeUpdateIntervalSeconds);
   els.gradeIntervalOutput.value = `${state.gradeUpdateIntervalSeconds} s`;
@@ -1339,6 +1676,10 @@ function restoreSettings() {
   updateSpeedOutput();
   syncCameraControls();
   updateCameraSettingsLabels();
+  syncRenderingControls();
+  updateRenderingSettingsLabels();
+  els.screenshotAspectSelect.value = state.screenshotAspect;
+  els.screenshotWidthSelect.value = String(state.screenshotWidth);
 }
 
 function saveSettings() {
@@ -1351,6 +1692,15 @@ function saveSettings() {
     cameraOffsetRightMeters: state.cameraOffsetRightMeters,
     cameraCenterAltitudeOffsetMeters: state.cameraCenterAltitudeOffsetMeters,
     centerRider: state.centerRider,
+    beaconEnabled: state.beaconEnabled,
+    beaconDiameterMeters: state.beaconDiameterMeters,
+    beaconHeightMeters: state.beaconHeightMeters,
+    beaconOpacity: state.beaconOpacity,
+    beaconColor: state.beaconColor,
+    terrainAvoidEnabled: state.terrainAvoidEnabled,
+    terrainClearanceMeters: state.terrainClearanceMeters,
+    screenshotAspect: state.screenshotAspect,
+    screenshotWidth: state.screenshotWidth,
     gradeUpdateIntervalSeconds: state.gradeUpdateIntervalSeconds,
     distanceUnits: state.distanceUnits,
     energyUnits: state.energyUnits,
