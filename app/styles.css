@@ -106,7 +106,7 @@ body {
 
 .fullscreen-hud {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -321,8 +321,75 @@ button {
 
 .button-row {
   display: grid;
-  grid-template-columns: 1fr 0.74fr 0.74fr;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   gap: 8px;
+}
+
+.unit-toggles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.unit-toggles label {
+  display: grid;
+  gap: 6px;
+}
+
+.unit-toggles span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.unit-toggles select {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+}
+
+.ride-recording {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.ride-recording h2 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.ride-recording-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.ride-recording-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+  margin: 0;
+}
+
+.ride-recording-stats dt {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.ride-recording-stats dd {
+  margin: 2px 0 0;
+  font-weight: 750;
 }
 
 button {

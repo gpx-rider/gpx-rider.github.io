@@ -1,19 +1,53 @@
+// GPX Rider entry point — orchestrates the modules in this folder: keeps the
+// app state, wires DOM events, drives the 3D map + follow camera, and runs
+// the movement loop that advances the rider from trainer speed (pedaling) or
+// the simulation slider.
+
 import {
+  cameraDistanceToPoint,
   computeFollowCamera,
   measureCameraOffset,
   normalizeHeading,
   rangeForBehind,
   signedHeadingDelta,
 } from "./camera.mjs";
+import { bearing, clamp, destinationPoint, haversine, roundCoordinate, toRad } from "./geo.mjs";
+import { densifyRoute, enrichRoute, gradeAt, interpolateRoutePoint, parseGpx, routeTotalDistance } from "./route.mjs";
+import { distanceAtProfileX, drawEmptyProfile, drawProfile } from "./profile.mjs";
+import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatSpeed } from "./units.mjs";
+import { readJson, removeStored, writeJson } from "./storage.mjs";
+import {
+  GRADE_INTERVAL_MAX_SECONDS,
+  GRADE_INTERVAL_MIN_SECONDS,
+  OP_START_OR_RESUME,
+  OP_STOP_OR_PAUSE,
+  connectTrainer,
+  initTrainer,
+  queueTrainerGradeSample,
+  reconnectSavedTrainer,
+  sendTrainerCommand,
+  sendTrainerGrade,
+} from "./trainer.mjs";
+import { connectHeartRate, initHeartRate, reconnectSavedHeartRate } from "./heartrate.mjs";
+import {
+  clearRideLog,
+  hasRideData,
+  persistRideLog,
+  recordRideTick,
+  restoreRideLog,
+  rideLogSamples,
+  rideLogSummary,
+} from "./recorder.mjs";
+import { encodeFitActivity } from "./fit.mjs";
+import { initGallery } from "./gallery.mjs";
 
 const MAPS_API_KEY_STORAGE_KEY = "gpx-rider:maps-api-key";
+const SETTINGS_STORAGE_KEY = "gpx-rider:settings";
+const RIDE_STORAGE_KEY = "gpx-rider:last-ride";
+
 const DEFAULT_CAMERA_ZOOM = 2.5;
 const DEFAULT_CAMERA_ANGLE_DEGREES = 75;
 const DEFAULT_CAMERA_BEHIND_METERS = 800;
-const RESET_CAMERA_ZOOM = DEFAULT_CAMERA_ZOOM;
-const RESET_CAMERA_ANGLE_DEGREES = DEFAULT_CAMERA_ANGLE_DEGREES;
-const RESET_CAMERA_BEHIND_METERS = DEFAULT_CAMERA_BEHIND_METERS;
-const SETTINGS_STORAGE_KEY = "gpx-rider:settings";
 const HEADING_SAMPLE_METERS = 4;
 const INTERACTION_SETTLE_MS = 600;
 const CAMERA_ZOOM_MIN = 0.05;
@@ -23,69 +57,31 @@ const CAMERA_CENTER_ALTITUDE_LIMIT_METERS = 3000;
 const CAMERA_TILT_MIN = 1;
 const CAMERA_TILT_MAX = 89;
 const DEFAULT_GRADE_INTERVAL_SECONDS = 2;
-const GRADE_INTERVAL_MIN_SECONDS = 1;
-const GRADE_INTERVAL_MAX_SECONDS = 5;
 
-const PROFILE_PADDING_LEFT = 44;
-const PROFILE_PADDING_RIGHT = 14;
-const PROFILE_PADDING_TOP = 10;
-const PROFILE_PADDING_BOTTOM = 22;
-const PROFILE_GRADE_STEEP_PERCENT = 12;
-const PROFILE_BAR_SAMPLE_PX = 4;
-const ELEVATION_STEP_CANDIDATES = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000];
-const DISTANCE_STEP_METERS_CANDIDATES = [50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000];
-const DISTANCE_STEP_KM_CANDIDATES = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
+// Pedaling detection with hysteresis so a spinning-down flywheel does not
+// flap the movement source on/off around a single threshold.
+const PEDALING_START_KPH = 3;
+const PEDALING_STOP_KPH = 1;
+// A backgrounded tab stops requestAnimationFrame; without this cap the first
+// frame after returning would teleport the rider minutes down the road.
+const MAX_TICK_SECONDS = 5;
 
-const PROFILE_THEME_LIGHT = {
-  background: "#f9faf8",
-  gridline: "rgba(23, 33, 31, 0.12)",
-  label: "#66716d",
-  line: "#24312e",
-  axisLine: "rgba(23, 33, 31, 0.25)",
-  marker: "#24312e",
-  hoverGuide: "rgba(23, 33, 31, 0.45)",
-};
-const PROFILE_THEME_DARK = {
-  background: "rgba(23, 33, 31, 0.55)",
-  gridline: "rgba(255, 255, 255, 0.16)",
-  label: "rgba(255, 255, 255, 0.8)",
-  line: "#ffffff",
-  axisLine: "rgba(255, 255, 255, 0.35)",
-  marker: "#ffffff",
-  hoverGuide: "rgba(255, 255, 255, 0.55)",
-};
-
-const FTMS_SERVICE = 0x1826;
-const FTMS_INDOOR_BIKE_DATA = 0x2ad2;
-const FTMS_CONTROL_POINT = 0x2ad9;
-const FTMS_STATUS = 0x2ada;
-const OP_REQUEST_CONTROL = 0x00;
-const OP_RESET = 0x01;
-const OP_START_OR_RESUME = 0x07;
-const OP_STOP_OR_PAUSE = 0x08;
-const OP_SET_SIMULATION = 0x11;
-const FTMS_RESPONSE_CODE = 0x80;
-const FTMS_RESULT_TEXT = {
-  0x01: "Success",
-  0x02: "Op code not supported",
-  0x03: "Invalid parameter",
-  0x04: "Operation failed",
-  0x05: "Control not permitted",
-};
-const FTMS_OPCODE_NAMES = {
-  [OP_REQUEST_CONTROL]: "Request Control",
-  [OP_RESET]: "Reset",
-  [OP_START_OR_RESUME]: "Start/Resume",
-  [OP_STOP_OR_PAUSE]: "Stop/Pause",
-  [OP_SET_SIMULATION]: "Set Simulation",
-};
-const RIDE_STORAGE_KEY = "gpx-rider:last-ride";
-const TRAINER_STORAGE_KEY = "gpx-rider:last-trainer";
+// Route line rendering: the line floats slightly above the terrain instead of
+// being draped onto it (see renderGoogle3DRoute), so segments between points
+// must stay short enough to follow the ground. Spacing grows on very long
+// routes to cap the total vertex count the map engine has to handle.
+const ROUTE_LINE_ALTITUDE_METERS = 2.5;
+const ROUTE_LINE_SPACING_METERS = 15;
+const ROUTE_LINE_MAX_POINTS = 5000;
 
 const state = {
   route: [],
   progressMeters: 0,
-  riding: false,
+  simulating: false,
+  pedaling: false,
+  movementLoopActive: false,
+  tickRaf: null,
+  tickTimeout: null,
   lastTick: 0,
   line: null,
   routeOutline: null,
@@ -98,24 +94,20 @@ const state = {
   minimapMap: null,
   minimapPath: null,
   minimapMarker: null,
-  trainer: null,
-  controlPoint: null,
-  bikeData: null,
-  bleWriteQueue: Promise.resolve(),
   trainerSpeedKph: null,
   trainerPowerWatts: null,
+  trainerCaloriesKcal: null,
+  trainerHeartRateBpm: null,
+  strapHeartRateBpm: null,
+  heartRateStatusText: null,
   gradeUpdateIntervalSeconds: DEFAULT_GRADE_INTERVAL_SECONDS,
-  gradeSampleSum: 0,
-  gradeSampleCount: 0,
-  lastGradeAttemptAt: 0,
-  lastGradeSentRaw: null,
-  gradeWriteInFlight: false,
   lastSlowUiAt: 0,
   lastRiderDot: null,
   lastRideSavedAt: 0,
   profileHoverMeters: null,
   userInteracting: false,
   interactionSettleTimer: null,
+  interactionDotLoopActive: false,
   cameraZoom: DEFAULT_CAMERA_ZOOM,
   cameraAngleDegrees: DEFAULT_CAMERA_ANGLE_DEGREES,
   cameraBehindMeters: DEFAULT_CAMERA_BEHIND_METERS,
@@ -125,6 +117,8 @@ const state = {
   cameraCenterAltitudeOffsetMeters: 0,
   centerRider: true,
   mapFullscreen: false,
+  distanceUnits: "metric",
+  energyUnits: "kcal",
 };
 
 const els = {
@@ -137,10 +131,14 @@ const els = {
   powerStat: document.querySelector("#powerStat"),
   speedStat: document.querySelector("#speedStat"),
   trainerStat: document.querySelector("#trainerStat"),
+  heartRateStat: document.querySelector("#heartRateStat"),
+  caloriesStat: document.querySelector("#caloriesStat"),
   speedInput: document.querySelector("#speedInput"),
   speedOutput: document.querySelector("#speedOutput"),
   gradeIntervalInput: document.querySelector("#gradeIntervalInput"),
   gradeIntervalOutput: document.querySelector("#gradeIntervalOutput"),
+  distanceUnitSelect: document.querySelector("#distanceUnitSelect"),
+  energyUnitSelect: document.querySelector("#energyUnitSelect"),
   cameraZoomInput: document.querySelector("#cameraZoomInput"),
   cameraZoomOutput: document.querySelector("#cameraZoomOutput"),
   cameraAngleInput: document.querySelector("#cameraAngleInput"),
@@ -151,9 +149,9 @@ const els = {
   centerRiderInput: document.querySelector("#centerRiderInput"),
   resetCameraBtn: document.querySelector("#resetCameraBtn"),
   connectBtn: document.querySelector("#connectBtn"),
+  connectHrBtn: document.querySelector("#connectHrBtn"),
   startBtn: document.querySelector("#startBtn"),
   resetBtn: document.querySelector("#resetBtn"),
-  browseGalleryBtn: document.querySelector("#browseGalleryBtn"),
   progress: document.querySelector("#progress"),
   progressLabel: document.querySelector("#progressLabel"),
   profile: document.querySelector("#profile"),
@@ -163,21 +161,43 @@ const els = {
   fullscreenOverlayBottom: document.querySelector("#fullscreenOverlayBottom"),
   hudPowerStat: document.querySelector("#hudPowerStat"),
   hudSpeedStat: document.querySelector("#hudSpeedStat"),
+  hudHeartRateStat: document.querySelector("#hudHeartRateStat"),
   hudGradeStat: document.querySelector("#hudGradeStat"),
   hudRiddenStat: document.querySelector("#hudRiddenStat"),
   hudRemainingStat: document.querySelector("#hudRemainingStat"),
+  recDistanceStat: document.querySelector("#recDistanceStat"),
+  recTimeStat: document.querySelector("#recTimeStat"),
+  recPointsStat: document.querySelector("#recPointsStat"),
+  recHeartRateStat: document.querySelector("#recHeartRateStat"),
+  recCaloriesStat: document.querySelector("#recCaloriesStat"),
+  downloadFitBtn: document.querySelector("#downloadFitBtn"),
+  clearRideDataBtn: document.querySelector("#clearRideDataBtn"),
 };
 
 startApp();
 
 async function startApp() {
+  initTrainer({
+    onTelemetry: handleTrainerTelemetry,
+    onStatus: handleTrainerStatus,
+    onMessage: updateProgressLabel,
+  });
+  initHeartRate({
+    onHeartRate: handleStrapHeartRate,
+    onStatus: handleHeartRateStatus,
+    onMessage: updateProgressLabel,
+  });
+
   restoreSettings();
+  restoreRideLog();
+  updateRecordingUi();
   els.mapsApiKeyInput.value = getStoredMapsApiKey();
   await initMap();
   bindEvents();
   restoreSavedRide();
   void reconnectSavedTrainer();
-  void initGallery();
+  void reconnectSavedHeartRate();
+  void initGallery(loadGpxFromUrl);
 }
 
 function getStoredMapsApiKey() {
@@ -289,27 +309,36 @@ function bindEvents() {
   });
   els.gpxFile.addEventListener("change", loadGpxFile);
   els.speedInput.addEventListener("input", () => {
-    els.speedOutput.value = `${els.speedInput.value} km/h`;
+    updateSpeedOutput();
     saveRide();
   });
   els.gradeIntervalInput.addEventListener("input", updateGradeIntervalFromControl);
+  els.distanceUnitSelect.addEventListener("change", updateUnitsFromControls);
+  els.energyUnitSelect.addEventListener("change", updateUnitsFromControls);
   els.cameraZoomInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraBehindInput.addEventListener("input", updateCameraSettingsFromControls);
   els.centerRiderInput.addEventListener("change", updateCenterRiderFromControl);
   els.resetCameraBtn.addEventListener("click", resetCameraToDefaults);
   els.connectBtn.addEventListener("click", connectTrainer);
-  els.startBtn.addEventListener("click", toggleRide);
+  els.connectHrBtn.addEventListener("click", connectHeartRate);
+  els.startBtn.addEventListener("click", toggleSimulation);
   els.resetBtn.addEventListener("click", resetRide);
+  els.downloadFitBtn.addEventListener("click", downloadFitFile);
+  els.clearRideDataBtn.addEventListener("click", confirmClearRideData);
   els.profile.addEventListener("mousemove", handleProfileHover);
   els.profile.addEventListener("mouseleave", handleProfileLeave);
   els.profile.addEventListener("click", handleProfileClick);
   els.fullscreenBtn.addEventListener("click", toggleMapFullscreen);
   document.addEventListener("fullscreenchange", handleFullscreenChange);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && state.mapFullscreen) exitMapFullscreen();
   });
-  window.addEventListener("beforeunload", saveRide);
+  window.addEventListener("beforeunload", () => {
+    saveRide();
+    persistRideLog();
+  });
 }
 
 async function loadGpxFile(event) {
@@ -337,101 +366,17 @@ function applyGpxText(text) {
 
   state.route = enrichRoute(route);
   state.progressMeters = 0;
-  state.riding = false;
+  state.simulating = false;
   state.lastTick = 0;
   state.profileHoverMeters = null;
+  updateStartButton();
   renderRoute();
-  drawProfile();
-  updateRideUi();
+  renderProfile();
+  updateRideUi({ force: true });
   saveRide();
 
   els.startBtn.disabled = false;
   els.resetBtn.disabled = false;
-}
-
-async function initGallery() {
-  try {
-    const response = await fetch("./gallery.json");
-    if (!response.ok) return;
-    const data = await response.json();
-    if (!data.routes?.length) return;
-    renderGallery(data.routes);
-  } catch {
-    // gallery.json not present — gallery stays hidden
-  }
-}
-
-function renderGallery(routes) {
-  const section = document.getElementById("gallery");
-  const grid = document.getElementById("galleryGrid");
-
-  for (const route of routes) {
-    const card = document.createElement("article");
-    card.className = "gallery-card";
-
-    if (route.screenshot) {
-      const img = document.createElement("img");
-      img.src = route.screenshot;
-      img.alt = route.title;
-      img.className = "gallery-card-img";
-      img.loading = "lazy";
-      card.appendChild(img);
-    }
-
-    const body = document.createElement("div");
-    body.className = "gallery-card-body";
-
-    const title = document.createElement("h3");
-    title.className = "gallery-card-title";
-    title.textContent = route.title;
-
-    const desc = document.createElement("p");
-    desc.className = "gallery-card-desc";
-    desc.innerHTML = route.description
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/\n/g, "<br>");
-
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "gallery-card-btn";
-    btn.textContent = "Load ride";
-    btn.addEventListener("click", () => loadGpxFromUrl(route.gpx));
-
-    body.appendChild(title);
-    body.appendChild(desc);
-    body.appendChild(btn);
-    card.appendChild(body);
-    grid.appendChild(card);
-  }
-
-  section.hidden = false;
-  els.browseGalleryBtn.hidden = false;
-  els.browseGalleryBtn.addEventListener("click", () => {
-    section.scrollIntoView({ behavior: "smooth" });
-  });
-}
-
-function parseGpx(text) {
-  const doc = new DOMParser().parseFromString(text, "application/xml");
-  const parserError = doc.querySelector("parsererror");
-  if (parserError) return [];
-
-  return [...doc.querySelectorAll("trkpt, rtept")].map((point) => ({
-    lat: Number(point.getAttribute("lat")),
-    lng: Number(point.getAttribute("lon")),
-    ele: Number(point.querySelector("ele")?.textContent ?? 0),
-  })).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
-}
-
-function enrichRoute(points) {
-  let distance = 0;
-  return points.map((point, index) => {
-    if (index > 0) distance += haversine(points[index - 1], point);
-    return { ...point, distance };
-  });
 }
 
 function renderRoute() {
@@ -443,7 +388,7 @@ function renderRoute() {
   }
 
   clearRouteFromMap();
-  const currentPoint = interpolateRoutePoint(state.progressMeters);
+  const currentPoint = interpolateRoutePoint(state.route, state.progressMeters);
   renderGoogle3DRoute(currentPoint);
 }
 
@@ -491,24 +436,33 @@ function updateMinimapPosition(point) {
 
 function renderGoogle3DRoute(currentPoint) {
   const { AltitudeMode, Polyline3DElement } = state.maps3d;
-  const path = state.route.map((point) => ({
+
+  // CLAMP_TO_GROUND drapes the stroke onto the terrain mesh like a decal, so
+  // on steep slopes the line smears down the hillside into wide blobs. A line
+  // held a couple of meters above the ground renders with a constant
+  // screen-pixel width instead. Densify the path so the elevated segments
+  // stay short enough to follow the terrain between GPX points.
+  const spacing = Math.max(ROUTE_LINE_SPACING_METERS, routeTotalDistance(state.route) / ROUTE_LINE_MAX_POINTS);
+  const linePoints = densifyRoute(state.route, spacing);
+  const pathAt = (altitude) => linePoints.map((point) => ({
     lat: point.lat,
     lng: point.lng,
-    altitude: 0,
+    altitude,
   }));
 
   if (Polyline3DElement) {
+    // The outline sits a touch lower than the line so the two never z-fight.
     state.routeOutline = new Polyline3DElement({
-      altitudeMode: AltitudeMode?.CLAMP_TO_GROUND,
-      path,
+      altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
+      path: pathAt(ROUTE_LINE_ALTITUDE_METERS - 0.4),
       strokeColor: "rgba(255, 255, 255, 0.72)",
       strokeWidth: 14,
     });
     state.map.append(state.routeOutline);
 
     state.line = new Polyline3DElement({
-      altitudeMode: AltitudeMode?.CLAMP_TO_GROUND,
-      path,
+      altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
+      path: pathAt(ROUTE_LINE_ALTITUDE_METERS),
       strokeColor: "#0a84ff",
       strokeWidth: 9,
     });
@@ -541,29 +495,37 @@ function renderRiderDot(point) {
   }
 
   if (!Polyline3DElement) return;
-  const path = riderCircleCoordinates(point, riderDotRadiusMeters());
+  const radius = riderDotRadiusMeters(point);
   state.riderDotOutline = new Polyline3DElement({
-    altitudeMode: AltitudeMode?.CLAMP_TO_GROUND,
-    path,
+    altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
+    path: riderCircleCoordinates(point, radius, 1),
     strokeColor: "#ffffff",
     strokeWidth: 10,
   });
   state.map.append(state.riderDotOutline);
 
   state.riderDot = new Polyline3DElement({
-    altitudeMode: AltitudeMode?.CLAMP_TO_GROUND,
-    path,
+    altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
+    path: riderCircleCoordinates(point, radius, 1.2),
     strokeColor: "#0a84ff",
     strokeWidth: 6,
   });
   state.map.append(state.riderDot);
 }
 
-function riderDotRadiusMeters() {
-  // Scale the dot with the camera distance so it reads like Apple Maps'
-  // fixed-size GPS dot instead of a ground decal that grows as you zoom in.
-  const range = Number(state.map?.range);
-  return clamp((Number.isFinite(range) && range > 0 ? range : 800) / 90, 2.5, 45);
+function riderDotRadiusMeters(position) {
+  // The dot is ground geometry sized in meters, so to read like a fixed-size
+  // GPS marker its radius must track the camera-eye distance to the dot
+  // itself — not the range to the look-at center, which is wrong the moment
+  // the rider is off-center, and not a tightly clamped value, which visibly
+  // grows/shrinks the dot at the clamp edges when zooming far in or out.
+  const distance = cameraDistanceToPoint({
+    center: state.map?.center,
+    range: state.map?.range,
+    tilt: state.map?.tilt,
+    heading: state.map?.heading,
+  }, position);
+  return clamp((distance ?? 800) / 90, 0.5, 20000);
 }
 
 function clearRouteFromMap() {
@@ -581,57 +543,169 @@ function clearRouteFromMap() {
   state.lastRiderDot = null;
 }
 
-function toggleRide() {
-  state.riding = !state.riding;
-  els.startBtn.textContent = state.riding ? "Pause" : "Start";
-  state.lastTick = performance.now();
-  if (state.riding) {
-    void sendTrainerCommand(OP_START_OR_RESUME);
-    requestAnimationFrame(tick);
-  } else {
+// --- Movement: simulation button + pedaling detection -----------------------
+//
+// Two independent movement sources drive the rider along the route:
+// 1. Pedaling — the trainer reports real speed; always wins when present.
+// 2. Simulation — the slider speed, toggled by the Start/Stop simulation
+//    button, for previewing a route without pedaling.
+// Starting to pedal stops a running simulation; the map then follows trainer
+// speed and stops when the rider stops pedaling.
+
+function isMoving() {
+  return state.simulating || state.pedaling;
+}
+
+function toggleSimulation() {
+  if (state.simulating) {
+    state.simulating = false;
+    updateStartButton();
     void sendTrainerCommand(OP_STOP_OR_PAUSE, [0x02]);
-    saveRide();
+    if (!state.pedaling) handleMovementStopped();
+    return;
+  }
+
+  if (state.route.length < 2) return;
+  if (state.pedaling) {
+    updateProgressLabel("You're pedaling — the ride is already following trainer speed.");
+    return;
+  }
+
+  if (state.progressMeters >= routeTotalDistance(state.route)) {
+    state.progressMeters = 0;
+  }
+  state.simulating = true;
+  updateStartButton();
+  void sendTrainerCommand(OP_START_OR_RESUME);
+  ensureMovementLoop();
+}
+
+function updateStartButton() {
+  els.startBtn.textContent = state.simulating ? "Stop simulation" : "Start simulation";
+}
+
+function updatePedalingFromSpeed() {
+  const speed = state.trainerSpeedKph;
+  if (!Number.isFinite(speed)) {
+    setPedaling(false);
+    return;
+  }
+  if (!state.pedaling && speed >= PEDALING_START_KPH) setPedaling(true);
+  else if (state.pedaling && speed <= PEDALING_STOP_KPH) setPedaling(false);
+}
+
+function setPedaling(pedaling) {
+  if (pedaling === state.pedaling) return;
+  state.pedaling = pedaling;
+
+  if (pedaling) {
+    if (state.simulating) {
+      state.simulating = false;
+      updateStartButton();
+      updateProgressLabel("Pedaling detected — simulation stopped, following trainer speed.");
+    }
+    ensureMovementLoop();
+  } else if (!state.simulating) {
+    handleMovementStopped();
   }
 }
 
+function ensureMovementLoop() {
+  if (state.movementLoopActive || state.route.length < 2) return;
+  state.movementLoopActive = true;
+  state.lastTick = performance.now();
+  scheduleTick();
+}
+
+// requestAnimationFrame stops in hidden tabs, which would freeze the ride —
+// and the recording — while the user is pedaling with another tab focused.
+// Fall back to a coarse timeout whenever the page is hidden.
+function scheduleTick() {
+  cancelScheduledTick();
+  if (document.hidden) {
+    state.tickTimeout = window.setTimeout(() => tick(performance.now()), 500);
+  } else {
+    state.tickRaf = requestAnimationFrame(tick);
+  }
+}
+
+function cancelScheduledTick() {
+  if (state.tickRaf !== null) cancelAnimationFrame(state.tickRaf);
+  if (state.tickTimeout !== null) window.clearTimeout(state.tickTimeout);
+  state.tickRaf = null;
+  state.tickTimeout = null;
+}
+
+function handleVisibilityChange() {
+  // A pending rAF from before the tab was hidden only fires once the tab is
+  // visible again; reschedule so the loop keeps ticking either way.
+  if (state.movementLoopActive) scheduleTick();
+}
+
+function handleMovementStopped() {
+  saveRide();
+  persistRideLog();
+  updateRecordingUi();
+}
+
 function resetRide() {
-  state.riding = false;
+  state.simulating = false;
   state.progressMeters = 0;
-  state.lastTick = 0;
-  els.startBtn.textContent = "Start";
-  updateRideUi();
+  state.lastTick = performance.now();
+  updateStartButton();
+  updateRideUi({ force: true });
   saveRide();
   void sendTrainerGrade(0);
 }
 
 function tick(now) {
-  if (!state.riding || state.route.length < 2) return;
+  if (!isMoving() || state.route.length < 2) {
+    state.movementLoopActive = false;
+    return;
+  }
 
-  const elapsedSeconds = (now - state.lastTick) / 1000;
+  const elapsedSeconds = clamp((now - state.lastTick) / 1000, 0, MAX_TICK_SECONDS);
   state.lastTick = now;
-  const speedKph = Number.isFinite(state.trainerSpeedKph) ? state.trainerSpeedKph : Number(els.speedInput.value);
+  const speedKph = state.pedaling && Number.isFinite(state.trainerSpeedKph)
+    ? state.trainerSpeedKph
+    : Number(els.speedInput.value);
   const metersPerSecond = speedKph / 3.6;
-  const totalDistance = state.route.at(-1).distance;
+  const totalDistance = routeTotalDistance(state.route);
 
+  const previousProgress = state.progressMeters;
   state.progressMeters = Math.min(totalDistance, state.progressMeters + metersPerSecond * elapsedSeconds);
+
+  recordRideTick({
+    elapsedSeconds,
+    metersAdvanced: state.progressMeters - previousProgress,
+    point: interpolateRoutePoint(state.route, state.progressMeters),
+    speedKph,
+    powerWatts: state.trainerPowerWatts,
+    heartRateBpm: currentHeartRate(),
+    caloriesKcal: state.trainerCaloriesKcal,
+  });
+
   updateRideUi();
   saveRideThrottled();
 
   if (state.progressMeters >= totalDistance) {
-    state.riding = false;
-    els.startBtn.textContent = "Start";
+    state.simulating = false;
+    state.movementLoopActive = false;
+    updateStartButton();
     saveRide();
+    persistRideLog();
+    updateRecordingUi();
     void sendTrainerGrade(0);
     return;
   }
 
-  requestAnimationFrame(tick);
+  scheduleTick();
 }
 
 function updateRideUi(options = {}) {
   if (!state.route.length) return;
 
-  const point = interpolateRoutePoint(state.progressMeters);
+  const point = interpolateRoutePoint(state.route, state.progressMeters);
 
   if (state.riderDot) {
     updateRiderDot(point);
@@ -641,94 +715,224 @@ function updateRideUi(options = {}) {
   // Per-frame work ends here. DOM stats, the profile canvas, and the trainer
   // grade only need a few updates per second while riding.
   const now = performance.now();
-  if (!options.force && state.riding && now - state.lastSlowUiAt < 250) return;
+  if (!options.force && isMoving() && now - state.lastSlowUiAt < 250) return;
   state.lastSlowUiAt = now;
 
-  const totalDistance = state.route.at(-1).distance;
-  const grade = currentGrade(state.progressMeters);
+  const totalDistance = routeTotalDistance(state.route);
+  const grade = gradeAt(state.route, state.progressMeters);
   const progress = totalDistance ? state.progressMeters / totalDistance : 0;
-  const riddenKm = state.progressMeters / 1000;
-  const remainingKm = (totalDistance - state.progressMeters) / 1000;
 
-  els.distanceStat.textContent = `${(totalDistance / 1000).toFixed(1)} km`;
+  els.distanceStat.textContent = formatDistance(totalDistance, state.distanceUnits, 1);
   els.gradeStat.textContent = `${grade.toFixed(1)}%`;
-  els.altitudeStat.textContent = `${Math.round(point.ele)} m`;
+  els.altitudeStat.textContent = formatAltitude(point.ele, state.distanceUnits);
   els.progress.value = progress;
-  updateProgressLabel(`${riddenKm.toFixed(2)} km of ${(totalDistance / 1000).toFixed(2)} km`);
-  drawProfile(progress);
+  updateProgressLabel(
+    `${formatDistance(state.progressMeters, state.distanceUnits)} of ${formatDistance(totalDistance, state.distanceUnits)}`,
+  );
+  renderProfile(progress);
   updateMinimapPosition(point);
   updateCameraSettingsLabels();
 
   els.hudGradeStat.textContent = `${grade.toFixed(1)}%`;
-  els.hudRiddenStat.textContent = `${riddenKm.toFixed(2)} km`;
-  els.hudRemainingStat.textContent = `${remainingKm.toFixed(2)} km`;
+  els.hudRiddenStat.textContent = formatDistance(state.progressMeters, state.distanceUnits);
+  els.hudRemainingStat.textContent = formatDistance(totalDistance - state.progressMeters, state.distanceUnits);
 
-  queueTrainerGradeSample(grade, options);
+  updateRecordingUi();
+  queueTrainerGradeSample(grade, {
+    force: options.force,
+    intervalSeconds: state.gradeUpdateIntervalSeconds,
+  });
 }
 
-function queueTrainerGradeSample(gradePercent, options = {}) {
-  // Average every sample seen since the last send instead of firing the
-  // instantaneous value: smooths out point-to-point jitter (2.9/3.0/2.9)
-  // and, combined with the hard interval below, guarantees we never enqueue
-  // BLE writes faster than the trainer can actually process them.
-  state.gradeSampleSum += gradePercent;
-  state.gradeSampleCount += 1;
-
-  const now = performance.now();
-  const intervalMs = clamp(state.gradeUpdateIntervalSeconds, GRADE_INTERVAL_MIN_SECONDS, GRADE_INTERVAL_MAX_SECONDS) * 1000;
-  const dueForSend = options.force || state.lastGradeAttemptAt === 0 || now - state.lastGradeAttemptAt >= intervalMs;
-  if (!dueForSend) return;
-
-  const averageGrade = state.gradeSampleSum / state.gradeSampleCount;
-  state.gradeSampleSum = 0;
-  state.gradeSampleCount = 0;
-  state.lastGradeAttemptAt = now;
-
-  void sendTrainerGrade(averageGrade);
+function renderProfile(progress = currentRideProgress()) {
+  if (!state.route.length) {
+    drawEmptyProfile(els.profile, { dark: state.mapFullscreen });
+    return;
+  }
+  drawProfile(els.profile, {
+    route: state.route,
+    progress,
+    hoverMeters: state.profileHoverMeters,
+    dark: state.mapFullscreen,
+    distanceUnits: state.distanceUnits,
+  });
 }
 
 function handleProfileHover(event) {
-  const distance = distanceAtProfileX(event.clientX);
+  const distance = distanceAtProfileX(els.profile, event.clientX, state.route);
   if (distance === null) return;
   state.profileHoverMeters = distance;
-  drawProfile(currentRideProgress());
+  renderProfile();
 }
 
 function handleProfileLeave() {
   if (state.profileHoverMeters === null) return;
   state.profileHoverMeters = null;
-  drawProfile(currentRideProgress());
+  renderProfile();
 }
 
 function handleProfileClick(event) {
-  const distance = distanceAtProfileX(event.clientX);
+  const distance = distanceAtProfileX(els.profile, event.clientX, state.route);
   if (distance === null) return;
   state.progressMeters = distance;
   state.lastTick = performance.now();
   updateRideUi({ force: true });
   saveRide();
-}
-
-function distanceAtProfileX(clientX) {
-  if (!state.route.length) return null;
-
-  const rect = els.profile.getBoundingClientRect();
-  const chartLeft = PROFILE_PADDING_LEFT;
-  const chartRight = rect.width - PROFILE_PADDING_RIGHT;
-  const chartWidth = Math.max(1, chartRight - chartLeft);
-  const x = clamp(clientX - rect.left, chartLeft, chartRight);
-  const totalDistance = state.route.at(-1).distance;
-  return ((x - chartLeft) / chartWidth) * totalDistance;
+  ensureMovementLoop();
 }
 
 function currentRideProgress() {
   if (!state.route.length) return 0;
-  const totalDistance = state.route.at(-1).distance || 1;
+  const totalDistance = routeTotalDistance(state.route) || 1;
   return state.progressMeters / totalDistance;
 }
 
+// --- Telemetry ---------------------------------------------------------------
+
+function handleTrainerTelemetry(telemetry) {
+  if (!telemetry) {
+    state.trainerSpeedKph = null;
+    state.trainerPowerWatts = null;
+    state.trainerHeartRateBpm = null;
+    setPedaling(false);
+    updateTelemetryUi();
+    return;
+  }
+
+  if (telemetry.speedKph !== null) state.trainerSpeedKph = telemetry.speedKph;
+  if (telemetry.powerWatts !== null) state.trainerPowerWatts = telemetry.powerWatts;
+  if (telemetry.totalCaloriesKcal !== null) state.trainerCaloriesKcal = telemetry.totalCaloriesKcal;
+  state.trainerHeartRateBpm = telemetry.heartRateBpm;
+
+  updatePedalingFromSpeed();
+  updateTelemetryUi();
+}
+
+function handleTrainerStatus(text, { onlyClearError = false } = {}) {
+  if (onlyClearError && els.trainerStat.textContent !== "BLE error") return;
+  els.trainerStat.textContent = text;
+}
+
+function handleStrapHeartRate(bpm) {
+  state.strapHeartRateBpm = Number.isFinite(bpm) ? bpm : null;
+  updateTelemetryUi();
+}
+
+function handleHeartRateStatus(text) {
+  state.heartRateStatusText = text;
+  updateTelemetryUi();
+}
+
+function currentHeartRate() {
+  // Prefer the dedicated strap; fall back to a trainer-relayed heart rate.
+  return state.strapHeartRateBpm ?? state.trainerHeartRateBpm ?? null;
+}
+
+function updateTelemetryUi() {
+  const powerText = Number.isFinite(state.trainerPowerWatts) ? `${state.trainerPowerWatts} W` : "--";
+  const speedText = formatSpeed(state.trainerSpeedKph, state.distanceUnits);
+  const heartRate = currentHeartRate();
+  const heartRateText = Number.isFinite(heartRate) ? `${heartRate} bpm` : "--";
+  const caloriesText = formatEnergy(state.trainerCaloriesKcal ?? NaN, state.energyUnits);
+
+  els.powerStat.textContent = powerText;
+  els.speedStat.textContent = speedText;
+  els.heartRateStat.textContent = heartRate !== null
+    ? heartRateText
+    : (state.heartRateStatusText || "--");
+  els.caloriesStat.textContent = caloriesText;
+  els.hudPowerStat.textContent = powerText;
+  els.hudSpeedStat.textContent = speedText;
+  els.hudHeartRateStat.textContent = heartRateText;
+}
+
+// --- Ride recording & FIT export ----------------------------------------------
+
+function updateRecordingUi() {
+  const summary = rideLogSummary();
+  els.recDistanceStat.textContent = formatDistance(summary.distanceMeters, state.distanceUnits);
+  els.recTimeStat.textContent = formatDuration(summary.timerSeconds);
+  els.recPointsStat.textContent = String(summary.sampleCount);
+  els.recHeartRateStat.textContent = summary.heartRateSampleCount > 0
+    ? `${summary.heartRateSampleCount} samples`
+    : "--";
+  els.recCaloriesStat.textContent = formatEnergy(summary.caloriesKcal ?? NaN, state.energyUnits);
+  els.downloadFitBtn.disabled = summary.sampleCount < 2;
+  els.clearRideDataBtn.disabled = summary.sampleCount === 0;
+}
+
+function downloadFitFile() {
+  const samples = rideLogSamples();
+  if (samples.length < 2) {
+    updateProgressLabel("Not enough recorded ride data yet — ride a little first.");
+    return;
+  }
+
+  persistRideLog();
+  const summary = rideLogSummary();
+
+  let bytes;
+  try {
+    bytes = encodeFitActivity({
+      samples,
+      summary: {
+        startTimeMs: summary.startedAtMs,
+        totalElapsedSeconds: summary.elapsedSeconds,
+        totalTimerSeconds: summary.timerSeconds,
+        totalDistanceMeters: summary.distanceMeters,
+        totalCalories: summary.caloriesKcal,
+      },
+    });
+  } catch (error) {
+    console.error("Could not encode the FIT file.", error);
+    updateProgressLabel("Could not build the FIT file from the recorded data.");
+    return;
+  }
+
+  const started = new Date(summary.startedAtMs);
+  const stamp = [
+    started.getFullYear(),
+    String(started.getMonth() + 1).padStart(2, "0"),
+    String(started.getDate()).padStart(2, "0"),
+  ].join("") + "-" + [
+    String(started.getHours()).padStart(2, "0"),
+    String(started.getMinutes()).padStart(2, "0"),
+  ].join("");
+
+  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `gpx-rider-virtual-ride-${stamp}.fit`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  // Give the browser a beat to hand the file off before asking.
+  window.setTimeout(() => {
+    if (window.confirm("FIT file downloaded. Clear the collected ride data to start fresh?")) {
+      clearRideLog();
+      updateRecordingUi();
+      updateProgressLabel("Ride data cleared.");
+    }
+  }, 300);
+}
+
+function confirmClearRideData() {
+  if (!hasRideData()) return;
+  const summary = rideLogSummary();
+  const description = `${formatDistance(summary.distanceMeters, state.distanceUnits)} / ${formatDuration(summary.timerSeconds)}`;
+  if (!window.confirm(`Discard the collected ride data (${description}) without downloading?`)) return;
+  clearRideLog();
+  updateRecordingUi();
+  updateProgressLabel("Ride data cleared.");
+}
+
+// --- Camera ------------------------------------------------------------------
+
 function updateRiderDot(position) {
-  const radius = riderDotRadiusMeters();
+  const radius = riderDotRadiusMeters(position);
 
   // Rebuilding the polygons re-tessellates them in the map engine, which is
   // far too expensive to do per frame. Skip updates smaller than a pixel or
@@ -751,9 +955,17 @@ function updateRiderDot(position) {
     return;
   }
 
-  const path = riderCircleCoordinates(position, radius);
-  if (state.riderDotOutline) state.riderDotOutline.path = path;
-  if (state.riderDot) state.riderDot.path = path;
+  if (state.riderDotOutline) state.riderDotOutline.path = riderCircleCoordinates(position, radius, 1);
+  if (state.riderDot) state.riderDot.path = riderCircleCoordinates(position, radius, 1.2);
+}
+
+function riderCircleCoordinates(center, radiusMeters, altitude = 0) {
+  const points = [];
+  for (let angle = 0; angle < 360; angle += 6) {
+    const point = destinationPoint(center, angle, radiusMeters);
+    points.push({ ...point, altitude });
+  }
+  return points;
 }
 
 function updateMapCamera(position) {
@@ -783,98 +995,6 @@ function updateMapCamera(position) {
   state.map.tilt = camera.tilt;
 }
 
-function updateGradeIntervalFromControl() {
-  state.gradeUpdateIntervalSeconds = clamp(
-    Number(els.gradeIntervalInput.value),
-    GRADE_INTERVAL_MIN_SECONDS,
-    GRADE_INTERVAL_MAX_SECONDS,
-  );
-  els.gradeIntervalOutput.value = `${state.gradeUpdateIntervalSeconds} s`;
-  saveSettings();
-}
-
-function updateCameraSettingsFromControls() {
-  state.cameraZoom = Number(els.cameraZoomInput.value);
-  state.cameraAngleDegrees = Number(els.cameraAngleInput.value);
-  state.cameraBehindMeters = Number(els.cameraBehindInput.value);
-  updateCameraSettingsLabels();
-  saveSettings();
-
-  updateRideUi();
-}
-
-function resetCameraToDefaults() {
-  state.cameraZoom = RESET_CAMERA_ZOOM;
-  state.cameraAngleDegrees = RESET_CAMERA_ANGLE_DEGREES;
-  state.cameraBehindMeters = RESET_CAMERA_BEHIND_METERS;
-  state.cameraHeadingOffsetDegrees = 0;
-  state.cameraOffsetForwardMeters = 0;
-  state.cameraOffsetRightMeters = 0;
-  state.cameraCenterAltitudeOffsetMeters = 0;
-
-  syncCameraControls();
-  updateCameraSettingsLabels();
-  saveSettings();
-
-  updateRideUi();
-}
-
-function updateCenterRiderFromControl() {
-  state.centerRider = els.centerRiderInput.checked;
-  if (state.centerRider) {
-    state.cameraOffsetForwardMeters = 0;
-    state.cameraOffsetRightMeters = 0;
-    state.cameraCenterAltitudeOffsetMeters = 0;
-  }
-  saveSettings();
-  updateCameraSettingsLabels();
-
-  updateRideUi();
-}
-
-function toggleMapFullscreen() {
-  if (state.mapFullscreen) exitMapFullscreen();
-  else enterMapFullscreen();
-}
-
-function enterMapFullscreen() {
-  state.mapFullscreen = true;
-  els.mapViewport.classList.add("fullscreen-mode");
-  els.fullscreenBtn.textContent = "⤢ Exit fullscreen";
-  els.fullscreenOverlayBottom.hidden = false;
-
-  // Move the elevation profile into the fullscreen HUD stack so it renders as
-  // a translucent overlay below the stat tiles instead of staying hidden
-  // behind the now-fixed-position map viewport.
-  els.fullscreenOverlayBottom.append(els.profile);
-  els.profile.classList.add("profile-translucent");
-
-  // The Fullscreen API also hides the browser chrome, but it can fail (no
-  // user gesture in the event tick, unsupported platform); the CSS class
-  // above already delivers the "just the map" view either way.
-  els.mapViewport.requestFullscreen?.().catch(() => {});
-
-  updateRideUi({ force: true });
-}
-
-function exitMapFullscreen() {
-  state.mapFullscreen = false;
-  els.mapViewport.classList.remove("fullscreen-mode");
-  els.fullscreenBtn.textContent = "⛶ Fullscreen";
-  els.fullscreenOverlayBottom.hidden = true;
-
-  els.mapViewport.after(els.profile);
-  els.profile.classList.remove("profile-translucent");
-
-  if (document.fullscreenElement === els.mapViewport) document.exitFullscreen?.().catch(() => {});
-
-  updateRideUi({ force: true });
-}
-
-function handleFullscreenChange() {
-  if (!document.fullscreenElement && state.mapFullscreen) exitMapFullscreen();
-}
-
 function bindManualCameraCapture() {
   // Only genuine input events mark a manual interaction. The gmp-* camera
   // change events also fire for programmatic follow-camera writes, so they
@@ -896,6 +1016,27 @@ function bindManualCameraCapture() {
 function beginUserInteraction() {
   state.userInteracting = true;
   window.clearTimeout(state.interactionSettleTimer);
+  startInteractionDotResizeLoop();
+}
+
+// While the user zooms or pans, the follow camera is suspended and nothing
+// else recomputes the dot radius, so a paused rider's dot would balloon or
+// vanish mid-gesture. Track the camera every frame until the gesture settles;
+// the change threshold inside updateRiderDot keeps re-tessellation cheap.
+function startInteractionDotResizeLoop() {
+  if (state.interactionDotLoopActive) return;
+  state.interactionDotLoopActive = true;
+  const step = () => {
+    if (!state.userInteracting) {
+      state.interactionDotLoopActive = false;
+      return;
+    }
+    if (state.route.length && state.riderDot) {
+      updateRiderDot(interpolateRoutePoint(state.route, state.progressMeters));
+    }
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 function scheduleInteractionEnd() {
@@ -918,7 +1059,7 @@ function captureManualCameraSettings() {
   const range = Number(state.map.range);
   const heading = Number(state.map.heading);
   const centerAltitude = Number(state.map.center?.altitude);
-  const rider = state.route.length ? interpolateRoutePoint(state.progressMeters) : null;
+  const rider = state.route.length ? interpolateRoutePoint(state.route, state.progressMeters) : null;
 
   let capturedTilt = Number.isFinite(tilt) ? clamp(tilt, CAMERA_TILT_MIN, CAMERA_TILT_MAX) : state.cameraAngleDegrees;
   let capturedRange = Number.isFinite(range) && range > 0
@@ -977,9 +1118,9 @@ function currentRouteHeading() {
   if (state.route.length < 2) return 0;
   // Sample a short window around the rider so the camera points exactly the
   // way the rider is moving, rather than at a spot far up the road.
-  const total = state.route.at(-1).distance;
-  const from = interpolateRoutePoint(clamp(state.progressMeters - HEADING_SAMPLE_METERS, 0, total));
-  const to = interpolateRoutePoint(clamp(state.progressMeters + HEADING_SAMPLE_METERS, 0, total));
+  const total = routeTotalDistance(state.route);
+  const from = interpolateRoutePoint(state.route, clamp(state.progressMeters - HEADING_SAMPLE_METERS, 0, total));
+  const to = interpolateRoutePoint(state.route, clamp(state.progressMeters + HEADING_SAMPLE_METERS, 0, total));
   return normalizeHeading(bearing(from, to));
 }
 
@@ -1017,6 +1158,118 @@ function updateCameraSettingsLabels() {
     `alt Δ ${Math.round(state.cameraCenterAltitudeOffsetMeters)} m`,
   ].join("  ");
 }
+
+function updateGradeIntervalFromControl() {
+  state.gradeUpdateIntervalSeconds = clamp(
+    Number(els.gradeIntervalInput.value),
+    GRADE_INTERVAL_MIN_SECONDS,
+    GRADE_INTERVAL_MAX_SECONDS,
+  );
+  els.gradeIntervalOutput.value = `${state.gradeUpdateIntervalSeconds} s`;
+  saveSettings();
+}
+
+function updateUnitsFromControls() {
+  state.distanceUnits = els.distanceUnitSelect.value === "imperial" ? "imperial" : "metric";
+  state.energyUnits = els.energyUnitSelect.value === "kj" ? "kj" : "kcal";
+  saveSettings();
+
+  updateSpeedOutput();
+  updateTelemetryUi();
+  updateRecordingUi();
+  if (state.route.length) updateRideUi({ force: true });
+  else renderProfile();
+}
+
+function updateSpeedOutput() {
+  els.speedOutput.value = formatSpeed(Number(els.speedInput.value), state.distanceUnits, 0);
+}
+
+function updateCameraSettingsFromControls() {
+  state.cameraZoom = Number(els.cameraZoomInput.value);
+  state.cameraAngleDegrees = Number(els.cameraAngleInput.value);
+  state.cameraBehindMeters = Number(els.cameraBehindInput.value);
+  updateCameraSettingsLabels();
+  saveSettings();
+
+  updateRideUi();
+}
+
+function resetCameraToDefaults() {
+  state.cameraZoom = DEFAULT_CAMERA_ZOOM;
+  state.cameraAngleDegrees = DEFAULT_CAMERA_ANGLE_DEGREES;
+  state.cameraBehindMeters = DEFAULT_CAMERA_BEHIND_METERS;
+  state.cameraHeadingOffsetDegrees = 0;
+  state.cameraOffsetForwardMeters = 0;
+  state.cameraOffsetRightMeters = 0;
+  state.cameraCenterAltitudeOffsetMeters = 0;
+
+  syncCameraControls();
+  updateCameraSettingsLabels();
+  saveSettings();
+
+  updateRideUi();
+}
+
+function updateCenterRiderFromControl() {
+  state.centerRider = els.centerRiderInput.checked;
+  if (state.centerRider) {
+    state.cameraOffsetForwardMeters = 0;
+    state.cameraOffsetRightMeters = 0;
+    state.cameraCenterAltitudeOffsetMeters = 0;
+  }
+  saveSettings();
+  updateCameraSettingsLabels();
+
+  updateRideUi();
+}
+
+// --- Fullscreen ----------------------------------------------------------------
+
+function toggleMapFullscreen() {
+  if (state.mapFullscreen) exitMapFullscreen();
+  else enterMapFullscreen();
+}
+
+function enterMapFullscreen() {
+  state.mapFullscreen = true;
+  els.mapViewport.classList.add("fullscreen-mode");
+  els.fullscreenBtn.textContent = "⤢ Exit fullscreen";
+  els.fullscreenOverlayBottom.hidden = false;
+
+  // Move the elevation profile into the fullscreen HUD stack so it renders as
+  // a translucent overlay below the stat tiles instead of staying hidden
+  // behind the now-fixed-position map viewport.
+  els.fullscreenOverlayBottom.append(els.profile);
+  els.profile.classList.add("profile-translucent");
+
+  // The Fullscreen API also hides the browser chrome, but it can fail (no
+  // user gesture in the event tick, unsupported platform); the CSS class
+  // above already delivers the "just the map" view either way.
+  els.mapViewport.requestFullscreen?.().catch(() => {});
+
+  updateRideUi({ force: true });
+}
+
+function exitMapFullscreen() {
+  state.mapFullscreen = false;
+  els.mapViewport.classList.remove("fullscreen-mode");
+  els.fullscreenBtn.textContent = "⛶ Fullscreen";
+  els.fullscreenOverlayBottom.hidden = true;
+
+  els.mapViewport.after(els.profile);
+  els.profile.classList.remove("profile-translucent");
+
+  if (document.fullscreenElement === els.mapViewport) document.exitFullscreen?.().catch(() => {});
+
+  updateRideUi({ force: true });
+}
+
+function handleFullscreenChange() {
+  if (!document.fullscreenElement && state.mapFullscreen) exitMapFullscreen();
+}
+
+// --- Settings & saved ride ------------------------------------------------------
 
 function restoreSettings() {
   const settings = readJson(SETTINGS_STORAGE_KEY);
@@ -1075,15 +1328,21 @@ function restoreSettings() {
     state.gradeUpdateIntervalSeconds = clamp(gradeInterval, GRADE_INTERVAL_MIN_SECONDS, GRADE_INTERVAL_MAX_SECONDS);
   }
 
+  if (settings?.distanceUnits === "imperial") state.distanceUnits = "imperial";
+  if (settings?.energyUnits === "kj") state.energyUnits = "kj";
+
   els.centerRiderInput.checked = state.centerRider;
   els.gradeIntervalInput.value = String(state.gradeUpdateIntervalSeconds);
   els.gradeIntervalOutput.value = `${state.gradeUpdateIntervalSeconds} s`;
+  els.distanceUnitSelect.value = state.distanceUnits;
+  els.energyUnitSelect.value = state.energyUnits;
+  updateSpeedOutput();
   syncCameraControls();
   updateCameraSettingsLabels();
 }
 
 function saveSettings() {
-  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({
+  writeJson(SETTINGS_STORAGE_KEY, {
     cameraZoom: state.cameraZoom,
     cameraAngleDegrees: state.cameraAngleDegrees,
     cameraBehindMeters: state.cameraBehindMeters,
@@ -1093,7 +1352,9 @@ function saveSettings() {
     cameraCenterAltitudeOffsetMeters: state.cameraCenterAltitudeOffsetMeters,
     centerRider: state.centerRider,
     gradeUpdateIntervalSeconds: state.gradeUpdateIntervalSeconds,
-  }));
+    distanceUnits: state.distanceUnits,
+    energyUnits: state.energyUnits,
+  });
 }
 
 function restoreSavedRide() {
@@ -1102,11 +1363,11 @@ function restoreSavedRide() {
 
   if (Number.isFinite(savedSpeed)) {
     els.speedInput.value = String(clamp(savedSpeed, Number(els.speedInput.min), Number(els.speedInput.max)));
-    els.speedOutput.value = `${els.speedInput.value} km/h`;
+    updateSpeedOutput();
   }
 
   if (!savedRide?.route?.length) {
-    drawEmptyProfile();
+    renderProfile();
     return;
   }
 
@@ -1119,18 +1380,19 @@ function restoreSavedRide() {
     .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
 
   if (route.length < 2) {
-    drawEmptyProfile();
+    renderProfile();
     return;
   }
 
   state.route = enrichRoute(route);
-  state.progressMeters = clamp(Number(savedRide.progressMeters) || 0, 0, state.route.at(-1).distance);
-  state.riding = false;
+  state.progressMeters = clamp(Number(savedRide.progressMeters) || 0, 0, routeTotalDistance(state.route));
+  state.simulating = false;
   state.lastTick = 0;
 
+  updateStartButton();
   renderRoute();
-  drawProfile(state.progressMeters / (state.route.at(-1).distance || 1));
-  updateRideUi();
+  renderProfile();
+  updateRideUi({ force: true });
   els.startBtn.disabled = false;
   els.resetBtn.disabled = false;
 }
@@ -1145,7 +1407,7 @@ function saveRide() {
   state.lastRideSavedAt = performance.now();
 
   if (!state.route.length) {
-    localStorage.removeItem(RIDE_STORAGE_KEY);
+    removeStored(RIDE_STORAGE_KEY);
     return;
   }
 
@@ -1155,604 +1417,17 @@ function saveRide() {
     ele: Math.round(point.ele * 10) / 10,
   }));
 
-  try {
-    localStorage.setItem(RIDE_STORAGE_KEY, JSON.stringify({
-      route,
-      progressMeters: Math.round(state.progressMeters),
-      speedKph: Number(els.speedInput.value),
-      savedAt: new Date().toISOString(),
-    }));
-  } catch (error) {
-    console.warn("Could not save this route locally.", error);
+  const saved = writeJson(RIDE_STORAGE_KEY, {
+    route,
+    progressMeters: Math.round(state.progressMeters),
+    speedKph: Number(els.speedInput.value),
+    savedAt: new Date().toISOString(),
+  });
+  if (!saved) {
     updateProgressLabel("This GPX is too large to save locally, but the ride still works.");
   }
 }
 
-function readJson(key) {
-  try {
-    return JSON.parse(localStorage.getItem(key));
-  } catch {
-    return null;
-  }
-}
-
-function interpolateRoutePoint(distance) {
-  const route = state.route;
-  if (distance <= route[0].distance) return route[0];
-  if (distance >= route.at(-1).distance) return route.at(-1);
-
-  let low = 0;
-  let high = route.length - 1;
-  while (high - low > 1) {
-    const mid = (low + high) >> 1;
-    if (route[mid].distance < distance) low = mid;
-    else high = mid;
-  }
-
-  const previous = route[low];
-  const next = route[high];
-  const span = next.distance - previous.distance || 1;
-  const ratio = (distance - previous.distance) / span;
-
-  return {
-    lat: lerp(previous.lat, next.lat, ratio),
-    lng: lerp(previous.lng, next.lng, ratio),
-    ele: lerp(previous.ele, next.ele, ratio),
-  };
-}
-
-function currentGrade(distance) {
-  const lookBehind = Math.max(0, distance - 18);
-  const lookAhead = Math.min(state.route.at(-1).distance, distance + 18);
-  const from = interpolateRoutePoint(lookBehind);
-  const to = interpolateRoutePoint(lookAhead);
-  const horizontal = Math.max(1, lookAhead - lookBehind);
-  const rawGrade = ((to.ele - from.ele) / horizontal) * 100;
-  return clamp(rawGrade, -15, 20);
-}
-
-async function connectTrainer() {
-  if (!navigator.bluetooth) {
-    els.trainerStat.textContent = "Use Chrome";
-    updateProgressLabel("Web Bluetooth is available in Chrome or Edge, not Safari.");
-    return;
-  }
-
-  try {
-    els.trainerStat.textContent = "Pairing";
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [FTMS_SERVICE] }, { namePrefix: "KICKR" }],
-      optionalServices: [FTMS_SERVICE],
-    });
-
-    await connectTrainerDevice(device);
-  } catch (error) {
-    console.error(error);
-    els.trainerStat.textContent = "Failed";
-    updateProgressLabel(error.message || "Could not connect to the trainer.");
-  }
-}
-
-async function reconnectSavedTrainer() {
-  const savedTrainer = readJson(TRAINER_STORAGE_KEY);
-  if (!savedTrainer || !navigator.bluetooth?.getDevices) return;
-
-  try {
-    els.trainerStat.textContent = "Reconnecting";
-    const devices = await navigator.bluetooth.getDevices();
-    const device = devices.find((candidate) => (
-      candidate.id === savedTrainer.id ||
-      candidate.name === savedTrainer.name ||
-      candidate.name?.startsWith("KICKR")
-    ));
-
-    if (!device) {
-      els.trainerStat.textContent = savedTrainer.name || "Saved";
-      return;
-    }
-
-    await connectTrainerDevice(device);
-  } catch (error) {
-    console.warn("Could not reconnect saved trainer.", error);
-    els.trainerStat.textContent = savedTrainer.name || "Saved";
-  }
-}
-
-async function connectTrainerDevice(device) {
-  device.addEventListener("gattserverdisconnected", () => {
-    state.trainer = null;
-    state.controlPoint = null;
-    state.bikeData = null;
-    state.bleWriteQueue = Promise.resolve();
-    state.trainerSpeedKph = null;
-    state.trainerPowerWatts = null;
-    updateTelemetryUi();
-    els.trainerStat.textContent = "Disconnected";
-  });
-
-  const server = await device.gatt.connect();
-  const service = await server.getPrimaryService(FTMS_SERVICE);
-  state.controlPoint = await service.getCharacteristic(FTMS_CONTROL_POINT);
-  await subscribeToControlPointResponses();
-  await subscribeToBikeData(service);
-
-  try {
-    const status = await service.getCharacteristic(FTMS_STATUS);
-    await status.startNotifications();
-  } catch {
-    // Some trainers expose indications only on the control point.
-  }
-
-  state.trainer = device;
-  localStorage.setItem(TRAINER_STORAGE_KEY, JSON.stringify({
-    id: device.id,
-    name: device.name || "KICKR",
-    savedAt: new Date().toISOString(),
-  }));
-  await sendTrainerCommand(OP_REQUEST_CONTROL);
-
-  // Clears any stale ERG/resistance target left over from a previous
-  // session (Zwift, TrainerRoad, etc.) — some trainers keep enforcing that
-  // target and silently ignore Set Simulation Parameters until reset.
-  await sendTrainerCommand(OP_RESET);
-
-  els.trainerStat.textContent = device.name || "Connected";
-}
-
-async function subscribeToControlPointResponses() {
-  try {
-    state.controlPoint.addEventListener("characteristicvaluechanged", handleControlPointResponse);
-    await state.controlPoint.startNotifications();
-  } catch (error) {
-    console.warn("Control point responses are not available.", error);
-  }
-}
-
-function handleControlPointResponse(event) {
-  const data = event.target.value;
-  if (data.byteLength < 3 || data.getUint8(0) !== FTMS_RESPONSE_CODE) return;
-
-  const requestOpcode = data.getUint8(1);
-  const resultCode = data.getUint8(2);
-  const resultText = FTMS_RESULT_TEXT[resultCode] || `Error ${resultCode}`;
-  const opcodeName = FTMS_OPCODE_NAMES[requestOpcode] || `0x${requestOpcode.toString(16)}`;
-
-  console.debug(`[trainer] response: ${opcodeName} -> ${resultText}`);
-
-  if (resultCode !== 0x01) {
-    els.trainerStat.textContent = resultText;
-  }
-}
-
-async function subscribeToBikeData(service) {
-  try {
-    state.bikeData = await service.getCharacteristic(FTMS_INDOOR_BIKE_DATA);
-    state.bikeData.addEventListener("characteristicvaluechanged", handleBikeData);
-    await state.bikeData.startNotifications();
-  } catch (error) {
-    console.warn("Indoor Bike Data notifications are not available.", error);
-  }
-}
-
-function handleBikeData(event) {
-  const data = event.target.value;
-  const flags = data.getUint16(0, true);
-  let index = 2;
-
-  if ((flags & 0x0001) === 0 && index + 2 <= data.byteLength) {
-    state.trainerSpeedKph = data.getUint16(index, true) / 100;
-    index += 2;
-  }
-
-  if (flags & 0x0002) index += 2;
-  if (flags & 0x0004) index += 2;
-  if (flags & 0x0008) index += 2;
-  if (flags & 0x0010) index += 3;
-  if (flags & 0x0020) index += 2;
-
-  if ((flags & 0x0040) && index + 2 <= data.byteLength) {
-    state.trainerPowerWatts = data.getInt16(index, true);
-    index += 2;
-  }
-
-  updateTelemetryUi();
-}
-
-function updateTelemetryUi() {
-  const powerText = Number.isFinite(state.trainerPowerWatts) ? `${state.trainerPowerWatts} W` : "--";
-  const speedText = Number.isFinite(state.trainerSpeedKph) ? `${state.trainerSpeedKph.toFixed(1)} km/h` : "--";
-  els.powerStat.textContent = powerText;
-  els.speedStat.textContent = speedText;
-  els.hudPowerStat.textContent = powerText;
-  els.hudSpeedStat.textContent = speedText;
-}
-
-async function sendTrainerGrade(gradePercent) {
-  if (!state.controlPoint) return;
-
-  // Never let a slow write build a backlog: if one is still in flight, skip
-  // this attempt entirely rather than queueing another. The next window
-  // (or the next queueTrainerGradeSample call) will pick up wherever the
-  // rider actually is by then.
-  if (state.gradeWriteInFlight) {
-    console.debug(`[trainer] grade ${gradePercent.toFixed(1)}% dropped, previous write still in flight`);
-    return;
-  }
-
-  const grade = Math.round(gradePercent * 100);
-  if (grade === state.lastGradeSentRaw) return;
-
-  const payload = [
-    OP_SET_SIMULATION,
-    0x00, 0x00,
-    grade & 0xff, (grade >> 8) & 0xff,
-    0x40,
-    0x51,
-  ];
-
-  console.debug(`[trainer] sending grade ${gradePercent.toFixed(1)}% (raw int16 ${grade})`);
-  state.gradeWriteInFlight = true;
-
-  try {
-    await sendBytes(payload);
-    state.lastGradeSentRaw = grade;
-    clearTrainerErrorStat();
-    console.debug(`[trainer] grade ${gradePercent.toFixed(1)}% write acknowledged`);
-  } catch (error) {
-    console.error(`[trainer] grade ${gradePercent.toFixed(1)}% write failed`, error);
-    els.trainerStat.textContent = "BLE error";
-  } finally {
-    state.gradeWriteInFlight = false;
-  }
-}
-
-async function sendTrainerCommand(opcode, payload = []) {
-  if (!state.controlPoint) return;
-  const opcodeName = FTMS_OPCODE_NAMES[opcode] || `0x${opcode.toString(16)}`;
-  console.debug(`[trainer] sending command ${opcodeName}`);
-  try {
-    await sendBytes([opcode, ...payload]);
-    clearTrainerErrorStat();
-    console.debug(`[trainer] command ${opcodeName} acknowledged`);
-  } catch (error) {
-    console.error(`[trainer] command ${opcodeName} failed`, error);
-    els.trainerStat.textContent = "BLE error";
-  }
-}
-
-function clearTrainerErrorStat() {
-  if (els.trainerStat.textContent === "BLE error") {
-    els.trainerStat.textContent = state.trainer?.name || "Connected";
-  }
-}
-
-function sendBytes(bytes) {
-  // The device only allows one outstanding GATT operation at a time.
-  // Grade writes fire independently of Start/Pause/Reset commands, so
-  // without a queue two overlapping writes throw "GATT operation already
-  // in progress" and the losing write is simply never applied.
-  const task = state.bleWriteQueue.then(() => writeBytesNow(bytes));
-  state.bleWriteQueue = task.catch(() => {});
-  return task;
-}
-
-async function writeBytesNow(bytes) {
-  // FTMS requires the Control Point to be written with a Write Request
-  // (writeValue) so the machine treats it as a real control transaction and
-  // sends back a Response Code indication. Write Without Response is a
-  // fire-and-forget command some machines silently accept without ever
-  // applying it. Only fall back to it for non-compliant peripherals that
-  // don't support Write Request at all.
-  try {
-    await state.controlPoint.writeValue(new Uint8Array(bytes));
-  } catch {
-    await state.controlPoint.writeValueWithoutResponse(new Uint8Array(bytes));
-  }
-}
-
-function drawEmptyProfile() {
-  const canvas = els.profile;
-  const ctx = configureCanvas(canvas);
-  const { width, height } = canvas.getBoundingClientRect();
-  const theme = state.mapFullscreen ? PROFILE_THEME_DARK : PROFILE_THEME_LIGHT;
-  fillProfileBackground(ctx, theme, width, height);
-}
-
-function fillProfileBackground(ctx, theme, width, height) {
-  ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = theme.background;
-  if (state.mapFullscreen) {
-    ctx.beginPath();
-    ctx.roundRect(0, 0, width, height, 10);
-    ctx.fill();
-  } else {
-    ctx.fillRect(0, 0, width, height);
-  }
-}
-
-function drawProfile(progress = 0) {
-  const route = state.route;
-  const canvas = els.profile;
-  const ctx = configureCanvas(canvas);
-  const { width, height } = canvas.getBoundingClientRect();
-  const theme = state.mapFullscreen ? PROFILE_THEME_DARK : PROFILE_THEME_LIGHT;
-
-  fillProfileBackground(ctx, theme, width, height);
-
-  if (route.length < 2) return;
-
-  const chartLeft = PROFILE_PADDING_LEFT;
-  const chartRight = width - PROFILE_PADDING_RIGHT;
-  const chartTop = PROFILE_PADDING_TOP;
-  const chartBottom = height - PROFILE_PADDING_BOTTOM;
-  const chartWidth = Math.max(1, chartRight - chartLeft);
-  const totalDistance = route.at(-1).distance || 1;
-
-  const elevations = route.map((point) => point.ele);
-  const min = Math.min(...elevations);
-  const max = Math.max(...elevations);
-  const span = Math.max(1, max - min);
-  const paddedMin = min - span * 0.08;
-  const paddedMax = max + span * 0.08;
-  const paddedSpan = Math.max(1, paddedMax - paddedMin);
-
-  const xFor = (distance) => chartLeft + (distance / totalDistance) * chartWidth;
-  const yFor = (ele) => chartBottom - ((ele - paddedMin) / paddedSpan) * (chartBottom - chartTop);
-
-  drawElevationGridlines(ctx, { min, max, chartLeft, chartRight, chartTop, yFor, theme });
-  drawGradeBars(ctx, { totalDistance, chartLeft, chartRight, chartBottom, xFor, yFor });
-  drawElevationLine(ctx, { route, totalDistance, xFor, yFor, theme });
-  drawDistanceAxis(ctx, { totalDistance, chartLeft, chartRight, chartBottom, height, xFor, theme });
-
-  const markerX = chartLeft + progress * chartWidth;
-  ctx.beginPath();
-  ctx.moveTo(markerX, chartTop);
-  ctx.lineTo(markerX, chartBottom);
-  ctx.strokeStyle = theme.marker;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  if (state.profileHoverMeters !== null) {
-    drawProfileHover(ctx, { totalDistance, chartLeft, chartRight, chartTop, chartBottom, xFor, yFor, theme });
-  }
-}
-
-function drawElevationGridlines(ctx, { min, max, chartLeft, chartRight, chartTop, yFor, theme }) {
-  const step = niceStep(Math.max(1, max - min), ELEVATION_STEP_CANDIDATES);
-  const first = Math.ceil(min / step) * step;
-
-  ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
-  ctx.font = "10px Inter, ui-sans-serif, system-ui, sans-serif";
-
-  for (let value = first; value <= max; value += step) {
-    const y = yFor(value);
-    if (y < chartTop - 1) continue;
-
-    ctx.beginPath();
-    ctx.moveTo(chartLeft, y);
-    ctx.lineTo(chartRight, y);
-    ctx.strokeStyle = theme.gridline;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.fillStyle = theme.label;
-    ctx.fillText(`${Math.round(value)} m`, chartLeft - 6, y);
-  }
-}
-
-function drawGradeBars(ctx, { totalDistance, chartLeft, chartRight, chartBottom, xFor, yFor }) {
-  const chartWidth = chartRight - chartLeft;
-  const sampleCount = clamp(Math.round(chartWidth / PROFILE_BAR_SAMPLE_PX), 20, 400);
-  const samples = [];
-  for (let i = 0; i <= sampleCount; i += 1) {
-    const distance = (i / sampleCount) * totalDistance;
-    samples.push({ distance, ele: interpolateRoutePoint(distance).ele });
-  }
-
-  for (let i = 0; i < samples.length - 1; i += 1) {
-    const from = samples[i];
-    const to = samples[i + 1];
-    const midDistance = (from.distance + to.distance) / 2;
-    const grade = currentGrade(midDistance);
-
-    const x0 = xFor(from.distance);
-    const x1 = xFor(to.distance);
-    const y0 = yFor(from.ele);
-    const y1 = yFor(to.ele);
-
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.lineTo(x1, chartBottom);
-    ctx.lineTo(x0, chartBottom);
-    ctx.closePath();
-    ctx.fillStyle = gradeColor(grade);
-    ctx.fill();
-  }
-}
-
-function drawElevationLine(ctx, { route, totalDistance, xFor, yFor, theme }) {
-  ctx.beginPath();
-  route.forEach((point, index) => {
-    const x = xFor(point.distance);
-    const y = yFor(point.ele);
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.strokeStyle = theme.line;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-}
-
-function drawDistanceAxis(ctx, { totalDistance, chartLeft, chartRight, chartBottom, height, xFor, theme }) {
-  ctx.beginPath();
-  ctx.moveTo(chartLeft, chartBottom);
-  ctx.lineTo(chartRight, chartBottom);
-  ctx.strokeStyle = theme.axisLine;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  const useKm = totalDistance >= 3000;
-  const step = useKm
-    ? niceStep(totalDistance / 1000, DISTANCE_STEP_KM_CANDIDATES) * 1000
-    : niceStep(totalDistance, DISTANCE_STEP_METERS_CANDIDATES);
-
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.font = "10px Inter, ui-sans-serif, system-ui, sans-serif";
-  ctx.fillStyle = theme.label;
-  ctx.strokeStyle = theme.axisLine;
-
-  for (let distance = 0; distance <= totalDistance; distance += step) {
-    const x = xFor(distance);
-    ctx.beginPath();
-    ctx.moveTo(x, chartBottom);
-    ctx.lineTo(x, chartBottom + 4);
-    ctx.stroke();
-
-    const label = useKm ? `${Math.round(distance / 1000)} km` : `${Math.round(distance)} m`;
-    ctx.fillText(label, clamp(x, chartLeft + 14, chartRight - 14), chartBottom + 6);
-  }
-}
-
-function drawProfileHover(ctx, { totalDistance, chartLeft, chartRight, chartTop, chartBottom, xFor, yFor, theme }) {
-  const distance = clamp(state.profileHoverMeters, 0, totalDistance);
-  const point = interpolateRoutePoint(distance);
-  const grade = currentGrade(distance);
-  const x = xFor(distance);
-  const y = yFor(point.ele);
-
-  ctx.beginPath();
-  ctx.moveTo(x, chartTop);
-  ctx.lineTo(x, chartBottom);
-  ctx.strokeStyle = theme.hoverGuide;
-  ctx.lineWidth = 1;
-  ctx.setLineDash([4, 3]);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctx.beginPath();
-  ctx.arc(x, y, 3.5, 0, Math.PI * 2);
-  ctx.fillStyle = theme.marker;
-  ctx.fill();
-
-  const label = `${(distance / 1000).toFixed(2)} km  ${grade >= 0 ? "+" : ""}${grade.toFixed(1)}%`;
-  ctx.font = "11px Inter, ui-sans-serif, system-ui, sans-serif";
-  const textWidth = ctx.measureText(label).width;
-  const boxWidth = textWidth + 16;
-  const boxHeight = 22;
-  let boxX = x - boxWidth / 2;
-  boxX = clamp(boxX, chartLeft, chartRight - boxWidth);
-  const boxY = chartTop + 4;
-
-  ctx.fillStyle = "rgba(36, 49, 46, 0.92)";
-  ctx.beginPath();
-  ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 5);
-  ctx.fill();
-
-  ctx.fillStyle = "#ffffff";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(label, boxX + boxWidth / 2, boxY + boxHeight / 2 + 0.5);
-}
-
-function niceStep(range, candidates) {
-  for (const candidate of candidates) {
-    if (range / candidate <= 6) return candidate;
-  }
-  return candidates.at(-1);
-}
-
-function gradeColor(grade) {
-  const intensity = clamp(Math.abs(grade) / PROFILE_GRADE_STEEP_PERCENT, 0, 1);
-  const lightness = 88 - intensity * 40;
-  if (grade > 0.3) return `hsl(4, 72%, ${lightness}%)`;
-  if (grade < -0.3) return `hsl(142, 55%, ${lightness}%)`;
-  return "hsl(60, 6%, 84%)";
-}
-
-function configureCanvas(canvas) {
-  const rect = canvas.getBoundingClientRect();
-  const scale = window.devicePixelRatio || 1;
-  const width = Math.round(rect.width * scale);
-  const height = Math.round(rect.height * scale);
-  // Assigning width/height resets and reallocates the canvas, so only touch
-  // them when the element size actually changed.
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  return ctx;
-}
-
-function bearing(a, b) {
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const y = Math.sin(dLng) * Math.cos(lat2);
-  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-  return Math.atan2(y, x) * 180 / Math.PI;
-}
-
-function riderCircleCoordinates(center, radiusMeters, altitude = 0) {
-  const points = [];
-  for (let angle = 0; angle < 360; angle += 6) {
-    const point = destinationPoint(center, angle, radiusMeters);
-    points.push({ ...point, altitude });
-  }
-  return points;
-}
-
-function destinationPoint(position, bearingDegrees, distanceMeters) {
-  const earthRadius = 6371000;
-  const angularDistance = distanceMeters / earthRadius;
-  const bearingRadians = toRad(bearingDegrees);
-  const lat1 = toRad(position.lat);
-  const lng1 = toRad(position.lng);
-  const lat2 = Math.asin(
-    Math.sin(lat1) * Math.cos(angularDistance) +
-    Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(bearingRadians),
-  );
-  const lng2 = lng1 + Math.atan2(
-    Math.sin(bearingRadians) * Math.sin(angularDistance) * Math.cos(lat1),
-    Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2),
-  );
-
-  return {
-    lat: lat2 * 180 / Math.PI,
-    lng: ((lng2 * 180 / Math.PI + 540) % 360) - 180,
-  };
-}
-
-function haversine(a, b) {
-  const earthRadius = 6371000;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * earthRadius * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
-
 function updateProgressLabel(text) {
   els.progressLabel.textContent = text;
-}
-
-function lerp(a, b, ratio) {
-  return a + (b - a) * ratio;
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function roundCoordinate(value) {
-  return Math.round(value * 1000000) / 1000000;
-}
-
-function toRad(value) {
-  return value * Math.PI / 180;
 }
