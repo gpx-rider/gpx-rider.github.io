@@ -72,6 +72,10 @@ make test
 
 ## How to use it
 
+The best tool for creating routes is [Mapy.com](https://mapy.com/). It
+supports bicycle routing, displays an elevation profile, and exports routes
+as GPX files ready to load into GPX Rider.
+
 1. Open the page in Chrome and paste in your Google Maps API key (saved
    locally, one-time setup).
 2. Choose a GPX file with track points and elevation.
@@ -115,6 +119,94 @@ own.
   slope, wind, rolling resistance, and drag-area values.
 - This is a young project. Test resistance changes at low speed and keep
   the bike/trainer clear before a real workout.
+
+## Routes
+
+A small collection of ready-to-ride GPX routes. Download any of them and load it straight into GPX Rider.
+
+<!-- gallery-start -->
+#### [Golden Gate Bridge](gallery/0100_goldengate/export.gpx)
+
+![](gallery/0100_goldengate/screenshot.jpeg)
+
+A short scenic ride along the San Francisco coast, heading toward the iconic red towers of the Golden Gate Bridge. Expect big ocean views, rolling hills, glimpses of San Francisco Bay, and a finish near Point Lobos.
+
+**10 km** · **184 m up** · **184 m down**
+
+[⬇ Download GPX](gallery/0100_goldengate/export.gpx)
+
+---
+
+#### [Stelvio Pass](gallery/0200_stelvio_pass/export.gpx)
+
+![](gallery/0200_stelvio_pass/screenshot.jpeg)
+
+A high-alpine ride from Stilfs over the legendary Stelvio Pass and down toward Bormio. Expect towering mountain views, dramatic switchbacks, exposed slopes, and one of the most recognizable roads in cycling.
+
+**30 km** · **1,495 m up** · **866 m down**
+
+[⬇ Download GPX](gallery/0200_stelvio_pass/export.gpx)
+
+---
+
+#### [Alpe d’Huez](gallery/0300_alpe_d_huez/export.gpx)
+
+![](gallery/0300_alpe_d_huez/screenshot.jpeg)
+
+A classic alpine climb from Le Bourg-d’Oisans to Alpe d’Huez, famous for its 21 hairpins and brutal Tour de France drama. Expect tight switchbacks, big valley views, and a final stretch high above the mountains before an easy cooldown.
+
+**20 km** · **1,174 m up** · **124 m down**
+
+[⬇ Download GPX](gallery/0300_alpe_d_huez/export.gpx)
+
+---
+
+#### [Zlaté návrší](gallery/0400_zlate_navrsi/export.gpx)
+
+![](gallery/0400_zlate_navrsi/screenshot.jpeg)
+
+Climb from Semily deep into the Krkonoše mountains, taking on a 40 km ascent toward Zlaté návrší - often claimed to be the longest climb in the Czech Republic. After the main climb, the route crosses the high ridges past Labská bouda, the source of the Elbe, and Vosecká bouda - including a protected stretch that is much easier to enjoy when your bike is virtual.
+
+**54.6 km** · **1,164 m up** · **711 m down**
+
+[⬇ Download GPX](gallery/0400_zlate_navrsi/export.gpx)
+
+---
+
+#### [Amalfi Coast](gallery/0500_amalfi_coast/export.gpx)
+
+![](gallery/0500_amalfi_coast/screenshot.jpeg)
+
+A punchy coastal ride along the Amalfi Coast, where the road keeps climbing out of seaside towns and dropping back toward the Mediterranean. Expect cliffside views, tight bends, short hard efforts, and plenty of downhill breaks before finishing at Piazza Giacomo Matteotti.
+
+**32.3 km** · **1,176 m up** · **1,237 m down**
+
+[⬇ Download GPX](gallery/0500_amalfi_coast/export.gpx)
+
+---
+
+#### [Boulder Foothills](gallery/0600_boulder/export.gpx)
+
+![](gallery/0600_boulder/screenshot.jpeg)
+
+A punchy ride through the Colorado foothills around Boulder, where the road keeps kicking up into short climbs before dropping into fast descents. Expect canyon roads, open mountain views, dry Rocky Mountain scenery, and a sawtooth profile that feels made for natural intervals.
+
+**48.2 km** · **1,473 m up** · **1,737 m down**
+
+[⬇ Download GPX](gallery/0600_boulder/export.gpx)
+
+---
+
+#### [Griffith Observatory](gallery/0700_los_angeles/export.gpx)
+
+![](gallery/0700_los_angeles/screenshot.jpeg)
+
+Ride from downtown Los Angeles into the Hollywood Hills, passing city landmarks before climbing through Griffith Park to one of LA’s most famous viewpoints. Expect skyline views, dry canyon scenery, rolling park roads, and a finish near Griffith Observatory above the city.
+
+**36.2 km** · **586 m up** · **341 m down**
+
+[⬇ Download GPX](gallery/0700_los_angeles/export.gpx)
+<!-- gallery-end -->
 
 ## Contributing
 
