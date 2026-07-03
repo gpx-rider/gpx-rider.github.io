@@ -234,6 +234,18 @@ Nobody expects anyone to finish a 180 km virtual ride in one go. Except Jan, obv
 **182.4 km** · **781 m up** · **781 m down**
 
 [⬇ Download GPX](gallery/0800_kona/export.gpx)
+
+---
+
+#### [Prague Landmarks](gallery/0900_prague/export.gpx)
+
+![](gallery/0900_prague/screenshot.jpeg)
+
+A compact sightseeing ride through the heart of Prague, linking Vyšehrad, the National Theatre, Old Town Square, the Astronomical Clock, Charles Bridge, Petřín, Prague Castle, Letná, and Vítkov. Expect river views, historic squares, park climbs, castle panoramas, and a steady stream of postcard moments.
+
+**21.1 km** · **172 m up** · **200 m down**
+
+[⬇ Download GPX](gallery/0900_prague/export.gpx)
 <!-- gallery-end -->
 
 ## Contributing
