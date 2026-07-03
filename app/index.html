@@ -64,6 +64,8 @@
           <span>Choose GPX</span>
         </label>
 
+        <button id="browseGalleryBtn" type="button" hidden>or browse the ride gallery</button>
+
         <div class="stats-grid" aria-live="polite">
           <div>
             <span>Distance</span>
@@ -148,6 +150,12 @@
         </details>
       </aside>
     </main>
+
+    <section class="gallery-section" id="gallery" hidden>
+      <h2 class="gallery-heading">Choose a ride</h2>
+      <p class="gallery-attribution">Route screenshots are captured from Google Maps Photorealistic 3D Maps. Map data &copy; Google.</p>      
+      <div class="gallery-grid" id="galleryGrid"></div>      
+    </section>
 
     <script src="./app.js" type="module"></script>
   </body>
