@@ -120,9 +120,23 @@ own.
 - This is a young project. Test resistance changes at low speed and keep
   the bike/trainer clear before a real workout.
 
+## Map imagery, routes, and trademarks
+
+GPX Rider uses Google Maps Platform / Google Photorealistic 3D Maps when you provide your own API key. Google Maps, Google Earth, and related imagery are owned by Google and/or its data providers. Keep all map attribution visible in the app and in screenshots.
+
+The GPX files in this repository are independently created demo routes for
+personal training and testing. They are unofficial and are not affiliated
+with, endorsed by, or sponsored by any race organizer, venue, mapping
+provider, equipment manufacturer, or other third party.
+
+Route and place names identify real-world locations only. Third-party
+trademarks belong to their respective owners.
+
 ## Routes
 
 A small collection of ready-to-ride GPX routes. Download any of them and load it straight into GPX Rider.
+
+Gallery screenshots are rendered from Google Photorealistic 3D Maps. The screenshots are meant to keep the Google/data-provider attribution visible; do not crop, hide, or remove that attribution when adding new gallery images.
 
 <!-- gallery-start -->
 #### [Golden Gate Bridge](gallery/0100_goldengate/export.gpx)
@@ -153,7 +167,7 @@ A high-alpine ride from Stilfs over the legendary Stelvio Pass and down toward B
 
 ![](gallery/0300_alpe_d_huez/screenshot.jpeg)
 
-A classic alpine climb from Le Bourg-d’Oisans to Alpe d’Huez, famous for its 21 hairpins and brutal Tour de France drama. Expect tight switchbacks, big valley views, and a final stretch high above the mountains before an easy cooldown.
+A classic alpine climb from Le Bourg-d’Oisans to Alpe d’Huez, famous for its 21 hairpins and years of grand-tour drama. Expect tight switchbacks, big valley views, and a final stretch high above the mountains before an easy cooldown.
 
 **20 km** · **1,174 m up** · **124 m down**
 
@@ -206,6 +220,20 @@ Ride from downtown Los Angeles into the Hollywood Hills, passing city landmarks 
 **36.2 km** · **586 m up** · **341 m down**
 
 [⬇ Download GPX](gallery/0700_los_angeles/export.gpx)
+
+---
+
+#### [Big Island Full-Distance Ride](gallery/0800_kona/export.gpx)
+
+![](gallery/0800_kona/screenshot.jpeg)
+
+Ride a full-distance route across Hawaiʻi’s Big Island: lava fields, ocean views, long exposed roads, and a distance that turns “I’ll just try it for a bit” into a very serious conversation with your legs.
+
+Nobody expects anyone to finish a 180 km virtual ride in one go. Except Jan, obviously. But the route is there whenever you feel dangerously optimistic.
+
+**182.4 km** · **781 m up** · **781 m down**
+
+[⬇ Download GPX](gallery/0800_kona/export.gpx)
 <!-- gallery-end -->
 
 ## Contributing

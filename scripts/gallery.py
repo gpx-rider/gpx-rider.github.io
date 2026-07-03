@@ -42,15 +42,16 @@ def build_gallery():
 def update_readme(gallery_md):
     content = README.read_text()
     replacement = f"<!-- gallery-start -->\n{gallery_md}\n<!-- gallery-end -->"
-    new_content = re.sub(
+    new_content, replacements = re.subn(
         r"<!-- gallery-start -->.*?<!-- gallery-end -->",
         replacement,
         content,
         flags=re.DOTALL,
     )
-    if new_content == content:
+    if replacements == 0:
         raise SystemExit("ERROR: gallery markers not found in README.md")
-    README.write_text(new_content)
+    if new_content != content:
+        README.write_text(new_content)
     n = gallery_md.count("⬇")
     print(f"Gallery updated: {n} route(s)")
 
