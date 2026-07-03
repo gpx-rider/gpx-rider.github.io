@@ -49,6 +49,32 @@ export function applyCameraOffset(position, routeHeading, forwardMeters, rightMe
   return destinationPoint(position, normalizeHeading(routeHeading + offsetAngle), distance);
 }
 
+// Distance from the camera eye to a point on the ground. Map3DElement only
+// exposes the look-at center plus range/tilt/heading, so the eye position is
+// reconstructed from those: it sits `range` away from the center, pulled back
+// along the opposite heading and lifted by the tilt.
+export function cameraDistanceToPoint({ center, range, tilt, heading }, point) {
+  const safeRange = Number(range);
+  const lat = Number(center?.lat);
+  const lng = Number(center?.lng);
+  if (!Number.isFinite(safeRange) || safeRange <= 0 || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+
+  const safeTilt = clamp(Number(tilt) || 0, 0, MAX_3D_CAMERA_TILT_DEGREES);
+  const horizontalStandoff = safeRange * Math.sin(toRad(safeTilt));
+  const eyeGround = destinationPoint(
+    { lat, lng },
+    normalizeHeading((Number(heading) || 0) + 180),
+    horizontalStandoff,
+  );
+  const eyeAltitude = (Number(center?.altitude) || 0) + safeRange * Math.cos(toRad(safeTilt));
+
+  const horizontalDistance = haversine(eyeGround, point);
+  const verticalDistance = eyeAltitude - (Number(point.ele) || 0);
+  return Math.hypot(horizontalDistance, verticalDistance);
+}
+
 export function measureCameraOffset(riderPosition, centerPosition, routeHeading) {
   const distance = haversine(riderPosition, centerPosition);
   if (distance < 0.01) return { forwardMeters: 0, rightMeters: 0 };
