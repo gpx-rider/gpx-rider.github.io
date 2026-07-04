@@ -14,6 +14,7 @@
           <div id="minimap" aria-label="Minimap showing rider position on the route"></div>
           <div class="map-actions">
             <button id="screenshotBtn" type="button" class="map-action-btn" title="Save a JPG of the map view">📷 Screenshot</button>
+            <button id="resetCameraViewBtn" type="button" class="map-action-btn" title="Reset the camera to its default view">⟲ Reset camera</button>
             <button id="fullscreenBtn" type="button" class="map-action-btn">⛶ Fullscreen</button>
           </div>
 
@@ -149,7 +150,7 @@
         <button id="settingsCloseBtn" type="button" class="settings-close" aria-label="Close settings">✕</button>
       </header>
 
-      <section class="settings-section">
+      <section id="apiKeySection" class="settings-section">
         <div class="api-key-control">
           <label for="mapsApiKeyInput">Google Maps API key</label>
           <div class="api-key-row">
