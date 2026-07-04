@@ -7,10 +7,7 @@
 // in Settings always takes precedence over this default.
 //
 // Base64-encoded, not encrypted — this is a public webapp, so the key is
-// visible in the network tab regardless of anything done here. The encoding
-// only keeps the raw "AIzaSy..." string out of the JS source as a literal,
-// so naive scrapers and secret-scanning bots grepping page source don't
-// flag it. It is not a security boundary.
+// visible in the network tab regardless of anything done here.
 const DEPLOYED_MAPS_API_KEY_B64 = "";
 
 export function deployedMapsApiKey() {
