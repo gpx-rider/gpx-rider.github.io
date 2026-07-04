@@ -37,7 +37,7 @@ import { classifyRoute } from "./difficulty.mjs";
 import { detectClimbs } from "./climbs.mjs";
 import { distanceAtProfileX, drawEmptyProfile, drawProfile } from "./profile.mjs";
 import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatSpeed } from "./units.mjs";
-import { readJson, removeStored, writeJson } from "./storage.mjs";
+import { initStorage, readJson, removeStored, writeJson } from "./storage.mjs";
 import {
   CAMERA_CENTER_ALTITUDE_LIMIT_METERS,
   CAMERA_PAN_LIMIT_METERS,
@@ -301,6 +301,10 @@ const els = {
 startApp();
 
 async function startApp() {
+  // Everything below reads persisted state through storage.mjs, so the
+  // IndexedDB-backed cache must be loaded before anything else runs.
+  await initStorage();
+
   initTrainer({
     onTelemetry: handleTrainerTelemetry,
     onStatus: handleTrainerStatus,
@@ -952,6 +956,13 @@ function handleVisibilityChange() {
   // A pending rAF from before the tab was hidden only fires once the tab is
   // visible again; reschedule so the loop keeps ticking either way.
   if (state.movementLoopActive) scheduleTick();
+  // Going hidden is the last dependable moment to persist: a background tab
+  // can be discarded without beforeunload, and an IndexedDB write started
+  // only in beforeunload may not get to commit.
+  if (document.hidden) {
+    saveRide();
+    persistRideLog();
+  }
 }
 
 function handleMovementStopped() {

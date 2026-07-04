@@ -109,7 +109,8 @@ If that sounds useful, contributions are very welcome — see
   ships with its own built-in key, so it skips this entirely.
 - 💾 **Remembers your session** — last route, ride progress, recorded ride
   data, fallback speed, camera settings, and previously paired trainer and
-  heart-rate sensor all persist locally.
+  heart-rate sensor all persist locally in your browser's IndexedDB, so
+  even a very long ride survives a reload or crash.
 - 🧩 **No build step** — plain HTML/CSS/JS ES modules, no bundler, no
   framework, no `node_modules` to run it.
 
@@ -192,9 +193,12 @@ own — visitors will be prompted to paste their own key on first load.
   JavaScript API** and the **Photorealistic 3D Maps** feature for your
   Google Cloud project, or the map fails to load instead of falling back to
   another renderer.
-- Route, ride progress, and the recorded ride data are stored in browser
-  `localStorage`. Very large GPX files or very long rides may exceed
-  browser storage limits (recording then continues in memory only).
+- Route, ride progress, and the recorded ride data are stored in the
+  browser's IndexedDB, which comfortably fits very long rides and large
+  GPX files (data saved by older versions in `localStorage` is migrated
+  over automatically). Browsers without working IndexedDB fall back to
+  `localStorage`, where very long rides may exceed storage limits
+  (recording then continues in memory only).
 - Total ascent/descent are computed from the GPX elevation with a small
   noise filter (climbs only count once they exceed a couple of meters), so
   the totals can differ slightly from what another planner or head unit

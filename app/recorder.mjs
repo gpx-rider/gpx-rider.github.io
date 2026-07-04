@@ -1,15 +1,16 @@
 // Ride recorder — the "bucket" of collected ride data. While the rider is
 // moving (pedaling or simulating) the app feeds it ticks; roughly once a
 // second it appends a track sample, and every few seconds it persists the
-// whole log to localStorage so a reload or crash never loses a ride.
+// whole log via storage.mjs (IndexedDB) so a reload or crash never loses a
+// ride.
 
 import { roundCoordinate } from "./geo.mjs";
-import { readJson, removeStored } from "./storage.mjs";
+import { readJson, removeStored, writeJson } from "./storage.mjs";
 import { RIDE_PERSIST_INTERVAL_MS, RIDE_SAMPLE_INTERVAL_MS } from "./tuning.mjs";
 
 const RIDE_LOG_STORAGE_KEY = "gpx-rider:ride-log";
 
-// Samples are stored as compact arrays to stretch the localStorage quota:
+// Samples are stored as compact arrays to keep the persisted log small:
 // [unixSeconds, lat, lng, ele, distanceMeters, speedKph, powerWatts, heartRateBpm, caloriesKcal]
 const log = emptyLog();
 
@@ -66,21 +67,20 @@ export function persistRideLog() {
     return;
   }
 
-  try {
-    localStorage.setItem(RIDE_LOG_STORAGE_KEY, JSON.stringify({
-      startedAtMs: log.startedAtMs,
-      timerSeconds: Math.round(log.timerSeconds),
-      distanceMeters: Math.round(log.distanceMeters),
-      samples: log.samples,
-    }));
+  const persisted = writeJson(RIDE_LOG_STORAGE_KEY, {
+    startedAtMs: log.startedAtMs,
+    timerSeconds: Math.round(log.timerSeconds),
+    distanceMeters: Math.round(log.distanceMeters),
+    samples: log.samples,
+  });
+  if (persisted) {
     log.persistBroken = false;
-  } catch (error) {
-    // Quota exceeded on a very long ride: the in-memory log keeps recording
-    // and the FIT download still works, only crash recovery is lost.
-    if (!log.persistBroken) {
-      log.persistBroken = true;
-      console.warn("Ride log no longer fits in localStorage; recording continues in memory only.", error);
-    }
+  } else if (!log.persistBroken) {
+    // Quota exceeded on a very long ride — only possible on the localStorage
+    // fallback path, IndexedDB quotas are far larger. The in-memory log keeps
+    // recording and the FIT download still works; only crash recovery is lost.
+    log.persistBroken = true;
+    console.warn("Ride log no longer fits in browser storage; recording continues in memory only.");
   }
 }
 
