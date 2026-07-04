@@ -176,7 +176,32 @@ export const DEFAULT_BEACON_COLOR = "#ffffff";
 // — that used to be simulated by stacking several circles at slightly
 // different altitudes, which z-fought into rendering glitches and muddy
 // colors on steep terrain. Diameter in meters.
-export const RIDER_DOT_DIAMETER_METERS = 12;
+//
+// KNOWN ISSUE, unresolved: at this diameter, at a typical follow-camera
+// distance (a few hundred meters — the default cameraBehindMeters/cameraZoom),
+// the fill renders solid black instead of RIDER_DOT_COLOR, though the stroke
+// still shows its true color. Confirmed NOT caused by (all tried and tested
+// in a real browser, holding everything else fixed):
+//   - polygon winding (riderCircleCoordinates' winding is correct — verified
+//     by shoelace-computing the live element's actual path)
+//   - altitude/z-fighting with the terrain mesh (still black from 1m up to
+//     20m up, tested directly on the live element)
+//   - extruded: true (a short cylinder instead of a flat disc)
+// What DOES change it: raising RIDER_DOT_DIAMETER_METERS to ~12 makes it
+// render its correct color at the same distance/angle where 5 renders black.
+// So the fill breaks specifically at small on-screen footprint (small
+// diameter × far camera distance) — looks like a tessellation/rasterization
+// edge case in the Maps 3D Alpha renderer for small filled polygons, not
+// anything under this app's control. Left at the value the user asked for
+// pending their call on whether to just render it bigger.
+export const RIDER_DOT_DIAMETER_METERS = 5;
+
+// How high the dot floats above the terrain. Matches ROUTE_LINE_ALTITUDE_METERS
+// deliberately (kept as its own literal below since it's declared before that
+// constant in this file) — not because it fixes the black-fill issue above
+// (it doesn't, see there), but because there's no reason for the dot to sit
+// at a different height than the line it's walking along.
+export const RIDER_DOT_ALTITUDE_METERS = 2.5;
 
 // --- Route line rendering -----------------------------------------------------------
 

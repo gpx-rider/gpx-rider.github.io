@@ -70,6 +70,7 @@ import {
   OVERVIEW_TILT_DEGREES,
   PEDALING_START_KPH,
   PEDALING_STOP_KPH,
+  RIDER_DOT_ALTITUDE_METERS,
   RIDER_DOT_DIAMETER_METERS,
   RIDE_SAVE_THROTTLE_MS,
   ROUTE_LINE_ALTITUDE_METERS,
@@ -829,7 +830,11 @@ function renderRiderDot(point) {
     // One polygon with fill + stroke, not several stacked circles: separate
     // geometries a fraction of a meter apart z-fight once the camera is far
     // enough that their altitude gap falls below depth precision, which is
-    // what produced the muddy, blob-like dot on steep terrain.
+    // what produced the muddy, blob-like dot on steep terrain. Floated at
+    // RIDER_DOT_ALTITUDE_METERS (not just ~1m up): any lower and the same
+    // z-fighting happens against the terrain mesh itself once the camera is
+    // far enough away, rendering the fill as a black hole (see the constant's
+    // comment in tuning.mjs — extrusion alone does not fix this).
     state.riderDot = new Polygon3DElement({
       altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
       fillColor: RIDER_DOT_COLOR,
@@ -844,7 +849,7 @@ function renderRiderDot(point) {
   if (!Polyline3DElement) return;
   state.riderDot = new Polyline3DElement({
     altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
-    path: riderCircleCoordinates(point, RIDER_DOT_DIAMETER_METERS / 2, 1),
+    path: riderCircleCoordinates(point, RIDER_DOT_DIAMETER_METERS / 2, RIDER_DOT_ALTITUDE_METERS),
     strokeColor: RIDER_DOT_COLOR,
     strokeWidth: RIDER_DOT_RING_WIDTH_PIXELS,
   });
@@ -1393,7 +1398,9 @@ function updateRiderDot(position) {
     );
   }
 
-  if (state.riderDot) state.riderDot.path = riderCircleCoordinates(position, radius, 1);
+  if (state.riderDot) {
+    state.riderDot.path = riderCircleCoordinates(position, radius, RIDER_DOT_ALTITUDE_METERS);
+  }
 }
 
 function riderCircleCoordinates(center, radiusMeters, altitude = 0, stepDegrees = 6) {
