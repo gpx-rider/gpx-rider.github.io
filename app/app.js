@@ -33,6 +33,8 @@ import {
   routeTotalDistance,
 } from "./route.mjs";
 import { createRideEstimator, estimateRemainingSeconds, recordEstimatorTick } from "./eta.mjs";
+import { classifyRoute } from "./difficulty.mjs";
+import { detectClimbs } from "./climbs.mjs";
 import { distanceAtProfileX, drawEmptyProfile, drawProfile } from "./profile.mjs";
 import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatSpeed } from "./units.mjs";
 import { readJson, removeStored, writeJson } from "./storage.mjs";
@@ -200,6 +202,11 @@ const els = {
   mapsApiKeyInput: document.querySelector("#mapsApiKeyInput"),
   mapsApiKeySaveBtn: document.querySelector("#mapsApiKeySaveBtn"),
   gpxFile: document.querySelector("#gpxFile"),
+  routeOverview: document.querySelector("#routeOverview"),
+  routeClassSummary: document.querySelector("#routeClassSummary"),
+  routeClassDetail: document.querySelector("#routeClassDetail"),
+  climbsSection: document.querySelector("#climbsSection"),
+  climbsList: document.querySelector("#climbsList"),
   distanceStat: document.querySelector("#distanceStat"),
   riddenStat: document.querySelector("#riddenStat"),
   remainingStat: document.querySelector("#remainingStat"),
@@ -529,10 +536,60 @@ function applyGpxText(text) {
   renderRoute();
   renderProfile();
   updateRideUi({ force: true });
+  updateRouteOverview();
   saveRide();
 
   els.startBtn.disabled = false;
   els.resetBtn.disabled = false;
+}
+
+// Route classification and detected climbs, shown on the setup page once a
+// GPX loads. Both are cheap single passes over the whole route and only
+// depend on its fixed distance/elevation totals, so this runs once per load
+// rather than on every ride-progress tick like updateRideUi.
+function updateRouteOverview() {
+  if (!state.route.length) {
+    els.routeOverview.hidden = true;
+    return;
+  }
+
+  const totalDistance = routeTotalDistance(state.route);
+  const totalAscent = routeTotalAscent(state.route);
+  const classification = classifyRoute(totalDistance, totalAscent);
+  if (!classification) {
+    els.routeOverview.hidden = true;
+    return;
+  }
+
+  els.routeOverview.hidden = false;
+  els.routeClassSummary.textContent =
+    `${formatDistance(totalDistance, state.distanceUnits, 1)} · ${formatAltitude(totalAscent, state.distanceUnits)}`;
+  els.routeClassDetail.textContent =
+    `${classification.distanceClass} - ${classification.terrainClass} · ${classification.difficulty}`;
+
+  const climbs = detectClimbs(state.route);
+  els.climbsSection.hidden = climbs.length === 0;
+  els.climbsList.replaceChildren(
+    ...climbs.map((climb, index) => {
+      const item = document.createElement("li");
+      const index_ = document.createElement("span");
+      index_.className = "climb-index";
+      index_.textContent = `${index + 1}.`;
+      const label = document.createElement("span");
+      label.textContent =
+        `${formatDistance(climb.startDistanceMeters, state.distanceUnits, 1)} → ` +
+        `${formatDistance(climb.endDistanceMeters, state.distanceUnits, 1)} · ` +
+        `${formatDistance(climb.lengthMeters, state.distanceUnits, 1)} · ` +
+        `${formatAltitude(climb.gainMeters, state.distanceUnits)}`;
+      const line = document.createElement("span");
+      line.append(index_, document.createTextNode(" "), label);
+      const grade = document.createElement("span");
+      grade.className = "climb-grade";
+      grade.textContent = `${climb.averageGradePercent.toFixed(1)}%`;
+      item.append(line, grade);
+      return item;
+    }),
+  );
 }
 
 function renderRoute() {
@@ -2155,6 +2212,7 @@ function restoreSavedRide() {
   renderRoute();
   renderProfile();
   updateRideUi({ force: true });
+  updateRouteOverview();
   els.startBtn.disabled = false;
   els.resetBtn.disabled = false;
 }
