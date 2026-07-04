@@ -169,6 +169,15 @@ export const DEFAULT_BEACON_HEIGHT_METERS = 20;
 export const DEFAULT_BEACON_OPACITY = 0.35;
 export const DEFAULT_BEACON_COLOR = "#ffffff";
 
+// --- Rider dot ---------------------------------------------------------------------
+
+// The ground marker showing the rider's position: a single flat circle at a
+// fixed real-world size. It deliberately does NOT scale with camera distance
+// — that used to be simulated by stacking several circles at slightly
+// different altitudes, which z-fought into rendering glitches and muddy
+// colors on steep terrain. Diameter in meters.
+export const RIDER_DOT_DIAMETER_METERS = 5;
+
 // --- Route line rendering -----------------------------------------------------------
 
 // The route line floats this high above the terrain instead of being draped

@@ -5,7 +5,6 @@
 
 import {
   applyCameraLift,
-  cameraDistanceToPoint,
   cameraEyePosition,
   cameraFromEyeAndCenter,
   chaseStep,
@@ -71,6 +70,7 @@ import {
   OVERVIEW_TILT_DEGREES,
   PEDALING_START_KPH,
   PEDALING_STOP_KPH,
+  RIDER_DOT_DIAMETER_METERS,
   RIDE_SAVE_THROTTLE_MS,
   ROUTE_LINE_ALTITUDE_METERS,
   ROUTE_LINE_MAX_POINTS,
@@ -117,11 +117,13 @@ const RIDE_STORAGE_KEY = "gpx-rider:last-ride";
 
 const BEACON_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
-// The rider's ground marker mirrors the brand "GPX Rider" dot: a solid amber
-// center with a paler amber ring and a soft amber outer glow.
+// The rider's ground marker mirrors the brand "GPX Rider" dot: a single flat
+// circle with a solid amber fill and a paler amber ring border — one
+// geometry, not several stacked ones (that used to z-fight into rendering
+// glitches and muddy colors on steep terrain).
 const RIDER_DOT_COLOR = "#f6a52c";
 const RIDER_DOT_RING_COLOR = "rgba(246, 165, 44, 0.5)";
-const RIDER_DOT_HALO_COLOR = "rgba(246, 165, 44, 0.18)";
+const RIDER_DOT_RING_WIDTH_PIXELS = 8;
 
 // Physical camera motion: after the load-time snap, every camera move chases
 // its target like an object with bounded acceleration — it eases into
@@ -148,8 +150,6 @@ const state = {
   lastTick: 0,
   line: null,
   riderDot: null,
-  riderDotOutline: null,
-  riderHalo: null,
   riderBeacon: null,
   map: null,
   mapProvider: null,
@@ -826,38 +826,27 @@ function renderRiderDot(point) {
   renderRiderBeacon();
 
   if (Polygon3DElement) {
-    const styles = [
-      ["riderHalo", RIDER_DOT_HALO_COLOR],
-      ["riderDotOutline", RIDER_DOT_RING_COLOR],
-      ["riderDot", RIDER_DOT_COLOR],
-    ];
-    styles.forEach(([key, fillColor]) => {
-      state[key] = new Polygon3DElement({
-        altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
-        fillColor,
-        strokeWidth: 0,
-      });
-      state.map.append(state[key]);
+    // One polygon with fill + stroke, not several stacked circles: separate
+    // geometries a fraction of a meter apart z-fight once the camera is far
+    // enough that their altitude gap falls below depth precision, which is
+    // what produced the muddy, blob-like dot on steep terrain.
+    state.riderDot = new Polygon3DElement({
+      altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
+      fillColor: RIDER_DOT_COLOR,
+      strokeColor: RIDER_DOT_RING_COLOR,
+      strokeWidth: RIDER_DOT_RING_WIDTH_PIXELS,
     });
+    state.map.append(state.riderDot);
     updateRiderDot(point);
     return;
   }
 
   if (!Polyline3DElement) return;
-  const radius = riderDotRadiusMeters(point);
-  state.riderDotOutline = new Polyline3DElement({
-    altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
-    path: riderCircleCoordinates(point, radius, 1),
-    strokeColor: RIDER_DOT_RING_COLOR,
-    strokeWidth: 10,
-  });
-  state.map.append(state.riderDotOutline);
-
   state.riderDot = new Polyline3DElement({
     altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
-    path: riderCircleCoordinates(point, radius, 1.2),
+    path: riderCircleCoordinates(point, RIDER_DOT_DIAMETER_METERS / 2, 1),
     strokeColor: RIDER_DOT_COLOR,
-    strokeWidth: 6,
+    strokeWidth: RIDER_DOT_RING_WIDTH_PIXELS,
   });
   state.map.append(state.riderDot);
 }
@@ -889,31 +878,12 @@ function beaconFillColor() {
   return `rgba(${r}, ${g}, ${b}, ${state.beaconOpacity})`;
 }
 
-function riderDotRadiusMeters(position) {
-  // The dot is ground geometry sized in meters, so to read like a fixed-size
-  // GPS marker its radius must track the camera-eye distance to the dot
-  // itself — not the range to the look-at center, which is wrong the moment
-  // the rider is off-center, and not a tightly clamped value, which visibly
-  // grows/shrinks the dot at the clamp edges when zooming far in or out.
-  const distance = cameraDistanceToPoint({
-    center: state.map?.center,
-    range: state.map?.range,
-    tilt: state.map?.tilt,
-    heading: state.map?.heading,
-  }, position);
-  return clamp((distance ?? 800) / 90, 0.5, 20000);
-}
-
 function clearRouteFromMap() {
   if (state.line) state.line.remove();
-  if (state.riderHalo) state.riderHalo.remove();
-  if (state.riderDotOutline) state.riderDotOutline.remove();
   if (state.riderDot) state.riderDot.remove();
   if (state.riderBeacon) state.riderBeacon.remove();
 
   state.line = null;
-  state.riderHalo = null;
-  state.riderDotOutline = null;
   state.riderDot = null;
   state.riderBeacon = null;
   state.lastRiderDot = null;
@@ -1403,20 +1373,14 @@ function confirmClearRideData() {
 // --- Camera ------------------------------------------------------------------
 
 function updateRiderDot(position) {
-  const radius = riderDotRadiusMeters(position);
+  const radius = RIDER_DOT_DIAMETER_METERS / 2;
 
-  // Rebuilding the polygons re-tessellates them in the map engine, which is
-  // far too expensive to do per frame. Skip updates smaller than a pixel or
-  // two on screen; the camera still follows the rider every frame.
+  // Rebuilding the polygon re-tessellates it in the map engine, which is far
+  // too expensive to do per frame. Skip updates smaller than a pixel or two
+  // on screen; the camera still follows the rider every frame.
   const last = state.lastRiderDot;
-  if (
-    last &&
-    Math.abs(radius - last.radius) < last.radius * 0.04 &&
-    haversine(last, position) < radius * 0.08
-  ) {
-    return;
-  }
-  state.lastRiderDot = { lat: position.lat, lng: position.lng, radius };
+  if (last && haversine(last, position) < radius * 0.08) return;
+  state.lastRiderDot = { lat: position.lat, lng: position.lng };
 
   if (state.riderBeacon) {
     // Real-world-sized geometry, so a coarse circle keeps the extruded
@@ -1429,16 +1393,7 @@ function updateRiderDot(position) {
     );
   }
 
-  if (state.riderHalo) {
-    // Stacked a little apart above the ground so the three fills don't z-fight.
-    state.riderHalo.path = riderCircleCoordinates(position, radius * 2.2, 0.5);
-    state.riderDotOutline.path = riderCircleCoordinates(position, radius * 1.35, 1);
-    state.riderDot.path = riderCircleCoordinates(position, radius, 1.5);
-    return;
-  }
-
-  if (state.riderDotOutline) state.riderDotOutline.path = riderCircleCoordinates(position, radius, 1);
-  if (state.riderDot) state.riderDot.path = riderCircleCoordinates(position, radius, 1.2);
+  if (state.riderDot) state.riderDot.path = riderCircleCoordinates(position, radius, 1);
 }
 
 function riderCircleCoordinates(center, radiusMeters, altitude = 0, stepDegrees = 6) {

@@ -164,8 +164,12 @@ in place).
   strokes smear down steep slopes into wide blobs. The route line and rider
   dot use `RELATIVE_TO_GROUND` a couple of meters up, with the path
   densified (`densifyRoute`) so elevated segments follow the terrain. The
-  rider dot's ground radius scales with the camera-eye distance
-  (`cameraDistanceToPoint`) to keep a constant apparent size. The dot (and
+  rider dot is a single `Polygon3DElement` (fill + stroke, one geometry) at a
+  fixed real-world size (`RIDER_DOT_DIAMETER_METERS` in `tuning.mjs`) —
+  deliberately not scaled with camera distance, and deliberately not several
+  stacked circles, since separate geometries a fraction of a meter apart
+  z-fight into rendering glitches and muddy colors once the camera is far
+  enough that their altitude gap falls below depth precision. The dot (and
   the minimap marker) mirrors the brand "GPX Rider" logo dot — a solid amber
   center with a paler amber ring — via the `RIDER_DOT_*` color constants in
   `app.js`. The rider beacon is a real-world-sized extruded `Polygon3DElement`

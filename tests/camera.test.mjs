@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   applyCameraLift,
   applyCameraOffset,
-  cameraDistanceToPoint,
   cameraEyePosition,
   cameraFromEyeAndCenter,
   chaseStep,
@@ -132,31 +131,6 @@ test("measured camera offset can be replayed", () => {
 
   assert.ok(Math.abs(replayed.lat - center.lat) < 0.000001);
   assert.ok(Math.abs(replayed.lng - center.lng) < 0.000001);
-});
-
-test("camera distance to the look-at point equals the range", () => {
-  // Regardless of tilt/heading, the eye is exactly `range` away from the
-  // ground point it is looking at.
-  for (const tilt of [0, 30, 67, 85]) {
-    const distance = cameraDistanceToPoint(
-      { center: { ...riderPosition, altitude: 0 }, range: 1000, tilt, heading: 42 },
-      { ...riderPosition, ele: 0 },
-    );
-    assert.ok(Math.abs(distance - 1000) < 1, `tilt ${tilt}: got ${distance}`);
-  }
-});
-
-test("camera distance grows for points away from the center", () => {
-  const camera = { center: { ...riderPosition, altitude: 0 }, range: 500, tilt: 60, heading: 0 };
-  const centered = cameraDistanceToPoint(camera, { ...riderPosition, ele: 0 });
-  // ~1.1 km north of the look-at center.
-  const offCenter = cameraDistanceToPoint(camera, { lat: riderPosition.lat + 0.01, lng: riderPosition.lng, ele: 0 });
-  assert.ok(offCenter > centered);
-});
-
-test("camera distance handles missing camera state", () => {
-  assert.equal(cameraDistanceToPoint({ center: null, range: 100 }, riderPosition), null);
-  assert.equal(cameraDistanceToPoint({ center: riderPosition, range: NaN }, riderPosition), null);
 });
 
 test("camera helper bounds are stable", () => {
