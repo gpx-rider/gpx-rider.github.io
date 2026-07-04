@@ -215,11 +215,22 @@ export const RIDER_DOT_SCALE = 5;
 // dot, since Polyline3DElement has no fill. Diameter in meters.
 export const RIDER_DOT_DIAMETER_METERS = 5;
 
-// How high the dot floats above the terrain. Matches ROUTE_LINE_ALTITUDE_METERS
-// deliberately (kept as its own literal below since it's declared before that
-// constant in this file) — there's no reason for the dot to sit at a
-// different height than the line it's walking along.
-export const RIDER_DOT_ALTITUDE_METERS = 2.5;
+// How high the dot's origin sits above the terrain, in meters. Independent
+// of ROUTE_LINE_ALTITUDE_METERS on purpose: the route line has to float well
+// clear of the terrain because a thin drawn line clamped to the ground
+// smears down slopes, but a real mesh (Model3DElement) doesn't have that
+// problem, so there's no reason to lift it off the ground the way the line
+// is. Not 0 though (confirmed by testing, not just assumed): the shipped
+// puck's origin is at its vertical center (0.15m tall, see
+// scripts/generate_rider_dot_model.py), so at 0 its bottom half was buried
+// in the terrain — and the model needed clearing by more than just its own
+// half-height (0.075m) to fully stop clipping on steep terrain, most likely
+// because the terrain mesh itself isn't perfectly smooth/precise at close
+// range. 0.5 was the smallest value that cleared cleanly on a steep
+// switchback in testing. Retune per model at RIDER_DOT_MODEL_PATH — start
+// from that model's own half-height above 0 and increase from there if it
+// still clips, especially on steep terrain.
+export const RIDER_DOT_ALTITUDE_METERS = 0.5;
 
 // --- Route line rendering -----------------------------------------------------------
 

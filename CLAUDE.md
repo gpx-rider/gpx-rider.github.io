@@ -170,11 +170,12 @@ in place).
   strokes smear down steep slopes into wide blobs. The route line floats at
   `ROUTE_LINE_ALTITUDE_METERS` (2.5m) with its path densified (`densifyRoute`)
   so elevated segments follow the terrain.
-  The rider dot is a `Model3DElement` loading `app/assets/rider-dot.glb` (see
-  `renderRiderDot`/`updateRiderDot` in `app.js`), **not** a `Polygon3DElement`
-  and **not** a `Marker3DElement`/`PinElement` billboard — both were tried
-  first, in that order, and both were confirmed by real-browser testing (not
-  just reasoned about) to fail:
+  The rider dot is a `Model3DElement` loading the model at
+  `RIDER_DOT_MODEL_PATH` (`tuning.mjs`; see `renderRiderDot`/`updateRiderDot`
+  in `app.js`), **not** a `Polygon3DElement` and **not** a
+  `Marker3DElement`/`PinElement` billboard — both were tried first, in that
+  order, and both were confirmed by real-browser testing (not just reasoned
+  about) to fail:
   - `Polygon3DElement`: meant for static terrain-draped areas, not a point
     that moves every frame. Re-tessellating one every frame produced a
     solid-black fill at ordinary follow-camera distances — independent of
@@ -186,26 +187,37 @@ in place).
     `scale` is a screen-space billboard size that doesn't grow/shrink with
     camera distance the way a real ground object should.
 
-  A real mesh avoids all of that. `app/assets/rider-dot.glb` is hand-rolled
-  by `scripts/generate_rider_dot_model.py` (no 3D modeling tool available in
-  this environment — the same "encode the binary format by hand" approach
-  `app/fit.mjs` takes for FIT files): a two-material puck, baked to a true 1
-  meter diameter so `RIDER_DOT_SCALE` in `tuning.mjs` is a plain real-world
-  size multiplier. Both materials use the `KHR_materials_unlit` glTF
-  extension — an ordinary lit PBR material rendered solid black here
-  regardless of normals/winding/doubleSided/texturing (confirmed by testing
-  many variants), and unlit is also the semantically correct choice for a
-  location marker anyway: it must stay clearly visible at any time of day or
-  camera angle, not dim to black in shadow like a real physical object would.
-  The model is placed with `orientation: {heading:0, tilt:90, roll:0})` —
-  without that correction the disc renders standing on its edge instead of
-  lying flat on the ground (confirmed by testing; the model's local up axis
-  does not map to world-up by default, and this doesn't appear to be
-  documented anywhere). Floated at `RIDER_DOT_ALTITUDE_METERS`, kept equal to
-  `ROUTE_LINE_ALTITUDE_METERS` since there's no reason for the dot to sit at
-  a different height than the line it's walking along. A `Polyline3DElement`
-  ring (via `riderCircleCoordinates`, whose winding must trace
-  counter-clockwise as seen from above — see its comment) is the fallback for
+  A real mesh avoids all of that. The shipped model, `app/assets/rider-dot.glb`,
+  is hand-rolled by `scripts/generate_rider_dot_model.py` (no 3D modeling
+  tool available in this environment — the same "encode the binary format by
+  hand" approach `app/fit.mjs` takes for FIT files): a two-material puck,
+  baked to a true 1 meter diameter so `RIDER_DOT_SCALE` in `tuning.mjs` is a
+  plain real-world size multiplier. Both materials use the
+  `KHR_materials_unlit` glTF extension — an ordinary lit PBR material
+  rendered solid black here regardless of normals/winding/doubleSided/
+  texturing (confirmed by testing many variants), and unlit is also the
+  semantically correct choice for a location marker anyway: it must stay
+  clearly visible at any time of day or camera angle, not dim to black in
+  shadow like a real physical object would. `RIDER_DOT_MODEL_PATH`,
+  `RIDER_DOT_ORIENTATION`, `RIDER_DOT_SCALE`, and `RIDER_DOT_ALTITUDE_METERS`
+  (`tuning.mjs`) are all independently tunable specifically so a different
+  model can be dropped into `app/assets/` and pointed at without touching
+  `app.js` — see the comments on those constants for what to expect when
+  swapping models (orientation and unlit materials both being the most
+  likely things a new model needs). `RIDER_DOT_ALTITUDE_METERS` puts the dot
+  on the ground and is deliberately independent of `ROUTE_LINE_ALTITUDE_METERS`
+  — the route line has to float clear of the terrain because a drawn line
+  clamped to the ground smears down slopes, but a real mesh doesn't have that
+  problem. It's not 0 though: the shipped puck's origin is at its vertical
+  center, so 0 buried its bottom half in the terrain, and clipping didn't
+  fully stop until well past just the model's own half-height — most likely
+  because the terrain mesh itself isn't perfectly smooth/precise at close
+  range (confirmed by testing on a steep switchback, where clipping is most
+  visible). Needs retuning alongside `RIDER_DOT_MODEL_PATH` for a model with
+  different dimensions or an off-center origin — start from that model's own
+  half-height above 0 and increase from there if it still clips. A
+  `Polyline3DElement` ring (via `riderCircleCoordinates`, whose winding must
+  trace counter-clockwise as seen from above — see its comment) is the fallback for
   browsers without `Model3DElement`. The dot (and the minimap marker) mirrors
   the brand "GPX Rider" logo dot — a solid amber center with a paler amber
   ring — via the model's two materials and, for the minimap and fallback
