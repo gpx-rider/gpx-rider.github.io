@@ -19,7 +19,18 @@ import {
 } from "./camera.mjs";
 import { bearing, clamp, destinationPoint, haversine, lerp, roundCoordinate, toRad } from "./geo.mjs";
 import { deployedMapsApiKey } from "./config.mjs";
-import { densifyRoute, enrichRoute, gradeAt, interpolateRoutePoint, maxElevationNear, parseGpx, routeTotalDistance } from "./route.mjs";
+import {
+  buildElevationProfile,
+  densifyRoute,
+  elevationAt,
+  enrichRoute,
+  gradeAt,
+  interpolateRoutePoint,
+  maxElevationNear,
+  parseGpx,
+  routeTotalDistance,
+  TERRAIN_GRADE_THRESHOLD_PERCENT,
+} from "./route.mjs";
 import { distanceAtProfileX, drawEmptyProfile, drawProfile } from "./profile.mjs";
 import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatSpeed } from "./units.mjs";
 import { readJson, removeStored, writeJson } from "./storage.mjs";
@@ -68,6 +79,45 @@ const CAMERA_CENTER_ALTITUDE_LIMIT_METERS = 20000;
 const CAMERA_TILT_MIN = 1;
 const CAMERA_TILT_MAX = 89;
 const DEFAULT_GRADE_INTERVAL_SECONDS = 2;
+
+// Every stat riders can see: always shown in the sidebar stats area, and
+// individually toggleable for the fullscreen HUD overlay via Settings.
+const HUD_STAT_DEFS = [
+  { key: "power", label: "Power" },
+  { key: "speed", label: "Speed" },
+  { key: "heartRate", label: "Heart rate" },
+  { key: "grade", label: "Grade" },
+  { key: "altitude", label: "Altitude" },
+  { key: "distance", label: "Route distance" },
+  { key: "ascent", label: "Total ascent" },
+  { key: "descent", label: "Total descent" },
+  { key: "ridden", label: "Ridden" },
+  { key: "remaining", label: "Remaining" },
+  { key: "ascentRemaining", label: "Ascent remaining" },
+  { key: "calories", label: "Calories" },
+  { key: "eta", label: "ETA" },
+];
+const DEFAULT_HUD_STATS = ["power", "speed", "heartRate", "grade", "ridden", "remaining"];
+
+const SIDEBAR_STAT_IDS = {
+  distance: "distanceStat",
+  grade: "gradeStat",
+  altitude: "altitudeStat",
+  power: "powerStat",
+  speed: "speedStat",
+  heartRate: "heartRateStat",
+  calories: "caloriesStat",
+  ascent: "ascentStat",
+  descent: "descentStat",
+  ridden: "riddenStat",
+  remaining: "remainingStat",
+  ascentRemaining: "ascentRemainingStat",
+  eta: "etaStat",
+};
+
+// ETA needs a little ridden data before a rider-specific pace means anything;
+// before that it reports "--" rather than extrapolating from a few meters.
+const MIN_PACE_SECONDS_FOR_ETA = 20;
 
 // Route overview shown instantly when a route loads: the whole route framed
 // from a 45° side view (see computeRouteOverviewCamera in camera.mjs).
@@ -200,7 +250,24 @@ const state = {
   mapFullscreen: false,
   distanceUnits: "metric",
   energyUnits: "kcal",
+  elevationProfile: [{ distance: 0, gain: 0, loss: 0, climbDistance: 0, climbVertical: 0, descentDistance: 0, flatDistance: 0 }],
+  elevationGainTotal: 0,
+  elevationLossTotal: 0,
+  lastTickElevation: 0,
+  terrainPace: emptyTerrainPace(),
+  hudVisibleStats: new Set(DEFAULT_HUD_STATS),
+  showMapLabels: false,
+  minimapEnabled: true,
 };
+
+function emptyTerrainPace() {
+  return {
+    totalSeconds: 0,
+    climb: { seconds: 0, verticalMeters: 0 },
+    descent: { seconds: 0, distanceMeters: 0 },
+    flat: { seconds: 0, distanceMeters: 0 },
+  };
+}
 
 const els = {
   settingsBtn: document.querySelector("#settingsBtn"),
@@ -218,6 +285,17 @@ const els = {
   trainerStat: document.querySelector("#trainerStat"),
   heartRateStat: document.querySelector("#heartRateStat"),
   caloriesStat: document.querySelector("#caloriesStat"),
+  ascentStat: document.querySelector("#ascentStat"),
+  descentStat: document.querySelector("#descentStat"),
+  riddenStat: document.querySelector("#riddenStat"),
+  remainingStat: document.querySelector("#remainingStat"),
+  ascentRemainingStat: document.querySelector("#ascentRemainingStat"),
+  etaStat: document.querySelector("#etaStat"),
+  ascentProgress: document.querySelector("#ascentProgress"),
+  ascentProgressLabel: document.querySelector("#ascentProgressLabel"),
+  minimapEnabledInput: document.querySelector("#minimapEnabledInput"),
+  mapLabelsInput: document.querySelector("#mapLabelsInput"),
+  hudStatsSettings: document.querySelector("#hudStatsSettings"),
   speedInput: document.querySelector("#speedInput"),
   speedOutput: document.querySelector("#speedOutput"),
   gradeIntervalInput: document.querySelector("#gradeIntervalInput"),
@@ -261,12 +339,7 @@ const els = {
   screenshotAspectSelect: document.querySelector("#screenshotAspectSelect"),
   screenshotWidthSelect: document.querySelector("#screenshotWidthSelect"),
   fullscreenOverlayBottom: document.querySelector("#fullscreenOverlayBottom"),
-  hudPowerStat: document.querySelector("#hudPowerStat"),
-  hudSpeedStat: document.querySelector("#hudSpeedStat"),
-  hudHeartRateStat: document.querySelector("#hudHeartRateStat"),
-  hudGradeStat: document.querySelector("#hudGradeStat"),
-  hudRiddenStat: document.querySelector("#hudRiddenStat"),
-  hudRemainingStat: document.querySelector("#hudRemainingStat"),
+  fullscreenHud: document.querySelector("#fullscreenHud"),
   recDistanceStat: document.querySelector("#recDistanceStat"),
   recTimeStat: document.querySelector("#recTimeStat"),
   recPointsStat: document.querySelector("#recPointsStat"),
@@ -275,6 +348,12 @@ const els = {
   downloadFitBtn: document.querySelector("#downloadFitBtn"),
   clearRideDataBtn: document.querySelector("#clearRideDataBtn"),
 };
+
+// Backs setStat()/buildHudTiles() below; declared here (not inline with them)
+// because startApp() runs synchronously up to its first await, including
+// buildHudTiles() — a `const` declared after this call would still be in its
+// temporal dead zone at that point.
+const hudStatEls = {};
 
 startApp();
 
@@ -290,6 +369,8 @@ async function startApp() {
     onMessage: updateProgressLabel,
   });
 
+  buildHudTiles();
+  buildHudSettingsControls();
   restoreSettings();
   restoreRideLog();
   updateRecordingUi();
@@ -302,7 +383,83 @@ async function startApp() {
   restoreSavedRide();
   void reconnectSavedTrainer();
   void reconnectSavedHeartRate();
-  void initGallery(loadGpxFromUrl);
+
+  const galleryRoutes = await initGallery(loadGpxFromUrl);
+  // A brand-new visitor (nothing restored from localStorage) gets the first
+  // gallery ride loaded automatically instead of a blank map.
+  if (!state.route.length && galleryRoutes?.length) {
+    await loadGpxFromUrl(galleryRoutes[0].gpx);
+  }
+}
+
+// --- HUD & stat tiles ---------------------------------------------------------
+//
+// One catalog (HUD_STAT_DEFS) drives both surfaces: the sidebar always shows
+// every stat via its static HTML tiles (see SIDEBAR_STAT_IDS), while the
+// fullscreen HUD only shows the subset the rider picked in Settings. Both are
+// written to by the single setStat() helper below.
+
+function buildHudTiles() {
+  els.fullscreenHud.replaceChildren();
+  for (const def of HUD_STAT_DEFS) {
+    const wrap = document.createElement("div");
+    wrap.dataset.hudStat = def.key;
+    const label = document.createElement("span");
+    label.textContent = def.label;
+    const value = document.createElement("strong");
+    value.textContent = "--";
+    wrap.append(label, value);
+    els.fullscreenHud.append(wrap);
+    hudStatEls[def.key] = { wrap, value };
+  }
+  applyHudVisibility();
+}
+
+function applyHudVisibility() {
+  for (const [key, { wrap }] of Object.entries(hudStatEls)) {
+    wrap.hidden = !state.hudVisibleStats.has(key);
+  }
+}
+
+function buildHudSettingsControls() {
+  els.hudStatsSettings.replaceChildren();
+  for (const def of HUD_STAT_DEFS) {
+    const label = document.createElement("label");
+    label.className = "camera-center-toggle";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.dataset.hudStatToggle = def.key;
+    input.addEventListener("change", updateHudVisibleStatsFromControls);
+    const span = document.createElement("span");
+    span.textContent = def.label;
+    label.append(input, span);
+    els.hudStatsSettings.append(label);
+  }
+  syncHudSettingsControls();
+}
+
+function syncHudSettingsControls() {
+  els.hudStatsSettings.querySelectorAll("input[data-hud-stat-toggle]").forEach((input) => {
+    input.checked = state.hudVisibleStats.has(input.dataset.hudStatToggle);
+  });
+}
+
+function updateHudVisibleStatsFromControls() {
+  const next = new Set();
+  els.hudStatsSettings.querySelectorAll("input[data-hud-stat-toggle]").forEach((input) => {
+    if (input.checked) next.add(input.dataset.hudStatToggle);
+  });
+  state.hudVisibleStats = next;
+  applyHudVisibility();
+  saveSettings();
+}
+
+// Writes one stat's value to every place it's shown: its sidebar tile
+// (always present) and its HUD tile (present only when selected).
+function setStat(key, text) {
+  const sidebarId = SIDEBAR_STAT_IDS[key];
+  if (sidebarId && els[sidebarId]) els[sidebarId].textContent = text;
+  if (hudStatEls[key]) hudStatEls[key].value.textContent = text;
 }
 
 function getStoredMapsApiKey() {
@@ -343,6 +500,7 @@ async function initMap() {
   }
 
   initMinimap();
+  applyMinimapVisibility();
 
   try {
     await initGooglePhotorealistic3DMap();
@@ -369,6 +527,38 @@ function initMinimap() {
   }
 }
 
+function updateMinimapSettingFromControl() {
+  state.minimapEnabled = els.minimapEnabledInput.checked;
+  saveSettings();
+  applyMinimapVisibility();
+}
+
+// The minimap's Google Maps instance is always created (even while hidden)
+// so it never has to lay itself out inside a display:none container; only
+// the CSS visibility is toggled, followed by a resize nudge and a re-fit
+// when it's switched back on.
+function applyMinimapVisibility() {
+  els.minimap.hidden = !state.minimapEnabled;
+  if (!state.minimapEnabled || !state.minimapMap) return;
+  google.maps.event.trigger(state.minimapMap, "resize");
+  if (state.route.length) renderMinimapRoute();
+}
+
+function updateMapLabelsFromControl() {
+  state.showMapLabels = els.mapLabelsInput.checked;
+  saveSettings();
+  applyMapLabelsMode();
+}
+
+// HYBRID overlays place/road labels on the satellite imagery; SATELLITE is
+// the plain photorealistic view. Both are valid Map3DElement.mode values at
+// any time, not just at construction.
+function applyMapLabelsMode() {
+  if (!state.map || state.mapProvider !== "google3d") return;
+  const { MapMode } = state.maps3d ?? {};
+  state.map.mode = state.showMapLabels ? MapMode?.HYBRID : MapMode?.SATELLITE;
+}
+
 async function initGooglePhotorealistic3DMap() {
   state.maps3d = await google.maps.importLibrary("maps3d");
   const { Map3DElement, MapMode } = state.maps3d;
@@ -387,7 +577,7 @@ async function initGooglePhotorealistic3DMap() {
   state.map = new Map3DElement({
     center: { ...camera.center, altitude: 0 },
     heading: camera.heading,
-    mode: MapMode?.SATELLITE,
+    mode: state.showMapLabels ? MapMode?.HYBRID : MapMode?.SATELLITE,
     range: camera.range,
     tilt: camera.tilt,
     // Hide the default UI buttons (compass, zoom); gestures still work and
@@ -439,6 +629,8 @@ function bindEvents() {
   els.gradeIntervalInput.addEventListener("input", updateGradeIntervalFromControl);
   els.distanceUnitSelect.addEventListener("change", updateUnitsFromControls);
   els.energyUnitSelect.addEventListener("change", updateUnitsFromControls);
+  els.minimapEnabledInput.addEventListener("change", updateMinimapSettingFromControl);
+  els.mapLabelsInput.addEventListener("change", updateMapLabelsFromControl);
   els.cameraZoomInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraBehindInput.addEventListener("input", updateCameraSettingsFromControls);
@@ -508,6 +700,8 @@ function applyGpxText(text) {
   state.simulating = false;
   state.lastTick = 0;
   state.profileHoverMeters = null;
+  applyRouteElevationData();
+  resetTerrainPace();
   enterOverviewMode({ instant: true });
   updateStartButton();
   renderRoute();
@@ -517,6 +711,24 @@ function applyGpxText(text) {
 
   els.startBtn.disabled = false;
   els.resetBtn.disabled = false;
+}
+
+// Resamples the route's elevation once per load (see buildElevationProfile in
+// route.mjs) so ascent/descent totals and progress queries are cheap lookups
+// afterward instead of re-walking every GPX point on every UI tick.
+function applyRouteElevationData() {
+  state.elevationProfile = buildElevationProfile(state.route);
+  const total = elevationAt(state.elevationProfile, routeTotalDistance(state.route));
+  state.elevationGainTotal = total.gain;
+  state.elevationLossTotal = total.loss;
+}
+
+// Clears the rider's own climb/descent/flat pace, used by the ETA estimate —
+// called whenever progress jumps to a new position that pace no longer
+// describes (a fresh route, a reset, or a manual seek).
+function resetTerrainPace() {
+  state.terrainPace = emptyTerrainPace();
+  state.lastTickElevation = state.route.length ? interpolateRoutePoint(state.route, state.progressMeters).ele : 0;
 }
 
 function renderRoute() {
@@ -823,6 +1035,7 @@ function resetRide() {
   state.simulating = false;
   state.progressMeters = 0;
   state.lastTick = performance.now();
+  resetTerrainPace();
   // A reset while stationary returns to the whole-route overview, like a
   // fresh load; while pedaling the camera stays with the rider.
   if (!isMoving()) enterOverviewMode();
@@ -851,11 +1064,15 @@ function tick(now) {
 
   const previousProgress = state.progressMeters;
   state.progressMeters = Math.min(totalDistance, state.progressMeters + metersPerSecond * elapsedSeconds);
+  const point = interpolateRoutePoint(state.route, state.progressMeters);
+  const metersAdvanced = state.progressMeters - previousProgress;
+  accumulateTerrainPace(elapsedSeconds, metersAdvanced, point.ele - state.lastTickElevation);
+  state.lastTickElevation = point.ele;
 
   recordRideTick({
     elapsedSeconds,
-    metersAdvanced: state.progressMeters - previousProgress,
-    point: interpolateRoutePoint(state.route, state.progressMeters),
+    metersAdvanced,
+    point,
     speedKph,
     powerWatts: state.trainerPowerWatts,
     heartRateBpm: currentHeartRate(),
@@ -899,27 +1116,109 @@ function updateRideUi(options = {}) {
   const totalDistance = routeTotalDistance(state.route);
   const grade = gradeAt(state.route, state.progressMeters);
   const progress = totalDistance ? state.progressMeters / totalDistance : 0;
+  const elevationSoFar = elevationAt(state.elevationProfile, state.progressMeters);
+  const ascentRemaining = Math.max(0, state.elevationGainTotal - elevationSoFar.gain);
+  const ascentProgress = state.elevationGainTotal ? elevationSoFar.gain / state.elevationGainTotal : 0;
 
-  els.distanceStat.textContent = formatDistance(totalDistance, state.distanceUnits, 1);
-  els.gradeStat.textContent = `${grade.toFixed(1)}%`;
-  els.altitudeStat.textContent = formatAltitude(point.ele, state.distanceUnits);
+  setStat("distance", formatDistance(totalDistance, state.distanceUnits, 1));
+  setStat("grade", `${grade.toFixed(1)}%`);
+  setStat("altitude", formatAltitude(point.ele, state.distanceUnits));
+  setStat("ascent", formatAltitude(state.elevationGainTotal, state.distanceUnits));
+  setStat("descent", formatAltitude(state.elevationLossTotal, state.distanceUnits));
+  setStat("ridden", formatDistance(state.progressMeters, state.distanceUnits));
+  setStat("remaining", formatDistance(totalDistance - state.progressMeters, state.distanceUnits));
+  setStat("ascentRemaining", formatAltitude(ascentRemaining, state.distanceUnits));
+  setStat("eta", formatEta(computeEtaSeconds()));
+
   els.progress.value = progress;
   updateProgressLabel(
     `${formatDistance(state.progressMeters, state.distanceUnits)} of ${formatDistance(totalDistance, state.distanceUnits)}`,
   );
+  els.ascentProgress.value = ascentProgress;
+  els.ascentProgressLabel.textContent =
+    `${formatAltitude(elevationSoFar.gain, state.distanceUnits)} of ${formatAltitude(state.elevationGainTotal, state.distanceUnits)} climbed`;
+
   renderProfile(progress);
   updateMinimapPosition(point);
   updateCameraSettingsLabels();
-
-  els.hudGradeStat.textContent = `${grade.toFixed(1)}%`;
-  els.hudRiddenStat.textContent = formatDistance(state.progressMeters, state.distanceUnits);
-  els.hudRemainingStat.textContent = formatDistance(totalDistance - state.progressMeters, state.distanceUnits);
 
   updateRecordingUi();
   queueTrainerGradeSample(grade, {
     force: options.force,
     intervalSeconds: state.gradeUpdateIntervalSeconds,
   });
+}
+
+// --- Terrain pace & ETA --------------------------------------------------------
+//
+// "Smart" in the sense of self-calibrating: rather than assuming a fixed
+// climbing/descending speed penalty, it measures the rider's own vertical
+// climb rate and horizontal descent/flat pace so far (accumulated per tick
+// in accumulateTerrainPace) and projects those same rates onto however much
+// climbing/descending/flat riding is left on the route (from the
+// precomputed elevation profile). Falls back to the rider's overall average
+// speed for any terrain type not yet encountered.
+
+function accumulateTerrainPace(elapsedSeconds, metersAdvanced, verticalDelta) {
+  const pace = state.terrainPace;
+  pace.totalSeconds += elapsedSeconds;
+  if (metersAdvanced <= 0) return;
+
+  const instantGradePercent = (verticalDelta / metersAdvanced) * 100;
+  if (instantGradePercent >= TERRAIN_GRADE_THRESHOLD_PERCENT) {
+    pace.climb.seconds += elapsedSeconds;
+    pace.climb.verticalMeters += Math.max(0, verticalDelta);
+  } else if (instantGradePercent <= -TERRAIN_GRADE_THRESHOLD_PERCENT) {
+    pace.descent.seconds += elapsedSeconds;
+    pace.descent.distanceMeters += metersAdvanced;
+  } else {
+    pace.flat.seconds += elapsedSeconds;
+    pace.flat.distanceMeters += metersAdvanced;
+  }
+}
+
+function terrainRemainingBreakdown() {
+  const totalDistance = routeTotalDistance(state.route);
+  const atProgress = elevationAt(state.elevationProfile, state.progressMeters);
+  const atEnd = elevationAt(state.elevationProfile, totalDistance);
+  return {
+    climbDistance: Math.max(0, atEnd.climbDistance - atProgress.climbDistance),
+    climbVertical: Math.max(0, atEnd.climbVertical - atProgress.climbVertical),
+    descentDistance: Math.max(0, atEnd.descentDistance - atProgress.descentDistance),
+    flatDistance: Math.max(0, atEnd.flatDistance - atProgress.flatDistance),
+  };
+}
+
+function computeEtaSeconds() {
+  if (state.route.length < 2 || state.progressMeters <= 0) return null;
+
+  const totalDistance = routeTotalDistance(state.route);
+  if (state.progressMeters >= totalDistance) return 0;
+
+  const pace = state.terrainPace;
+  if (pace.totalSeconds < MIN_PACE_SECONDS_FOR_ETA) return null;
+
+  const overallSpeedMps = state.progressMeters / pace.totalSeconds;
+  if (!(overallSpeedMps > 0)) return null;
+
+  const climbRateMps = pace.climb.seconds > 0 ? pace.climb.verticalMeters / pace.climb.seconds : null;
+  const descentSpeedMps = pace.descent.seconds > 0 ? pace.descent.distanceMeters / pace.descent.seconds : null;
+  const flatSpeedMps = pace.flat.seconds > 0 ? pace.flat.distanceMeters / pace.flat.seconds : null;
+
+  const remaining = terrainRemainingBreakdown();
+  const climbTime = remaining.climbDistance > 0
+    ? (climbRateMps && remaining.climbVertical > 0 ? remaining.climbVertical / climbRateMps : remaining.climbDistance / overallSpeedMps)
+    : 0;
+  const descentTime = remaining.descentDistance > 0 ? remaining.descentDistance / (descentSpeedMps || overallSpeedMps) : 0;
+  const flatTime = remaining.flatDistance > 0 ? remaining.flatDistance / (flatSpeedMps || overallSpeedMps) : 0;
+
+  return climbTime + descentTime + flatTime;
+}
+
+function formatEta(etaSeconds) {
+  if (etaSeconds === null || !Number.isFinite(etaSeconds) || etaSeconds < 0) return "--";
+  const arrival = new Date(Date.now() + etaSeconds * 1000);
+  return arrival.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function renderProfile(progress = currentRideProgress()) {
@@ -954,6 +1253,10 @@ function handleProfileClick(event) {
   if (distance === null) return;
   state.progressMeters = distance;
   state.lastTick = performance.now();
+  // A seek jumps the rider to a new elevation without actually climbing or
+  // descending it, so resync the ETA's reference point rather than letting
+  // the jump register as a burst of vertical speed on the next tick.
+  state.lastTickElevation = interpolateRoutePoint(state.route, distance).ele;
   updateRideUi({ force: true });
   saveRide();
   ensureMovementLoop();
@@ -1010,18 +1313,13 @@ function updateTelemetryUi() {
   const powerText = Number.isFinite(state.trainerPowerWatts) ? `${state.trainerPowerWatts} W` : "--";
   const speedText = formatSpeed(state.trainerSpeedKph, state.distanceUnits);
   const heartRate = currentHeartRate();
-  const heartRateText = Number.isFinite(heartRate) ? `${heartRate} bpm` : "--";
+  const heartRateText = Number.isFinite(heartRate) ? `${heartRate} bpm` : (state.heartRateStatusText || "--");
   const caloriesText = formatEnergy(state.trainerCaloriesKcal ?? NaN, state.energyUnits);
 
-  els.powerStat.textContent = powerText;
-  els.speedStat.textContent = speedText;
-  els.heartRateStat.textContent = heartRate !== null
-    ? heartRateText
-    : (state.heartRateStatusText || "--");
-  els.caloriesStat.textContent = caloriesText;
-  els.hudPowerStat.textContent = powerText;
-  els.hudSpeedStat.textContent = speedText;
-  els.hudHeartRateStat.textContent = heartRateText;
+  setStat("power", powerText);
+  setStat("speed", speedText);
+  setStat("heartRate", heartRateText);
+  setStat("calories", caloriesText);
 }
 
 // --- Ride recording & FIT export ----------------------------------------------
@@ -1938,6 +2236,20 @@ function restoreSettings() {
     state.screenshotWidth = clamp(Math.round(savedShotWidth), SCREENSHOT_WIDTH_MIN, SCREENSHOT_WIDTH_MAX);
   }
 
+  if (typeof settings?.showMapLabels === "boolean") {
+    state.showMapLabels = settings.showMapLabels;
+  }
+
+  if (typeof settings?.minimapEnabled === "boolean") {
+    state.minimapEnabled = settings.minimapEnabled;
+  }
+
+  if (Array.isArray(settings?.hudVisibleStats)) {
+    const validKeys = new Set(HUD_STAT_DEFS.map((def) => def.key));
+    const restored = settings.hudVisibleStats.filter((key) => validKeys.has(key));
+    state.hudVisibleStats = new Set(restored.length ? restored : DEFAULT_HUD_STATS);
+  }
+
   els.centerRiderInput.checked = state.centerRider;
   els.gradeIntervalInput.value = String(state.gradeUpdateIntervalSeconds);
   els.gradeIntervalOutput.value = `${state.gradeUpdateIntervalSeconds} s`;
@@ -1952,6 +2264,12 @@ function restoreSettings() {
   els.screenshotAspectSelect.value = state.screenshotAspect;
   els.screenshotWidthSelect.value = String(state.screenshotWidth);
   applyScreenshotButtonVisibility();
+
+  els.minimapEnabledInput.checked = state.minimapEnabled;
+  els.minimap.hidden = !state.minimapEnabled;
+  els.mapLabelsInput.checked = state.showMapLabels;
+  syncHudSettingsControls();
+  applyHudVisibility();
 }
 
 function saveSettings() {
@@ -1977,6 +2295,9 @@ function saveSettings() {
     gradeUpdateIntervalSeconds: state.gradeUpdateIntervalSeconds,
     distanceUnits: state.distanceUnits,
     energyUnits: state.energyUnits,
+    showMapLabels: state.showMapLabels,
+    minimapEnabled: state.minimapEnabled,
+    hudVisibleStats: [...state.hudVisibleStats],
   });
 }
 
@@ -2011,6 +2332,8 @@ function restoreSavedRide() {
   state.progressMeters = clamp(Number(savedRide.progressMeters) || 0, 0, routeTotalDistance(state.route));
   state.simulating = false;
   state.lastTick = 0;
+  applyRouteElevationData();
+  resetTerrainPace();
 
   enterOverviewMode({ instant: true });
   updateStartButton();

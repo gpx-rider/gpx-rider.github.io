@@ -4,6 +4,17 @@ const GRADE_LOOKAROUND_METERS = 18;
 const GRADE_MIN_PERCENT = -15;
 const GRADE_MAX_PERCENT = 20;
 
+// Elevation profile resampling: raw GPX elevation is noisy (GPS/barometric
+// jitter), so summing every point-to-point delta wildly overstates total
+// ascent/descent. Resampling at a fixed spacing and summing deltas of the
+// resampled (already-interpolated) series filters out sub-spacing noise —
+// the same idea most ride computers use for "elevation gain".
+const ELEVATION_SAMPLE_SPACING_METERS = 25;
+// A resampled step is only classed as climbing/descending once its grade
+// clears this threshold; gentler undulation counts as flat for the terrain
+// breakdown that feeds the ETA estimate (see app.js computeEtaSeconds).
+export const TERRAIN_GRADE_THRESHOLD_PERCENT = 2;
+
 export function parseGpx(text) {
   const doc = new DOMParser().parseFromString(text, "application/xml");
   const parserError = doc.querySelector("parsererror");
@@ -82,6 +93,81 @@ export function maxElevationNear(route, location, radiusMeters) {
     if (maxEle === null || point.ele > maxEle) maxEle = point.ele;
   }
   return maxEle;
+}
+
+// Resamples the route's elevation at a fixed spacing and returns a table of
+// cumulative ascent/descent and cumulative climb/descent/flat distance &
+// vertical, one entry per sample. Query it with elevationAt() rather than
+// recomputing per call — building it is the only part that's O(samples).
+export function buildElevationProfile(route) {
+  const total = routeTotalDistance(route);
+  const first = { distance: 0, gain: 0, loss: 0, climbDistance: 0, climbVertical: 0, descentDistance: 0, flatDistance: 0 };
+  if (total <= 0 || route.length < 2) return [first];
+
+  const steps = Math.max(1, Math.round(total / ELEVATION_SAMPLE_SPACING_METERS));
+  const stepLength = total / steps;
+  const profile = [first];
+  let previousEle = route[0].ele;
+  let gain = 0;
+  let loss = 0;
+  let climbDistance = 0;
+  let climbVertical = 0;
+  let descentDistance = 0;
+  let flatDistance = 0;
+
+  for (let i = 1; i <= steps; i += 1) {
+    const distance = stepLength * i;
+    const ele = interpolateRoutePoint(route, distance).ele;
+    const delta = ele - previousEle;
+    if (delta > 0) gain += delta;
+    else loss -= delta;
+
+    const gradePercent = (delta / stepLength) * 100;
+    if (gradePercent >= TERRAIN_GRADE_THRESHOLD_PERCENT) {
+      climbDistance += stepLength;
+      climbVertical += delta;
+    } else if (gradePercent <= -TERRAIN_GRADE_THRESHOLD_PERCENT) {
+      descentDistance += stepLength;
+    } else {
+      flatDistance += stepLength;
+    }
+
+    previousEle = ele;
+    profile.push({ distance, gain, loss, climbDistance, climbVertical, descentDistance, flatDistance });
+  }
+  return profile;
+}
+
+// Cumulative gain/loss/climb/descent/flat values at `distance`, linearly
+// interpolated between the two bracketing samples — mirrors
+// interpolateRoutePoint's binary search and clamping behavior.
+export function elevationAt(profile, distance) {
+  const first = profile[0];
+  const last = profile.at(-1);
+  if (distance <= first.distance) return first;
+  if (distance >= last.distance) return last;
+
+  let low = 0;
+  let high = profile.length - 1;
+  while (high - low > 1) {
+    const mid = (low + high) >> 1;
+    if (profile[mid].distance < distance) low = mid;
+    else high = mid;
+  }
+
+  const a = profile[low];
+  const b = profile[high];
+  const span = b.distance - a.distance || 1;
+  const ratio = (distance - a.distance) / span;
+  return {
+    distance,
+    gain: lerp(a.gain, b.gain, ratio),
+    loss: lerp(a.loss, b.loss, ratio),
+    climbDistance: lerp(a.climbDistance, b.climbDistance, ratio),
+    climbVertical: lerp(a.climbVertical, b.climbVertical, ratio),
+    descentDistance: lerp(a.descentDistance, b.descentDistance, ratio),
+    flatDistance: lerp(a.flatDistance, b.flatDistance, ratio),
+  };
 }
 
 export function gradeAt(route, distance) {

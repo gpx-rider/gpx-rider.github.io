@@ -30,7 +30,7 @@ module:
 | `app/app.js` | Orchestrator: state, DOM, map rendering, camera capture, movement loop, settings & saved-ride persistence |
 | `app/camera.mjs` | Pure follow-camera math (tested) |
 | `app/geo.mjs` | Pure geodesy helpers: haversine, bearing, destinationPoint, clamp, lerp |
-| `app/route.mjs` | GPX parsing, route enrichment, point interpolation, grade computation (tested) |
+| `app/route.mjs` | GPX parsing, route enrichment, point interpolation, grade computation, resampled elevation profile for ascent/descent totals and the terrain breakdown behind the ETA estimate (tested) |
 | `app/profile.mjs` | Elevation profile canvas drawing + hover/seek hit-testing |
 | `app/trainer.mjs` | FTMS trainer over Web Bluetooth: pairing, reconnect, control-point writes, Indoor Bike Data parsing (speed, power, calories, HR) |
 | `app/heartrate.mjs` | BLE heart-rate strap (standard Heart Rate service 0x180D) |
@@ -90,6 +90,25 @@ state and talk back to `app.js` only through `init*()` callbacks.
   acceleration budget grows with remaining distance, so follow tracking is
   gentle while transition flights are fast, braking to arrive), stepped by
   the movement loop while riding and by `ensureCameraFlightLoop` otherwise.
+- **Stats & HUD**: one catalog (`HUD_STAT_DEFS` in `app.js`) drives both
+  surfaces — the sidebar shows every stat unconditionally via its static
+  tiles (`SIDEBAR_STAT_IDS`), while the fullscreen HUD only shows the
+  rider-selected subset (`state.hudVisibleStats`, toggled in ⚙ Settings →
+  HUD). Both are written by the single `setStat(key, text)` helper; add a
+  new stat there rather than touching sidebar/HUD DOM separately.
+- **Ascent/descent & ETA**: `route.mjs`'s `buildElevationProfile` resamples
+  elevation at a fixed spacing (filtering GPS/barometric noise out of the
+  ascent/descent totals) and classifies each resampled step as climbing,
+  descending, or flat by grade threshold (`TERRAIN_GRADE_THRESHOLD_PERCENT`).
+  The ETA is self-calibrating, not a fixed assumption: `app.js` tracks the
+  rider's own vertical climb rate and horizontal descent/flat pace so far
+  per tick (`accumulateTerrainPace`) and projects those rates onto whatever
+  climbing/descending/flat riding remains (`terrainRemainingBreakdown`),
+  falling back to the overall average speed for any terrain type not yet
+  encountered. Anything that jumps `progressMeters` without genuinely riding
+  it (a GPX reload, `resetRide`, a profile-bar seek) must resync
+  `state.lastTickElevation` and/or call `resetTerrainPace()` or the next
+  tick's vertical delta will spike.
 - **Camera terrain avoidance** lifts the follow camera when its eye would
   sink below terrain + clearance and eases it back down as terrain allows
   (`currentTerrainLift` in `app.js`; pure math in `camera.mjs`'s

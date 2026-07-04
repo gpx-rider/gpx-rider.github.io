@@ -19,32 +19,7 @@
           </div>
 
           <div id="fullscreenOverlayBottom" class="fullscreen-overlay-bottom" hidden>
-            <div id="fullscreenHud" class="fullscreen-hud" aria-live="polite">
-              <div>
-                <span>Power</span>
-                <strong id="hudPowerStat">--</strong>
-              </div>
-              <div>
-                <span>Speed</span>
-                <strong id="hudSpeedStat">--</strong>
-              </div>
-              <div>
-                <span>HR</span>
-                <strong id="hudHeartRateStat">--</strong>
-              </div>
-              <div>
-                <span>Grade</span>
-                <strong id="hudGradeStat">--</strong>
-              </div>
-              <div>
-                <span>Ridden</span>
-                <strong id="hudRiddenStat">--</strong>
-              </div>
-              <div>
-                <span>Remaining</span>
-                <strong id="hudRemainingStat">--</strong>
-              </div>
-            </div>
+            <div id="fullscreenHud" class="fullscreen-hud" aria-live="polite"></div>
           </div>
         </div>
         <canvas id="profile" aria-label="Elevation profile"></canvas>
@@ -99,6 +74,30 @@
             <span>Calories</span>
             <strong id="caloriesStat">--</strong>
           </div>
+          <div>
+            <span>Ascent</span>
+            <strong id="ascentStat">--</strong>
+          </div>
+          <div>
+            <span>Descent</span>
+            <strong id="descentStat">--</strong>
+          </div>
+          <div>
+            <span>Ridden</span>
+            <strong id="riddenStat">--</strong>
+          </div>
+          <div>
+            <span>Remaining</span>
+            <strong id="remainingStat">--</strong>
+          </div>
+          <div>
+            <span>Ascent remaining</span>
+            <strong id="ascentRemainingStat">--</strong>
+          </div>
+          <div>
+            <span>ETA</span>
+            <strong id="etaStat">--</strong>
+          </div>
         </div>
 
         <div class="speed-control">
@@ -120,6 +119,11 @@
         <div class="progress-wrap">
           <progress id="progress" max="1" value="0"></progress>
           <span id="progressLabel">Load a route to begin</span>
+        </div>
+
+        <div class="progress-wrap">
+          <progress id="ascentProgress" max="1" value="0"></progress>
+          <span id="ascentProgressLabel">Load a route to begin</span>
         </div>
 
         <div class="ride-recording">
@@ -217,6 +221,29 @@
           <button id="resetCameraBtn" type="button">Reset camera</button>
           <output id="cameraReadout" class="camera-readout" aria-live="polite">Camera --</output>
         </div>
+      </section>
+
+      <section class="settings-section">
+        <h3>Map display</h3>
+        <div class="camera-controls">
+          <label class="camera-center-toggle">
+            <input id="minimapEnabledInput" type="checkbox" checked>
+            <span>Show minimap</span>
+          </label>
+          <label class="camera-center-toggle">
+            <input id="mapLabelsInput" type="checkbox">
+            <span>Show place &amp; road labels on the 3D map</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h3>HUD (fullscreen)</h3>
+        <p class="settings-note">
+          Choose which stats appear in the overlay while riding in
+          fullscreen. The sidebar always shows every stat.
+        </p>
+        <div id="hudStatsSettings" class="hud-stats-settings"></div>
       </section>
 
       <section class="settings-section">

@@ -34,9 +34,13 @@ If that sounds useful, contributions are very welcome — see
 
 ## Features
 
-- 📍 **GPX import** — drag in any route with track points and elevation.
+- 📍 **GPX import** — drag in any route with track points and elevation. A
+  first-time visit with nothing saved yet loads the first ride gallery route
+  automatically instead of a blank map.
 - 🛰️ **Photorealistic 3D map** — a forward-facing follow camera tracks your
-  position and heading along the route, with a satellite minimap overlay.
+  position and heading along the route, with a satellite minimap overlay
+  (toggle it off in ⚙ Settings → Map display, along with place/road labels
+  on the 3D map itself, both remembered locally).
   Loading a route instantly shows a **whole-route overview**: the
   start-to-end line reads left-to-right from a 45° perch, with the route's
   far side facing away. Once you start moving, the camera **flies down
@@ -66,10 +70,19 @@ If that sounds useful, contributions are very welcome — see
   chosen slider speed for previewing without pedaling; real pedaling
   automatically takes over and stops the simulation.
 - 📈 **Live stats & elevation profile** — distance, grade, altitude, power,
-  speed, heart rate, and calories (from the trainer), plus a full-route
-  elevation chart. Switch between km/mi and kcal/kJ display units.
+  speed, heart rate, calories, total ascent/descent, distance ridden/
+  remaining, ascent remaining, and a **smart ETA** (from the trainer/route),
+  plus a full-route elevation chart. A second progress bar below the
+  distance one tracks how much of the route's total climbing is done.
+  Switch between km/mi and kcal/kJ display units. The ETA self-calibrates to
+  *your* pace: it tracks your own vertical climb rate and horizontal
+  descending/flat speed so far and projects those onto however much
+  climbing, descending, and flat riding is left on the route, rather than
+  assuming a fixed speed.
 - 🖥️ **Fullscreen ride HUD** — a distraction-free overlay for pairing with a
-  smart TV or tablet on the handlebars.
+  smart TV or tablet on the handlebars. Pick exactly which stats appear in
+  it from the full list above in ⚙ Settings → HUD (fullscreen); the sidebar
+  always shows every stat regardless of what's selected for the HUD.
 - 📷 **One-click ride screenshots** — an optional `📷 Screenshot` button on
   the map (off by default; enable it in ⚙ Settings → Screenshots) saves a
   JPG of the exact view including the HUD, minimap, elevation profile, and
@@ -135,7 +148,9 @@ as GPX files ready to load into GPX Rider.
    with a forward-facing camera based on GPX bearing. Everything
    configurable lives in the ⚙ settings dialog: camera
    tuning (`Zoom`, `Camera angle`, `Camera behind`), km/mi and kcal/kJ
-   display units, the trainer grade update interval, and the **Rendering**
+   display units, the trainer grade update interval, **Map display**
+   (minimap on/off, 3D map place/road labels on/off), **HUD (fullscreen)**
+   (which stats show in the fullscreen overlay), and the **Rendering**
    section — the rider beacon (the translucent cylinder that marks your
    position above the trees — on/off, diameter, height, opacity, color)
    and the *keep camera above terrain* behavior with its clearance margin.
@@ -179,6 +194,10 @@ own — visitors will be prompted to paste their own key on first load.
   elevation points (no Elevation API calls), so it works best where the
   road itself climbs the hill — switchbacks, mountain passes. An off-route
   ridge with no track points nearby is not detected.
+- Ascent/descent totals and the ETA are estimates from the GPX's own
+  elevation data, resampled to smooth out GPS/barometric noise — they won't
+  match a barometric bike computer exactly. The ETA needs a little ridden
+  distance before it can calibrate to your pace, and shows `--` until then.
 - This is a young project. Test resistance changes at low speed and keep
   the bike/trainer clear before a real workout.
 

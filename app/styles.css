@@ -121,7 +121,7 @@ body {
 
 .fullscreen-hud {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 10px;
 }
 
@@ -420,6 +420,12 @@ button {
 
 .camera-center-toggle input {
   margin: 0;
+}
+
+.hud-stats-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
 }
 
 .camera-readout {

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildElevationProfile,
   densifyRoute,
+  elevationAt,
   enrichRoute,
   gradeAt,
   interpolateRoutePoint,
@@ -56,6 +58,36 @@ test("gradeAt reports climbing and descending", () => {
   const route = enrichRoute(points);
   assert.ok(gradeAt(route, route[1].distance / 2) > 0, "first leg climbs");
   assert.ok(gradeAt(route, (route[1].distance + route[2].distance) / 2) < 0, "second leg descends");
+});
+
+test("buildElevationProfile sums ascent/descent and classifies climb/descent/flat", () => {
+  const route = enrichRoute([
+    { lat: 50.000, lng: 14.400, ele: 100 },
+    { lat: 50.009, lng: 14.400, ele: 200 }, // ~1000 m climb
+    { lat: 50.0135, lng: 14.400, ele: 150 }, // ~500 m descent
+    { lat: 50.016, lng: 14.400, ele: 150 }, // ~280 m flat
+  ]);
+
+  const profile = buildElevationProfile(route);
+  const total = elevationAt(profile, routeTotalDistance(route));
+
+  assert.ok(Math.abs(total.gain - 100) < 5, `gain ${total.gain}`);
+  assert.ok(Math.abs(total.loss - 50) < 5, `loss ${total.loss}`);
+  assert.ok(total.climbDistance > 900 && total.climbDistance < 1100, `climbDistance ${total.climbDistance}`);
+  assert.ok(total.descentDistance > 400 && total.descentDistance < 600, `descentDistance ${total.descentDistance}`);
+  assert.ok(total.flatDistance > 150, `flatDistance ${total.flatDistance}`);
+});
+
+test("elevationAt clamps at the ends and interpolates monotonically in between", () => {
+  const route = enrichRoute(points);
+  const profile = buildElevationProfile(route);
+  const total = routeTotalDistance(route);
+
+  assert.deepEqual(elevationAt(profile, -5), profile[0]);
+  assert.deepEqual(elevationAt(profile, 1e9), profile.at(-1));
+
+  const mid = elevationAt(profile, total / 2);
+  assert.ok(mid.gain >= 0 && mid.gain <= elevationAt(profile, total).gain);
 });
 
 test("maxElevationNear reports the highest nearby track point", () => {
