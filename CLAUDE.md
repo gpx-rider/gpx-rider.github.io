@@ -13,6 +13,7 @@ make run       # serve the repo at http://127.0.0.1:5173/app/ (python3 http.serv
 make test      # node --test tests/*.test.mjs (no dependencies needed)
 make gallery   # regenerate the README gallery section from gallery/*/desc.md
 make gallery-data  # regenerate app/gallery.json (parses each GPX for distance/ascent/descent, difficulty classification, and ready-to-draw mini-profile bars) for the in-app ride gallery
+make rider-dot-model  # regenerate app/assets/rider-dot.glb (the 3D rider marker mesh) — only needed after editing scripts/generate_rider_dot_model.py, not part of the default `make`
 ```
 
 Always run `make test` after changing anything in `app/`. Browser-only
@@ -53,8 +54,13 @@ hardware/IO modules (`trainer.mjs`, `heartrate.mjs`) hold their own internal
 state and talk back to `app.js` only through `init*()` callbacks.
 
 Tunable parameters (defaults, thresholds, physics/model factors) live in
-`app/tuning.mjs` with a doc comment each — never as inline magic numbers —
-so users can adjust behavior in one place. Deliberate exceptions:
+`app/tuning.mjs` with a doc comment each — never as inline magic values —
+so users can adjust behavior in one place. This is not limited to numbers:
+file paths, URLs, color strings, orientation/config objects — anything a
+user or future contributor might reasonably want to retune belongs in
+`tuning.mjs`, not inlined at its call site, even if it's only used once. When
+adding a new adjustable behavior, add its constant to `tuning.mjs` in the
+same change; don't leave it inline "for now." Deliberate exceptions:
 `app/config.mjs` (rewritten at deploy time, see below) and the BLE
 write-queue timing internals in `trainer.mjs` (hardware-safety, documented
 in place).
@@ -161,17 +167,68 @@ in place).
   `trainer.mjs` (one GATT operation at a time) and grade writes are
   throttled/averaged — read the comments there before changing timing.
 - **3D map geometry**: never render lines with `CLAMP_TO_GROUND` — draped
-  strokes smear down steep slopes into wide blobs. The route line and rider
-  dot use `RELATIVE_TO_GROUND` a couple of meters up, with the path
-  densified (`densifyRoute`) so elevated segments follow the terrain. The
-  rider dot's ground radius scales with the camera-eye distance
-  (`cameraDistanceToPoint`) to keep a constant apparent size. The dot (and
-  the minimap marker) mirrors the brand "GPX Rider" logo dot — a solid amber
-  center with a paler amber ring — via the `RIDER_DOT_*` color constants in
-  `app.js`. The rider beacon is a real-world-sized extruded `Polygon3DElement`
-  cylinder with `drawsOccludedSegments` so trees never hide the rider's
-  position; it is **off by default** (`DEFAULT_BEACON_ENABLED`), opt-in from
-  the Rendering settings.
+  strokes smear down steep slopes into wide blobs. The route line floats at
+  `ROUTE_LINE_ALTITUDE_METERS` (2.5m) with its path densified (`densifyRoute`)
+  so elevated segments follow the terrain.
+  The rider dot is a `Model3DElement` loading the model at
+  `RIDER_DOT_MODEL_PATH` (`tuning.mjs`; see `renderRiderDot`/`updateRiderDot`
+  in `app.js`), **not** a `Polygon3DElement` and **not** a
+  `Marker3DElement`/`PinElement` billboard — both were tried first, in that
+  order, and both were confirmed by real-browser testing (not just reasoned
+  about) to fail:
+  - `Polygon3DElement`: meant for static terrain-draped areas, not a point
+    that moves every frame. Re-tessellating one every frame produced a
+    solid-black fill at ordinary follow-camera distances — independent of
+    polygon winding, altitude/z-fighting with terrain (tried 1–20m up), and
+    `extruded: true` (a short cylinder instead of a flat disc) — plus a
+    faceted/streaky look from the constant re-triangulation.
+  - `Marker3DElement` + `PinElement`: fixed the black-fill and faceting, but
+    a `PinElement` reads as a map-pin/teardrop, not a location dot, and its
+    `scale` is a screen-space billboard size that doesn't grow/shrink with
+    camera distance the way a real ground object should.
+
+  A real mesh avoids all of that. The shipped model, `app/assets/rider-dot.glb`,
+  is hand-rolled by `scripts/generate_rider_dot_model.py` (no 3D modeling
+  tool available in this environment — the same "encode the binary format by
+  hand" approach `app/fit.mjs` takes for FIT files): a two-material puck,
+  baked to a true 1 meter diameter so `RIDER_DOT_SCALE` in `tuning.mjs` is a
+  plain real-world size multiplier. Both materials use the
+  `KHR_materials_unlit` glTF extension — an ordinary lit PBR material
+  rendered solid black here regardless of normals/winding/doubleSided/
+  texturing (confirmed by testing many variants), and unlit is also the
+  semantically correct choice for a location marker anyway: it must stay
+  clearly visible at any time of day or camera angle, not dim to black in
+  shadow like a real physical object would. `RIDER_DOT_MODEL_PATH`,
+  `RIDER_DOT_ORIENTATION`, `RIDER_DOT_SCALE`, and `RIDER_DOT_ALTITUDE_METERS`
+  (`tuning.mjs`) are all independently tunable specifically so a different
+  model can be dropped into `app/assets/` and pointed at without touching
+  `app.js` — see the comments on those constants for what to expect when
+  swapping models (orientation and unlit materials both being the most
+  likely things a new model needs). `RIDER_DOT_ALTITUDE_METERS` puts the dot
+  on the ground and is deliberately independent of `ROUTE_LINE_ALTITUDE_METERS`
+  — the route line has to float clear of the terrain because a drawn line
+  clamped to the ground smears down slopes, but a real mesh doesn't have that
+  problem. It's not 0 though: the shipped puck's origin is at its vertical
+  center, so 0 buried its bottom half in the terrain, and clipping didn't
+  fully stop until well past just the model's own half-height — most likely
+  because the terrain mesh itself isn't perfectly smooth/precise at close
+  range (confirmed by testing on a steep switchback, where clipping is most
+  visible). Needs retuning alongside `RIDER_DOT_MODEL_PATH` for a model with
+  different dimensions or an off-center origin — start from that model's own
+  half-height above 0 and increase from there if it still clips. A
+  `Polyline3DElement` ring (via `riderCircleCoordinates`, whose winding must
+  trace counter-clockwise as seen from above — see its comment) is the fallback for
+  browsers without `Model3DElement`. The dot (and the minimap marker) mirrors
+  the brand "GPX Rider" logo dot — a solid amber center with a paler amber
+  ring — via the model's two materials and, for the minimap and fallback
+  ring, the `RIDER_DOT_COLOR` constant in `app.js`. The rider beacon is a
+  real-world-sized extruded `Polygon3DElement` cylinder with
+  `drawsOccludedSegments` so trees never hide the rider's position; it is
+  **off by default** (`DEFAULT_BEACON_ENABLED`), opt-in from the Rendering
+  settings — unlike the dot, it hasn't shown the same black-fill issue, but
+  it's also large enough that a small-on-screen-footprint problem wouldn't
+  reproduce the same way, and if it ever does, the fix here is the same:
+  switch it to a `Model3DElement` too, not more polygon tweaking.
 - **Camera modes & physical motion**: `state.cameraMode` is `"overview"`
   after a route loads (whole route framed via `computeRouteOverviewCamera`
   in `camera.mjs`: start→end reads left-to-right, the route's far side

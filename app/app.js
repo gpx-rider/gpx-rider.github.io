@@ -5,7 +5,6 @@
 
 import {
   applyCameraLift,
-  cameraDistanceToPoint,
   cameraEyePosition,
   cameraFromEyeAndCenter,
   chaseStep,
@@ -71,6 +70,11 @@ import {
   OVERVIEW_TILT_DEGREES,
   PEDALING_START_KPH,
   PEDALING_STOP_KPH,
+  RIDER_DOT_ALTITUDE_METERS,
+  RIDER_DOT_DIAMETER_METERS,
+  RIDER_DOT_MODEL_PATH,
+  RIDER_DOT_ORIENTATION,
+  RIDER_DOT_SCALE,
   RIDE_SAVE_THROTTLE_MS,
   ROUTE_LINE_ALTITUDE_METERS,
   ROUTE_LINE_MAX_POINTS,
@@ -118,10 +122,16 @@ const RIDE_STORAGE_KEY = "gpx-rider:last-ride";
 const BEACON_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
 // The rider's ground marker mirrors the brand "GPX Rider" dot: a solid amber
-// center with a paler amber ring and a soft amber outer glow.
+// center with a paler amber ring. The 3D marker is an actual mesh (path in
+// RIDER_DOT_MODEL_PATH, tuning.mjs) with those colors baked into its
+// materials — RIDER_DOT_COLOR here only feeds the minimap's 2D marker icon
+// and the Polyline3DElement fallback for browsers without Model3DElement.
 const RIDER_DOT_COLOR = "#f6a52c";
-const RIDER_DOT_RING_COLOR = "rgba(246, 165, 44, 0.5)";
-const RIDER_DOT_HALO_COLOR = "rgba(246, 165, 44, 0.18)";
+const RIDER_DOT_RING_WIDTH_PIXELS = 8;
+// Resolved against this module's own URL, not a path relative to the page,
+// so the model loads correctly regardless of what path GPX Rider is served
+// from (a local checkout, a fork's Pages URL with a repo-name prefix, etc).
+const RIDER_DOT_MODEL_URL = new URL(RIDER_DOT_MODEL_PATH, import.meta.url);
 
 // Physical camera motion: after the load-time snap, every camera move chases
 // its target like an object with bounded acceleration — it eases into
@@ -148,8 +158,6 @@ const state = {
   lastTick: 0,
   line: null,
   riderDot: null,
-  riderDotOutline: null,
-  riderHalo: null,
   riderBeacon: null,
   map: null,
   mapProvider: null,
@@ -166,6 +174,7 @@ const state = {
   gradeUpdateIntervalSeconds: DEFAULT_GRADE_INTERVAL_SECONDS,
   lastSlowUiAt: 0,
   lastRiderDot: null,
+  lastRiderBeacon: null,
   lastRideSavedAt: 0,
   profileHoverMeters: null,
   userInteracting: false,
@@ -821,45 +830,40 @@ function renderGoogle3DRoute(currentPoint) {
 }
 
 function renderRiderDot(point) {
-  const { AltitudeMode, Polygon3DElement, Polyline3DElement } = state.maps3d;
+  const { AltitudeMode, Model3DElement, Polyline3DElement } = state.maps3d;
 
   renderRiderBeacon();
 
-  if (Polygon3DElement) {
-    const styles = [
-      ["riderHalo", RIDER_DOT_HALO_COLOR],
-      ["riderDotOutline", RIDER_DOT_RING_COLOR],
-      ["riderDot", RIDER_DOT_COLOR],
-    ];
-    styles.forEach(([key, fillColor]) => {
-      state[key] = new Polygon3DElement({
-        altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
-        fillColor,
-        strokeWidth: 0,
-      });
-      state.map.append(state[key]);
+  // A Model3DElement (an actual mesh, RIDER_DOT_MODEL_PATH in tuning.mjs),
+  // not a Polygon3DElement: a filled ground polygon is meant for static
+  // terrain-draped areas, and re-tessellating one every frame as the rider
+  // moves produced two separate failures confirmed in a real browser — the
+  // fill rendering solid black at ordinary follow-camera distances
+  // (independent of winding, altitude, and extrusion, all tried), and a
+  // faceted/streaky look from the constant re-triangulation.
+  // RIDER_DOT_ORIENTATION and RIDER_DOT_SCALE are tuned for the specific
+  // model at RIDER_DOT_MODEL_PATH — see the comments there before swapping
+  // in a different model.
+  if (Model3DElement) {
+    state.riderDot = new Model3DElement({
+      src: RIDER_DOT_MODEL_URL,
+      altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
+      orientation: RIDER_DOT_ORIENTATION,
+      scale: RIDER_DOT_SCALE,
     });
+    state.map.append(state.riderDot);
     updateRiderDot(point);
     return;
   }
 
   if (!Polyline3DElement) return;
-  const radius = riderDotRadiusMeters(point);
-  state.riderDotOutline = new Polyline3DElement({
-    altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
-    path: riderCircleCoordinates(point, radius, 1),
-    strokeColor: RIDER_DOT_RING_COLOR,
-    strokeWidth: 10,
-  });
-  state.map.append(state.riderDotOutline);
-
   state.riderDot = new Polyline3DElement({
     altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
-    path: riderCircleCoordinates(point, radius, 1.2),
     strokeColor: RIDER_DOT_COLOR,
-    strokeWidth: 6,
+    strokeWidth: RIDER_DOT_RING_WIDTH_PIXELS,
   });
   state.map.append(state.riderDot);
+  updateRiderDot(point);
 }
 
 function renderRiderBeacon() {
@@ -889,34 +893,16 @@ function beaconFillColor() {
   return `rgba(${r}, ${g}, ${b}, ${state.beaconOpacity})`;
 }
 
-function riderDotRadiusMeters(position) {
-  // The dot is ground geometry sized in meters, so to read like a fixed-size
-  // GPS marker its radius must track the camera-eye distance to the dot
-  // itself — not the range to the look-at center, which is wrong the moment
-  // the rider is off-center, and not a tightly clamped value, which visibly
-  // grows/shrinks the dot at the clamp edges when zooming far in or out.
-  const distance = cameraDistanceToPoint({
-    center: state.map?.center,
-    range: state.map?.range,
-    tilt: state.map?.tilt,
-    heading: state.map?.heading,
-  }, position);
-  return clamp((distance ?? 800) / 90, 0.5, 20000);
-}
-
 function clearRouteFromMap() {
   if (state.line) state.line.remove();
-  if (state.riderHalo) state.riderHalo.remove();
-  if (state.riderDotOutline) state.riderDotOutline.remove();
   if (state.riderDot) state.riderDot.remove();
   if (state.riderBeacon) state.riderBeacon.remove();
 
   state.line = null;
-  state.riderHalo = null;
-  state.riderDotOutline = null;
   state.riderDot = null;
   state.riderBeacon = null;
   state.lastRiderDot = null;
+  state.lastRiderBeacon = null;
 }
 
 // --- Movement: simulation button + pedaling detection -----------------------
@@ -1403,47 +1389,54 @@ function confirmClearRideData() {
 // --- Camera ------------------------------------------------------------------
 
 function updateRiderDot(position) {
-  const radius = riderDotRadiusMeters(position);
-
-  // Rebuilding the polygons re-tessellates them in the map engine, which is
-  // far too expensive to do per frame. Skip updates smaller than a pixel or
-  // two on screen; the camera still follows the rider every frame.
-  const last = state.lastRiderDot;
-  if (
-    last &&
-    Math.abs(radius - last.radius) < last.radius * 0.04 &&
-    haversine(last, position) < radius * 0.08
-  ) {
-    return;
-  }
-  state.lastRiderDot = { lat: position.lat, lng: position.lng, radius };
-
   if (state.riderBeacon) {
     // Real-world-sized geometry, so a coarse circle keeps the extruded
-    // cylinder cheap to re-tessellate as it follows the rider.
-    state.riderBeacon.path = riderCircleCoordinates(
-      position,
-      state.beaconDiameterMeters / 2,
-      state.beaconHeightMeters,
-      15,
-    );
+    // cylinder cheap to re-tessellate as it follows the rider. Throttled
+    // the same way the polygon fallback below is, since it's still a
+    // rebuilt-every-update polygon.
+    const last = state.lastRiderBeacon;
+    if (!last || haversine(last, position) >= (state.beaconDiameterMeters / 2) * 0.08) {
+      state.lastRiderBeacon = { lat: position.lat, lng: position.lng };
+      state.riderBeacon.path = riderCircleCoordinates(
+        position,
+        state.beaconDiameterMeters / 2,
+        state.beaconHeightMeters,
+        15,
+      );
+    }
   }
 
-  if (state.riderHalo) {
-    // Stacked a little apart above the ground so the three fills don't z-fight.
-    state.riderHalo.path = riderCircleCoordinates(position, radius * 2.2, 0.5);
-    state.riderDotOutline.path = riderCircleCoordinates(position, radius * 1.35, 1);
-    state.riderDot.path = riderCircleCoordinates(position, radius, 1.5);
+  if (state.riderDot instanceof state.maps3d?.Model3DElement) {
+    // Just moving the model's position, not rebuilding a mesh — cheap
+    // enough to do every frame, no throttling needed.
+    state.riderDot.position = { lat: position.lat, lng: position.lng, altitude: RIDER_DOT_ALTITUDE_METERS };
     return;
   }
 
-  if (state.riderDotOutline) state.riderDotOutline.path = riderCircleCoordinates(position, radius, 1);
-  if (state.riderDot) state.riderDot.path = riderCircleCoordinates(position, radius, 1.2);
+  if (state.riderDot) {
+    const radius = RIDER_DOT_DIAMETER_METERS / 2;
+    // Rebuilding the polygon re-tessellates it in the map engine, which is
+    // far too expensive to do per frame. Skip updates smaller than a pixel
+    // or two on screen; the camera still follows the rider every frame.
+    const last = state.lastRiderDot;
+    if (last && haversine(last, position) < radius * 0.08) return;
+    state.lastRiderDot = { lat: position.lat, lng: position.lng };
+    state.riderDot.path = riderCircleCoordinates(position, radius, RIDER_DOT_ALTITUDE_METERS);
+  }
 }
 
 function riderCircleCoordinates(center, radiusMeters, altitude = 0, stepDegrees = 6) {
+  // Walking compass bearings upward (N, E, S, W, ...) traces the ring
+  // clockwise as seen from above. A filled polygon's normal follows the
+  // right-hand rule from its vertex order, so a clockwise-from-above ring
+  // faces its front side down into the ground — the lit fill then reads as
+  // almost black (no light hits the face pointing away from the sky) even
+  // though the stroke, which isn't lit the same way, still shows its true
+  // color. Walking bearings downward instead traces the ring
+  // counter-clockwise from above so the fill faces up and renders its real
+  // color.
   const points = [];
-  for (let angle = 0; angle < 360; angle += stepDegrees) {
+  for (let angle = 360; angle > 0; angle -= stepDegrees) {
     const point = destinationPoint(center, angle, radiusMeters);
     points.push({ ...point, altitude });
   }
@@ -2042,7 +2035,7 @@ function resetRenderingToDefaults() {
 function rebuildRiderBeacon() {
   renderRiderBeacon();
   if (!state.route.length || !state.riderBeacon) return;
-  state.lastRiderDot = null;
+  state.lastRiderBeacon = null;
   updateRiderDot(interpolateRoutePoint(state.route, state.progressMeters));
 }
 

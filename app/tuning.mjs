@@ -169,6 +169,69 @@ export const DEFAULT_BEACON_HEIGHT_METERS = 20;
 export const DEFAULT_BEACON_OPACITY = 0.35;
 export const DEFAULT_BEACON_COLOR = "#ffffff";
 
+// --- Rider dot ---------------------------------------------------------------------
+
+// The ground marker showing the rider's position is a Model3DElement (see
+// renderRiderDot in app.js), not a filled Polygon3DElement. Polygon3DElement
+// is meant for static terrain-draped areas; re-tessellating one every frame
+// as the rider moves produced two separate failures confirmed in a real
+// browser (not just reasoned about): the fill rendering solid black at
+// ordinary follow-camera distances — independent of polygon winding,
+// altitude/z-fighting with terrain (tried 1m through 20m up), and
+// `extruded: true` (a short cylinder instead of a flat disc), none of which
+// changed it — and a faceted/streaky look from the constant re-triangulation.
+// A real mesh sidesteps both.
+
+// A path, not a full URL — app.js resolves it against its own module URL
+// (not the page's), so it loads correctly regardless of what path GPX Rider
+// is served from. Swap this to experiment with other models — a couple of
+// things to expect when trying a new one, both confirmed by testing, neither
+// documented anywhere we could find:
+//   - A model's local "up" axis does not necessarily map to world-up; if a
+//     new model stands on its edge instead of lying flat, adjust
+//     RIDER_DOT_ORIENTATION below (the shipped puck needed tilt: 90).
+//   - An ordinary lit PBR material can render solid black on this renderer
+//     regardless of normals/winding/texturing — if a replacement model
+//     renders black, look for (or add) a KHR_materials_unlit extension on
+//     its materials, the same fix the shipped puck needed.
+export const RIDER_DOT_MODEL_PATH = "assets/rider-dot.glb";
+
+// heading/tilt/roll passed straight to Model3DElement's `orientation`. Not
+// meaningful in isolation — it corrects for the specific model at
+// RIDER_DOT_MODEL_PATH's own local axes, so re-tune this whenever that model
+// changes (see the note above).
+export const RIDER_DOT_ORIENTATION = { heading: 0, tilt: 90, roll: 0 };
+
+// The model at RIDER_DOT_MODEL_PATH is baked to a true 1 meter diameter, so
+// this is a plain real-world size multiplier, not a unitless fudge factor —
+// unlike a screen-space billboard (Marker3DElement + PinElement, tried and
+// rejected: doesn't grow/shrink with camera distance the way a real ground
+// object should, and a map-pin shape doesn't read as a location dot anyway).
+// A different model baked to a different base size will need this retuned.
+export const RIDER_DOT_SCALE = 5;
+
+// Only used by the Polyline3DElement fallback for browsers without
+// Model3DElement (see renderRiderDot) — an outlined ring instead of a filled
+// dot, since Polyline3DElement has no fill. Diameter in meters.
+export const RIDER_DOT_DIAMETER_METERS = 5;
+
+// How high the dot's origin sits above the terrain, in meters. Independent
+// of ROUTE_LINE_ALTITUDE_METERS on purpose: the route line has to float well
+// clear of the terrain because a thin drawn line clamped to the ground
+// smears down slopes, but a real mesh (Model3DElement) doesn't have that
+// problem, so there's no reason to lift it off the ground the way the line
+// is. Not 0 though (confirmed by testing, not just assumed): the shipped
+// puck's origin is at its vertical center (0.15m tall, see
+// scripts/generate_rider_dot_model.py), so at 0 its bottom half was buried
+// in the terrain — and the model needed clearing by more than just its own
+// half-height (0.075m) to fully stop clipping on steep terrain, most likely
+// because the terrain mesh itself isn't perfectly smooth/precise at close
+// range. 0.5 was the smallest value that cleared cleanly on a steep
+// switchback in testing. Retune per model at RIDER_DOT_MODEL_PATH — start
+// from that model's own half-height above 0 and increase from there if it
+// still clips, especially on steep terrain.
+export const RIDER_DOT_ALTITUDE_METERS = 0.5;
+
 // --- Route line rendering -----------------------------------------------------------
 
 // The route line floats this high above the terrain instead of being draped

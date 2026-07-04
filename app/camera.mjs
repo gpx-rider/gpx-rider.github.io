@@ -74,16 +74,6 @@ export function cameraEyePosition({ center, range, tilt, heading }) {
   };
 }
 
-// Distance from the camera eye to a point on the ground.
-export function cameraDistanceToPoint(camera, point) {
-  const eye = cameraEyePosition(camera);
-  if (!eye) return null;
-
-  const horizontalDistance = haversine(eye, point);
-  const verticalDistance = eye.altitude - (Number(point.ele) || 0);
-  return Math.hypot(horizontalDistance, verticalDistance);
-}
-
 // Lift the camera eye by `liftMeters` while keeping the same range, by tilting
 // toward overhead — the view stays locked on the rider, the eye rises and
 // tucks in over whatever terrain was in the way. If the tilt limit cannot
