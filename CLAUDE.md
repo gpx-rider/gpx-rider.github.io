@@ -78,6 +78,15 @@ state and talk back to `app.js` only through `init*()` callbacks.
   (`cameraDistanceToPoint`) to keep a constant apparent size. The rider
   beacon is a real-world-sized extruded `Polygon3DElement` cylinder with
   `drawsOccludedSegments` so trees never hide the rider's position.
+- **Camera modes & physical motion**: `state.cameraMode` is `"overview"`
+  after a route loads (whole route framed via `computeRouteOverviewCamera`
+  in `camera.mjs`: start→end reads left-to-right, the route's far side
+  faces away, 45° tilt), `"manual"` once the user grabs the overview, and
+  `"follow"` from the moment movement starts. The applied camera never
+  jumps: it chases the target camera's eye/look-at pair with bounded
+  acceleration (`chaseStep` in `camera.mjs` — speed scales with remaining
+  distance, braking to arrive), stepped by the movement loop while riding
+  and by `ensureCameraFlightLoop` in `app.js` otherwise.
 - **Camera terrain avoidance** lifts the follow camera when its eye would
   sink below terrain + clearance and eases it back down as terrain allows
   (`currentTerrainLift` in `app.js`; pure math in `camera.mjs`'s

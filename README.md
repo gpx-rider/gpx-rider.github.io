@@ -36,6 +36,12 @@ If that sounds useful, contributions are very welcome — see
 - 📍 **GPX import** — drag in any route with track points and elevation.
 - 🛰️ **Photorealistic 3D map** — a forward-facing follow camera tracks your
   position and heading along the route, with a satellite minimap overlay.
+  Loading a route first shows a **whole-route overview**: the start-to-end
+  line reads left-to-right from a 45° perch, with the route's far side
+  facing away. Once you start moving, the camera **flies down behind the
+  rider** — all camera moves behave like a physical object with limited
+  acceleration, so they ease in, cross big distances quickly, and brake
+  smoothly instead of snapping.
   A translucent **rider beacon** (a tall cylinder above the rider) keeps
   your position visible behind trees and buildings, and the camera
   automatically **lifts over terrain** when a hillside would otherwise
@@ -120,8 +126,11 @@ as GPX files ready to load into GPX Rider.
    it stored only in your browser. Hit `Download FIT` at any time to export
    the ride as a `.fit` file tagged as a virtual ride for Strava, Garmin
    Connect, etc.; afterwards the app offers to clear the collected data.
-7. The map follows the route with a forward-facing camera based on GPX
-   bearing. Everything configurable lives in the ⚙ settings dialog: camera
+7. A freshly loaded route is framed whole from above; the camera stays on
+   that overview (or wherever you drag it) until movement starts, then
+   flies down behind the rider. While riding, the map follows the route
+   with a forward-facing camera based on GPX bearing. Everything
+   configurable lives in the ⚙ settings dialog: camera
    tuning (`Zoom`, `Camera angle`, `Camera behind`), km/mi and kcal/kJ
    display units, the trainer grade update interval, and the **Rendering**
    section — the rider beacon (the translucent cylinder that marks your

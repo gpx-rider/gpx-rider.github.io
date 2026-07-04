@@ -104,6 +104,134 @@ export function applyCameraLift({ tiltDegrees, rangeMeters, liftMeters, minTiltD
   };
 }
 
+// Frame the whole route from a 45-degree side view: the start→end line
+// becomes the screen-horizontal axis and the camera looks at the route from
+// whichever side leaves the point furthest from that axis away from the
+// viewer. A straight (or symmetric) route defaults to looking from the
+// south side of the axis direction — start on the left, end on the right.
+export function computeRouteOverviewCamera(route, {
+  tiltDegrees = 45,
+  viewportAspect = 16 / 9,
+  fovYDegrees = 55,
+  marginFactor = 1.35,
+  minRangeMeters = 250,
+} = {}) {
+  if (!Array.isArray(route) || route.length < 2) return null;
+
+  const start = route[0];
+  const end = route[route.length - 1];
+
+  // Loop routes have no usable start→end axis; aim it at the point furthest
+  // from the start instead.
+  let axisEnd = end;
+  if (haversine(start, end) < 10) {
+    for (const point of route) {
+      if (haversine(start, point) > haversine(start, axisEnd)) axisEnd = point;
+    }
+    if (haversine(start, axisEnd) < 10) return null;
+  }
+  const axisBearing = bearing(start, axisEnd);
+
+  let minAlong = 0;
+  let maxAlong = 0;
+  let minCross = 0;
+  let maxCross = 0;
+  let minEle = Infinity;
+  let maxEle = -Infinity;
+  for (const point of route) {
+    const distance = haversine(start, point);
+    const angle = toRad(bearing(start, point) - axisBearing);
+    const along = distance * Math.cos(angle);
+    const cross = distance * Math.sin(angle);
+    minAlong = Math.min(minAlong, along);
+    maxAlong = Math.max(maxAlong, along);
+    minCross = Math.min(minCross, cross);
+    maxCross = Math.max(maxCross, cross);
+    const ele = Number(point.ele) || 0;
+    minEle = Math.min(minEle, ele);
+    maxEle = Math.max(maxEle, ele);
+  }
+
+  // Positive cross is to the right of the axis. Looking toward the side that
+  // reaches further puts that side away from the viewer. The deadband keeps
+  // near-straight and near-symmetric routes on the default left side — which
+  // reads start-on-the-left, end-on-the-right — instead of flipping the whole
+  // view over a few meters of bulge.
+  const sideDeadband = Math.max(20, (maxAlong - minAlong) * 0.02);
+  const sideSign = maxCross > -minCross + sideDeadband ? 1 : -1;
+  const heading = normalizeHeading(axisBearing + 90 * sideSign);
+
+  const centerOnAxis = destinationPoint(start, axisBearing, (minAlong + maxAlong) / 2);
+  const center = destinationPoint(centerOnAxis, normalizeHeading(axisBearing + 90), (minCross + maxCross) / 2);
+
+  const tilt = clamp(Number(tiltDegrees) || 45, MIN_3D_CAMERA_TILT_DEGREES, MAX_3D_CAMERA_TILT_DEGREES);
+  const halfWidth = ((maxAlong - minAlong) / 2) * marginFactor;
+  const halfDepth = ((maxCross - minCross) / 2) * marginFactor;
+  const halfHeight = ((maxEle - minEle) / 2) * marginFactor;
+  const tanHalfY = Math.tan(toRad(clamp(Number(fovYDegrees) || 55, 10, 120) / 2));
+  const tanHalfX = tanHalfY * Math.max(0.1, Number(viewportAspect) || 16 / 9);
+
+  // The along-axis extent spans the screen horizontally; the cross extent and
+  // the elevation span project onto the screen's vertical axis, foreshortened
+  // by the tilt.
+  const rangeForWidth = halfWidth / tanHalfX;
+  const rangeForDepth = (halfDepth * Math.sin(toRad(tilt)) + halfHeight * Math.cos(toRad(tilt))) / tanHalfY;
+
+  return {
+    center: { lat: center.lat, lng: center.lng, altitude: (minEle + maxEle) / 2 },
+    heading,
+    tilt,
+    range: Math.max(minRangeMeters, rangeForWidth, rangeForDepth),
+  };
+}
+
+// "Arrive" steering for the camera: accelerate toward the target, then brake
+// along the sqrt(2·a·d) curve so the motion ends on the target, never
+// exceeding maxAcceleration. Close targets are approached slowly, distant
+// ones at speed — the camera moves like a physical object flying to its
+// goal. position/velocity/target are [x, y, z] in meters of any local frame.
+export function chaseStep({ position, velocity, target, maxAcceleration, maxSpeed = Infinity, dt }) {
+  const dtSafe = clamp(Number(dt) || 0, 0.001, 0.5);
+  const accel = Math.max(0.01, Number(maxAcceleration) || 0);
+  const delta = target.map((value, i) => value - position[i]);
+  const distance = Math.hypot(...delta);
+
+  // Approach speed follows the braking curve; the distance/dt term keeps a
+  // single frame from stepping past the target.
+  const desiredSpeed = Math.min(maxSpeed, Math.sqrt(2 * accel * distance), distance / dtSafe);
+  const desired = distance > 1e-9 ? delta.map((value) => (value / distance) * desiredSpeed) : [0, 0, 0];
+
+  const steering = desired.map((value, i) => value - velocity[i]);
+  const steeringMagnitude = Math.hypot(...steering);
+  const steeringLimit = accel * dtSafe;
+  const scale = steeringMagnitude > steeringLimit ? steeringLimit / steeringMagnitude : 1;
+  const nextVelocity = velocity.map((value, i) => value + steering[i] * scale);
+  const nextPosition = position.map((value, i) => value + nextVelocity[i] * dtSafe);
+
+  const remaining = Math.hypot(...target.map((value, i) => value - nextPosition[i]));
+  if (remaining < 0.05 && Math.hypot(...nextVelocity) < steeringLimit) {
+    return { position: [...target], velocity: [0, 0, 0], settled: true };
+  }
+  return { position: nextPosition, velocity: nextVelocity, settled: false };
+}
+
+// Rebuild the map camera parameters from an eye and look-at pair — the
+// inverse of cameraEyePosition. Nearly-overhead poses keep the caller's
+// fallback heading, since the bearing degenerates there.
+export function cameraFromEyeAndCenter(eye, center, fallbackHeading = 0) {
+  const standoff = haversine(eye, center);
+  const height = (Number(eye.altitude) || 0) - (Number(center.altitude) || 0);
+  return {
+    heading: standoff < 0.5 ? normalizeHeading(fallbackHeading) : normalizeHeading(bearing(eye, center)),
+    range: Math.max(1, Math.hypot(standoff, height)),
+    tilt: clamp(
+      Math.atan2(standoff, Math.max(height, 1e-6)) * 180 / Math.PI,
+      MIN_3D_CAMERA_TILT_DEGREES,
+      MAX_3D_CAMERA_TILT_DEGREES,
+    ),
+  };
+}
+
 export function measureCameraOffset(riderPosition, centerPosition, routeHeading) {
   const distance = haversine(riderPosition, centerPosition);
   if (distance < 0.01) return { forwardMeters: 0, rightMeters: 0 };

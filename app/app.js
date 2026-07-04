@@ -7,7 +7,10 @@ import {
   applyCameraLift,
   cameraDistanceToPoint,
   cameraEyePosition,
+  cameraFromEyeAndCenter,
+  chaseStep,
   computeFollowCamera,
+  computeRouteOverviewCamera,
   measureCameraOffset,
   normalizeHeading,
   rangeForBehind,
@@ -63,6 +66,16 @@ const CAMERA_CENTER_ALTITUDE_LIMIT_METERS = 20000;
 const CAMERA_TILT_MIN = 1;
 const CAMERA_TILT_MAX = 89;
 const DEFAULT_GRADE_INTERVAL_SECONDS = 2;
+
+// Route overview shown when a route loads: the whole route framed from a 45°
+// side view (see computeRouteOverviewCamera in camera.mjs). Movement starting
+// is what hands the camera over to the follow view.
+const OVERVIEW_TILT_DEGREES = 45;
+// Physical camera motion: the applied camera chases its target (overview or
+// follow) like an object with bounded acceleration — it eases into motion,
+// crosses long distances fast (overview → behind the rider), and brakes to
+// arrive without snapping. Close targets are approached slowly.
+const CAMERA_CHASE_ACCELERATION_MPS2 = 120;
 
 // Rider beacon: a translucent extruded cylinder standing on the rider so the
 // position stays visible when trees or buildings hide the ground dot.
@@ -145,6 +158,12 @@ const state = {
   userInteracting: false,
   interactionSettleTimer: null,
   interactionDotLoopActive: false,
+  // "overview" while a freshly loaded route is framed whole, "manual" after
+  // the user grabs the overview camera, "follow" once movement starts.
+  cameraMode: "follow",
+  overviewCamera: null,
+  cameraFlight: null,
+  cameraFlightLoopActive: false,
   cameraZoom: DEFAULT_CAMERA_ZOOM,
   cameraAngleDegrees: DEFAULT_CAMERA_ANGLE_DEGREES,
   cameraBehindMeters: DEFAULT_CAMERA_BEHIND_METERS,
@@ -467,6 +486,7 @@ function applyGpxText(text) {
   state.simulating = false;
   state.lastTick = 0;
   state.profileHoverMeters = null;
+  enterOverviewMode();
   updateStartButton();
   renderRoute();
   renderProfile();
@@ -565,7 +585,7 @@ function renderGoogle3DRoute(currentPoint) {
   }
 
   renderRiderDot(currentPoint);
-  updateMapCamera({ lat: currentPoint.lat, lng: currentPoint.lng, ele: currentPoint.ele });
+  updateMapCamera();
 }
 
 function renderRiderDot(point) {
@@ -735,7 +755,12 @@ function setPedaling(pedaling) {
 }
 
 function ensureMovementLoop() {
-  if (state.movementLoopActive || state.route.length < 2) return;
+  if (state.route.length < 2) return;
+  // Actual movement (not a mere seek) hands the camera over to the follow
+  // view; the camera flight then flies it in from wherever it is — e.g. down
+  // from the route overview when the rider starts pedaling.
+  if (isMoving()) state.cameraMode = "follow";
+  if (state.movementLoopActive) return;
   state.movementLoopActive = true;
   state.lastTick = performance.now();
   scheduleTick();
@@ -776,6 +801,9 @@ function resetRide() {
   state.simulating = false;
   state.progressMeters = 0;
   state.lastTick = performance.now();
+  // A reset while stationary returns to the whole-route overview, like a
+  // fresh load; while pedaling the camera stays with the rider.
+  if (!isMoving()) enterOverviewMode();
   updateStartButton();
   updateRideUi({ force: true });
   saveRide();
@@ -785,6 +813,9 @@ function resetRide() {
 function tick(now) {
   if (!isMoving() || state.route.length < 2) {
     state.movementLoopActive = false;
+    // The movement loop was driving the camera flight; let the flight loop
+    // finish any move still in progress.
+    ensureCameraFlightLoop();
     return;
   }
 
@@ -815,6 +846,7 @@ function tick(now) {
   if (state.progressMeters >= totalDistance) {
     state.simulating = false;
     state.movementLoopActive = false;
+    ensureCameraFlightLoop();
     updateStartButton();
     saveRide();
     persistRideLog();
@@ -833,7 +865,7 @@ function updateRideUi(options = {}) {
 
   if (state.riderDot) {
     updateRiderDot(point);
-    updateMapCamera({ lat: point.lat, lng: point.lng, ele: point.ele });
+    updateMapCamera();
   }
 
   // Per-frame work ends here. DOM stats, the profile canvas, and the trainer
@@ -1103,10 +1135,30 @@ function riderCircleCoordinates(center, radiusMeters, altitude = 0, stepDegrees 
   return points;
 }
 
-function updateMapCamera(position) {
-  if (state.mapProvider !== "google3d" || !state.route.length) return;
-  if (state.userInteracting) return;
+function updateMapCamera() {
+  if (state.mapProvider !== "google3d" || !state.route.length || !state.map) return;
+  if (state.userInteracting || state.cameraMode === "manual") return;
 
+  const settled = stepCameraFlight(performance.now());
+  // While the rider moves, the movement loop calls this every frame; when
+  // nothing else ticks, the flight loop keeps an unfinished move animating.
+  if (!settled && !state.movementLoopActive) ensureCameraFlightLoop();
+}
+
+// The camera the flight is heading for: the whole-route overview after a
+// load, otherwise the configured follow camera behind the rider.
+function cameraFlightTarget() {
+  if (state.cameraMode === "overview") {
+    const overview = state.overviewCamera;
+    if (!overview) return null;
+    const eye = cameraEyePosition(overview);
+    return eye ? { eye, center: overview.center, heading: overview.heading } : null;
+  }
+  return followCameraTarget();
+}
+
+function followCameraTarget() {
+  const position = interpolateRoutePoint(state.route, state.progressMeters);
   const heading = currentRouteHeading();
   const camera = computeFollowCamera({
     riderPosition: position,
@@ -1138,10 +1190,139 @@ function updateMapCamera(position) {
     liftedCenterAltitude = centerAltitude + lifted.extraCenterAltitude;
   }
 
-  state.map.center = { lat: camera.center.lat, lng: camera.center.lng, altitude: liftedCenterAltitude };
+  const center = { lat: camera.center.lat, lng: camera.center.lng, altitude: liftedCenterAltitude };
+  const eye = cameraEyePosition({ center, range: camera.range, tilt, heading: camera.heading });
+  return eye ? { eye, center, heading: camera.heading } : null;
+}
+
+// Advance the camera flight one step: chase the target's eye and look-at
+// points with bounded acceleration (chaseStep), then write the map camera
+// re-derived from the chased pair. Returns true once the flight has settled
+// on its target.
+function stepCameraFlight(now) {
+  const target = cameraFlightTarget();
+  if (!target) return true;
+
+  if (!state.cameraFlight) {
+    const pose = currentMapCameraPose();
+    state.cameraFlight = {
+      eye: pose?.eye ?? { ...target.eye },
+      center: pose?.center ?? { ...target.center },
+      eyeVelocity: [0, 0, 0],
+      centerVelocity: [0, 0, 0],
+      lastStepMs: now,
+    };
+  }
+
+  const flight = state.cameraFlight;
+  const dt = clamp((now - flight.lastStepMs) / 1000, 0, 0.5);
+  flight.lastStepMs = now;
+
+  let settled = false;
+  if (dt > 0) {
+    const eyeStep = chaseGeoPoint(flight.eye, flight.eyeVelocity, target.eye, dt);
+    const centerStep = chaseGeoPoint(flight.center, flight.centerVelocity, target.center, dt);
+    flight.eye = eyeStep.point;
+    flight.eyeVelocity = eyeStep.velocity;
+    flight.center = centerStep.point;
+    flight.centerVelocity = centerStep.velocity;
+    settled = eyeStep.settled && centerStep.settled;
+  }
+
+  const camera = cameraFromEyeAndCenter(flight.eye, flight.center, target.heading);
+  state.map.center = { ...flight.center };
   state.map.heading = camera.heading;
   state.map.range = camera.range;
-  state.map.tilt = tilt;
+  state.map.tilt = camera.tilt;
+  return settled;
+}
+
+// Chase one geo point toward its target in a local north/east/up meter
+// frame; the velocity array persists across frames in that same frame.
+function chaseGeoPoint(current, velocity, target, dt) {
+  const horizontal = haversine(current, target);
+  const towardTarget = toRad(bearing(current, target));
+  const step = chaseStep({
+    position: [0, 0, 0],
+    velocity,
+    target: [
+      horizontal * Math.cos(towardTarget),
+      horizontal * Math.sin(towardTarget),
+      (Number(target.altitude) || 0) - (Number(current.altitude) || 0),
+    ],
+    maxAcceleration: CAMERA_CHASE_ACCELERATION_MPS2,
+    dt,
+  });
+
+  const [north, east, up] = step.position;
+  const moved = Math.hypot(north, east);
+  const ground = moved > 0.001
+    ? destinationPoint(current, Math.atan2(east, north) * 180 / Math.PI, moved)
+    : { lat: current.lat, lng: current.lng };
+  return {
+    point: { ...ground, altitude: (Number(current.altitude) || 0) + up },
+    velocity: step.velocity,
+    settled: step.settled,
+  };
+}
+
+function currentMapCameraPose() {
+  const center = state.map?.center;
+  const lat = Number(center?.lat);
+  const lng = Number(center?.lng);
+  const range = Number(state.map?.range);
+  const tilt = Number(state.map?.tilt);
+  const heading = Number(state.map?.heading);
+  if (![lat, lng, range, tilt, heading].every(Number.isFinite)) return null;
+
+  const centerPoint = { lat, lng, altitude: Number(center?.altitude) || 0 };
+  const eye = cameraEyePosition({ center: centerPoint, range, tilt, heading });
+  return eye ? { eye, center: centerPoint } : null;
+}
+
+// The movement loop drives the camera while the rider moves; this loop keeps
+// an in-progress flight animating when nothing else ticks — route just
+// loaded, movement stopped mid-flight, or a seek/settings change while
+// paused.
+function ensureCameraFlightLoop() {
+  if (state.cameraFlightLoopActive) return;
+  state.cameraFlightLoopActive = true;
+  const step = () => {
+    if (
+      !state.route.length || !state.map || state.userInteracting ||
+      state.movementLoopActive || state.cameraMode === "manual"
+    ) {
+      state.cameraFlightLoopActive = false;
+      return;
+    }
+    const settled = stepCameraFlight(performance.now());
+    // Keep the ground dot's apparent size steady while the camera flies.
+    if (state.riderDot) updateRiderDot(interpolateRoutePoint(state.route, state.progressMeters));
+    if (settled) {
+      state.cameraFlightLoopActive = false;
+      return;
+    }
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// Frame the whole loaded route: start→end reads left-to-right, the side of
+// the route bulging furthest from that axis faces away, seen from 45° with
+// margin. The camera stays there until movement starts.
+function enterOverviewMode() {
+  // A rider already moving (e.g. a new GPX loaded mid-pedaling) stays in the
+  // follow view — the overview is for routes loaded at rest.
+  if (!state.route.length || !state.map || isMoving()) return;
+  const width = els.mapViewport?.clientWidth;
+  const height = els.mapViewport?.clientHeight;
+  state.overviewCamera = computeRouteOverviewCamera(state.route, {
+    tiltDegrees: OVERVIEW_TILT_DEGREES,
+    viewportAspect: width && height ? width / height : undefined,
+  });
+  if (!state.overviewCamera) return;
+  state.cameraMode = "overview";
+  ensureCameraFlightLoop();
 }
 
 // --- Terrain avoidance ---------------------------------------------------------
@@ -1256,8 +1437,17 @@ function scheduleInteractionEnd() {
 }
 
 function endUserInteraction() {
-  captureManualCameraSettings();
+  if (state.cameraMode === "follow") {
+    captureManualCameraSettings();
+  } else if (state.cameraMode === "overview") {
+    // The user took over the overview; leave the camera where they put it
+    // (don't fly back, don't bake overview framing into the follow settings)
+    // until movement starts.
+    state.cameraMode = "manual";
+  }
   state.userInteracting = false;
+  // The next flight step restarts from wherever the gesture left the camera.
+  state.cameraFlight = null;
 
   // The capture bakes whatever the user sees — including any active terrain
   // lift — into the camera settings, so the lift restarts from zero against
@@ -1756,6 +1946,7 @@ function restoreSavedRide() {
   state.simulating = false;
   state.lastTick = 0;
 
+  enterOverviewMode();
   updateStartButton();
   renderRoute();
   renderProfile();
