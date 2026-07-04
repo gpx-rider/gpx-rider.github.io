@@ -5,10 +5,9 @@
 
 import { roundCoordinate } from "./geo.mjs";
 import { readJson, removeStored } from "./storage.mjs";
+import { RIDE_PERSIST_INTERVAL_MS, RIDE_SAMPLE_INTERVAL_MS } from "./tuning.mjs";
 
 const RIDE_LOG_STORAGE_KEY = "gpx-rider:ride-log";
-const SAMPLE_INTERVAL_MS = 1000;
-const PERSIST_INTERVAL_MS = 5000;
 
 // Samples are stored as compact arrays to stretch the localStorage quota:
 // [unixSeconds, lat, lng, ele, distanceMeters, speedKph, powerWatts, heartRateBpm, caloriesKcal]
@@ -42,7 +41,7 @@ export function recordRideTick({ elapsedSeconds, metersAdvanced, point, speedKph
   log.timerSeconds += Math.max(0, elapsedSeconds);
   log.distanceMeters += Math.max(0, metersAdvanced);
 
-  if (now - log.lastSampleAtMs < SAMPLE_INTERVAL_MS) return;
+  if (now - log.lastSampleAtMs < RIDE_SAMPLE_INTERVAL_MS) return;
   log.lastSampleAtMs = now;
 
   log.samples.push([
@@ -57,7 +56,7 @@ export function recordRideTick({ elapsedSeconds, metersAdvanced, point, speedKph
     Number.isFinite(caloriesKcal) ? Math.round(caloriesKcal) : null,
   ]);
 
-  if (now - log.lastPersistAtMs >= PERSIST_INTERVAL_MS) persistRideLog();
+  if (now - log.lastPersistAtMs >= RIDE_PERSIST_INTERVAL_MS) persistRideLog();
 }
 
 export function persistRideLog() {
