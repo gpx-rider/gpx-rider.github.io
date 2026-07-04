@@ -54,8 +54,13 @@ hardware/IO modules (`trainer.mjs`, `heartrate.mjs`) hold their own internal
 state and talk back to `app.js` only through `init*()` callbacks.
 
 Tunable parameters (defaults, thresholds, physics/model factors) live in
-`app/tuning.mjs` with a doc comment each — never as inline magic numbers —
-so users can adjust behavior in one place. Deliberate exceptions:
+`app/tuning.mjs` with a doc comment each — never as inline magic values —
+so users can adjust behavior in one place. This is not limited to numbers:
+file paths, URLs, color strings, orientation/config objects — anything a
+user or future contributor might reasonably want to retune belongs in
+`tuning.mjs`, not inlined at its call site, even if it's only used once. When
+adding a new adjustable behavior, add its constant to `tuning.mjs` in the
+same change; don't leave it inline "for now." Deliberate exceptions:
 `app/config.mjs` (rewritten at deploy time, see below) and the BLE
 write-queue timing internals in `trainer.mjs` (hardware-safety, documented
 in place).
