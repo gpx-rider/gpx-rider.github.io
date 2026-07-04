@@ -176,7 +176,7 @@ export const DEFAULT_BEACON_COLOR = "#ffffff";
 // — that used to be simulated by stacking several circles at slightly
 // different altitudes, which z-fought into rendering glitches and muddy
 // colors on steep terrain. Diameter in meters.
-export const RIDER_DOT_DIAMETER_METERS = 5;
+export const RIDER_DOT_DIAMETER_METERS = 12;
 
 // --- Route line rendering -----------------------------------------------------------
 
