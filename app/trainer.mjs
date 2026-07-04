@@ -4,6 +4,7 @@
 
 import { clamp } from "./geo.mjs";
 import { readJson, writeJson } from "./storage.mjs";
+import { GRADE_INTERVAL_MAX_SECONDS, GRADE_INTERVAL_MIN_SECONDS } from "./tuning.mjs";
 
 const FTMS_SERVICE = 0x1826;
 const FTMS_INDOOR_BIKE_DATA = 0x2ad2;
@@ -33,8 +34,6 @@ const FTMS_OPCODE_NAMES = {
 };
 
 const TRAINER_STORAGE_KEY = "gpx-rider:last-trainer";
-export const GRADE_INTERVAL_MIN_SECONDS = 1;
-export const GRADE_INTERVAL_MAX_SECONDS = 5;
 
 const trainer = {
   device: null,

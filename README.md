@@ -65,11 +65,26 @@ If that sounds useful, contributions are very welcome — see
 - ▶️ **Simulation mode** — a "Start simulation" button rides the route at a
   chosen slider speed for previewing without pedaling; real pedaling
   automatically takes over and stops the simulation.
-- 📈 **Live stats & elevation profile** — distance, grade, altitude, power,
+- 📈 **Live stats & elevation profile** — distance ridden/remaining, total
+  ascent & descent, ascent still ahead, a smart ETA, grade, altitude, power,
   speed, heart rate, and calories (from the trainer), plus a full-route
-  elevation chart. Switch between km/mi and kcal/kJ display units.
+  elevation chart. Below the distance progress bar a second, amber
+  **climbing progress bar** shows how much of the route's total ascent is
+  already behind you. Switch between km/mi and kcal/kJ display units.
+- ⏱️ **Smart ETA** — the estimated time to the finish accounts for the
+  climbing and descending still ahead: your pace so far is measured in
+  "flat-equivalent" terms (a vertical meter climbed counts as extra flat
+  distance, a descent gives some back), so grinding up a pass doesn't
+  project a crawl onto the descent after it. In simulation mode the ETA is
+  simply remaining distance at the slider speed.
 - 🖥️ **Fullscreen ride HUD** — a distraction-free overlay for pairing with a
-  smart TV or tablet on the handlebars.
+  smart TV or tablet on the handlebars. Pick exactly which tiles it shows
+  (power, speed, heart rate, grade, ridden, remaining, ascent left, ETA) in
+  ⚙ Settings → Display & HUD — where you can also hide the minimap or turn
+  on **place labels** (roads, towns) on the 3D map.
+- 🚀 **Ready to ride on first open** — with nothing loaded yet, the first
+  gallery route is loaded automatically so the app never starts on an
+  empty map.
 - 📷 **One-click ride screenshots** — an optional `📷 Screenshot` button on
   the map (off by default; enable it in ⚙ Settings → Screenshots) saves a
   JPG of the exact view including the HUD, minimap, elevation profile, and
@@ -116,7 +131,8 @@ as GPX files ready to load into GPX Rider.
    locally, one-time setup). The settings dialog opens by itself on first
    run; later it's behind the ⚙ icon at the top right.
 2. Choose a GPX file with track points and elevation, or pick one from the
-   ride gallery.
+   ride gallery. (If nothing is loaded yet, the first gallery ride is
+   loaded for you automatically.)
 3. Click `Connect KICKR` and select your trainer. Optionally click
    `Connect HR` to pair a Bluetooth heart-rate strap.
 4. Just start pedaling — the map follows your real trainer speed and stops
@@ -135,11 +151,16 @@ as GPX files ready to load into GPX Rider.
    with a forward-facing camera based on GPX bearing. Everything
    configurable lives in the ⚙ settings dialog: camera
    tuning (`Zoom`, `Camera angle`, `Camera behind`), km/mi and kcal/kJ
-   display units, the trainer grade update interval, and the **Rendering**
+   display units, the **Display & HUD** section (minimap on/off, place
+   labels on the 3D map, and which tiles the fullscreen ride HUD shows),
+   the trainer grade update interval, and the **Rendering**
    section — the rider beacon (the translucent cylinder that marks your
    position above the trees — on/off, diameter, height, opacity, color)
    and the *keep camera above terrain* behavior with its clearance margin.
-   All of it is remembered locally.
+   All of it is remembered locally. If you host your own copy, every other
+   behavior parameter (pedaling thresholds, ETA model factors, camera
+   physics, ascent noise filtering, …) lives documented in one file:
+   [`app/tuning.mjs`](app/tuning.mjs).
 
 ## Hosting your own copy
 
@@ -163,6 +184,12 @@ own — visitors will be prompted to paste their own key on first load.
 - Route, ride progress, and the recorded ride data are stored in browser
   `localStorage`. Very large GPX files or very long rides may exceed
   browser storage limits (recording then continues in memory only).
+- Total ascent/descent are computed from the GPX elevation with a small
+  noise filter (climbs only count once they exceed a couple of meters), so
+  the totals can differ slightly from what another planner or head unit
+  reports for the same file.
+- The smart ETA needs a minute or so of real pedaling before it trusts
+  your measured pace; until then it projects the current speed.
 - Calories are shown and exported only if the trainer reports FTMS
   Expended Energy; heart rate comes from a paired strap or, as a fallback,
   from the trainer's own HR field.

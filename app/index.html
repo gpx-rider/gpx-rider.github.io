@@ -20,29 +20,37 @@
 
           <div id="fullscreenOverlayBottom" class="fullscreen-overlay-bottom" hidden>
             <div id="fullscreenHud" class="fullscreen-hud" aria-live="polite">
-              <div>
+              <div data-hud="power">
                 <span>Power</span>
                 <strong id="hudPowerStat">--</strong>
               </div>
-              <div>
+              <div data-hud="speed">
                 <span>Speed</span>
                 <strong id="hudSpeedStat">--</strong>
               </div>
-              <div>
+              <div data-hud="heartRate">
                 <span>HR</span>
                 <strong id="hudHeartRateStat">--</strong>
               </div>
-              <div>
+              <div data-hud="grade">
                 <span>Grade</span>
                 <strong id="hudGradeStat">--</strong>
               </div>
-              <div>
+              <div data-hud="ridden">
                 <span>Ridden</span>
                 <strong id="hudRiddenStat">--</strong>
               </div>
-              <div>
+              <div data-hud="remaining">
                 <span>Remaining</span>
                 <strong id="hudRemainingStat">--</strong>
+              </div>
+              <div data-hud="ascentLeft">
+                <span>Ascent left</span>
+                <strong id="hudAscentLeftStat">--</strong>
+              </div>
+              <div data-hud="eta">
+                <span>ETA</span>
+                <strong id="hudEtaStat">--</strong>
               </div>
             </div>
           </div>
@@ -70,6 +78,30 @@
           <div>
             <span>Distance</span>
             <strong id="distanceStat">--</strong>
+          </div>
+          <div>
+            <span>Ridden</span>
+            <strong id="riddenStat">--</strong>
+          </div>
+          <div>
+            <span>Remaining</span>
+            <strong id="remainingStat">--</strong>
+          </div>
+          <div>
+            <span>ETA</span>
+            <strong id="etaStat">--</strong>
+          </div>
+          <div>
+            <span>Ascent</span>
+            <strong id="ascentStat">--</strong>
+          </div>
+          <div>
+            <span>Descent</span>
+            <strong id="descentStat">--</strong>
+          </div>
+          <div>
+            <span>Ascent left</span>
+            <strong id="ascentLeftStat">--</strong>
           </div>
           <div>
             <span>Grade</span>
@@ -120,6 +152,8 @@
         <div class="progress-wrap">
           <progress id="progress" max="1" value="0"></progress>
           <span id="progressLabel">Load a route to begin</span>
+          <progress id="ascentProgress" class="ascent-progress" max="1" value="0" hidden></progress>
+          <span id="ascentProgressLabel" hidden>--</span>
         </div>
 
         <div class="ride-recording">
@@ -181,6 +215,57 @@
             </select>
           </label>
         </div>
+      </section>
+
+      <section class="settings-section">
+        <h3>Display &amp; HUD</h3>
+        <label class="camera-center-toggle">
+          <input id="minimapInput" type="checkbox" checked>
+          <span>Show minimap on the 3D map</span>
+        </label>
+        <label class="camera-center-toggle">
+          <input id="mapLabelsInput" type="checkbox">
+          <span>Show place labels on the 3D map</span>
+        </label>
+        <p class="settings-note">Ride HUD tiles (shown over the map in fullscreen):</p>
+        <div class="hud-toggle-grid">
+          <label class="camera-center-toggle">
+            <input type="checkbox" data-hud-toggle="power" checked>
+            <span>Power</span>
+          </label>
+          <label class="camera-center-toggle">
+            <input type="checkbox" data-hud-toggle="speed" checked>
+            <span>Speed</span>
+          </label>
+          <label class="camera-center-toggle">
+            <input type="checkbox" data-hud-toggle="heartRate" checked>
+            <span>Heart rate</span>
+          </label>
+          <label class="camera-center-toggle">
+            <input type="checkbox" data-hud-toggle="grade" checked>
+            <span>Grade</span>
+          </label>
+          <label class="camera-center-toggle">
+            <input type="checkbox" data-hud-toggle="ridden" checked>
+            <span>Ridden</span>
+          </label>
+          <label class="camera-center-toggle">
+            <input type="checkbox" data-hud-toggle="remaining" checked>
+            <span>Remaining</span>
+          </label>
+          <label class="camera-center-toggle">
+            <input type="checkbox" data-hud-toggle="ascentLeft" checked>
+            <span>Ascent left</span>
+          </label>
+          <label class="camera-center-toggle">
+            <input type="checkbox" data-hud-toggle="eta" checked>
+            <span>ETA</span>
+          </label>
+        </div>
+        <p class="settings-note">
+          ETA is the estimated time to the finish: your average pace so far,
+          adjusted for the climbing and descending still ahead.
+        </p>
       </section>
 
       <section class="settings-section">

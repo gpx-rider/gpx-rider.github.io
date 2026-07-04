@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ascentAt,
   densifyRoute,
+  descentAt,
   enrichRoute,
   gradeAt,
   interpolateRoutePoint,
   maxElevationNear,
+  routeTotalAscent,
+  routeTotalDescent,
   routeTotalDistance,
 } from "../app/route.mjs";
 
@@ -50,6 +54,52 @@ test("densifyRoute keeps originals and bounds the gap between points", () => {
 
   // Already-dense routes gain nothing.
   assert.equal(densifyRoute(route, 500).length, route.length);
+});
+
+test("enrichRoute accumulates ascent and descent along the track", () => {
+  const route = enrichRoute(points); // +5 m up, then -2 m down
+  assert.equal(route[0].ascent, 0);
+  assert.equal(route[0].descent, 0);
+  assert.equal(routeTotalAscent(route), 5);
+  assert.equal(routeTotalDescent(route), 2);
+});
+
+test("ascent/descent ignore sub-threshold elevation noise", () => {
+  // A flat road whose GPX elevation jitters by ±1 m point-to-point.
+  const noisy = enrichRoute([
+    { lat: 50.000, lng: 14.400, ele: 100 },
+    { lat: 50.001, lng: 14.400, ele: 101 },
+    { lat: 50.002, lng: 14.400, ele: 100 },
+    { lat: 50.003, lng: 14.400, ele: 101 },
+    { lat: 50.004, lng: 14.400, ele: 100 },
+  ]);
+  assert.equal(routeTotalAscent(noisy), 0);
+  assert.equal(routeTotalDescent(noisy), 0);
+
+  // A genuine steady climb is counted in full.
+  const climb = enrichRoute([
+    { lat: 50.000, lng: 14.400, ele: 100 },
+    { lat: 50.001, lng: 14.400, ele: 150 },
+    { lat: 50.002, lng: 14.400, ele: 200 },
+  ]);
+  assert.equal(routeTotalAscent(climb), 100);
+  assert.equal(routeTotalDescent(climb), 0);
+});
+
+test("ascentAt and descentAt interpolate cumulative climbing at a distance", () => {
+  const route = enrichRoute(points);
+
+  assert.equal(ascentAt(route, 0), 0);
+  assert.equal(ascentAt(route, 1e9), routeTotalAscent(route));
+  assert.equal(descentAt(route, -5), 0);
+  assert.equal(descentAt(route, 1e9), routeTotalDescent(route));
+
+  // Halfway along the first (climbing) leg: half the leg's 5 m gained.
+  const halfway = ascentAt(route, route[1].distance / 2);
+  assert.ok(halfway > 2 && halfway < 3, `expected ~2.5, got ${halfway}`);
+
+  // No descent happens before the second leg.
+  assert.equal(descentAt(route, route[1].distance), 0);
 });
 
 test("gradeAt reports climbing and descending", () => {
