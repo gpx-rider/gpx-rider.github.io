@@ -1326,6 +1326,9 @@ function enterOverviewMode({ instant = false } = {}) {
   state.overviewCamera = computeRouteOverviewCamera(state.route, {
     tiltDegrees: OVERVIEW_TILT_DEGREES,
     viewportAspect: width && height ? width / height : undefined,
+    // Newer Maps versions expose the actual field of view; older ones fall
+    // back to the module's default (Google's documented 35° default).
+    fovDegrees: Number(state.map.fov) || undefined,
   });
   if (!state.overviewCamera) return;
   state.cameraMode = "overview";
