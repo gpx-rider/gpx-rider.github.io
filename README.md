@@ -35,11 +35,11 @@ If that sounds useful, contributions are very welcome — see
 ## Features
 
 - 📍 **GPX import** — drag in any route with track points and elevation.
-- 🏔️ **Route difficulty & detected climbs** — as soon as a route loads, the
-  setup page shows its name, distance/terrain/difficulty classification
-  (e.g. `M - Rolling · Moderate`), and a list of the sustained climbs found
-  along the way, each with its distance, length, elevation gain, and average
-  grade. Classification uses only distance and elevation gain — no power,
+- 🏔️ **Route difficulty & detected climbs** — as soon as a route loads, its
+  name appears in the top bar, a stat tile shows the
+  distance/terrain/difficulty classification (e.g. `Moderate` — `M · Hilly`),
+  and the elevation card lists the sustained climbs found along the way,
+  each with its distance, length, elevation gain, and average grade. Classification uses only distance and elevation gain — no power,
   speed, or weather data — and every threshold, including how much flat or
   downhill a climb tolerates before it's considered over, is a documented
   constant in `app/tuning.mjs`. While riding, the same panel tracks you live:
@@ -73,9 +73,13 @@ If that sounds useful, contributions are very welcome — see
   downloaded at any time as a `.fit` file correctly tagged as a *virtual
   ride*, ready for Strava, Garmin Connect, or intervals.icu. After the
   download the app offers to clear the collected data.
-- ▶️ **Simulation mode** — a "Start simulation" button rides the route at a
-  chosen slider speed for previewing without pedaling; real pedaling
-  automatically takes over and stops the simulation.
+- ▶️ **Simulation mode** — the Simulation card's Start button rides the
+  route at a chosen slider speed for previewing without pedaling; real
+  pedaling automatically takes over and stops the simulation.
+- 🗺️ **Ride gallery overlay** — the `Browse gallery` button opens a
+  fullscreen catalogue of curated routes. Each card carries a screenshot,
+  a grade-colored mini elevation profile, the computed length, total
+  ascent, and difficulty class, and marks the currently loaded route.
 - 📈 **Live stats & elevation profile** — distance ridden/remaining, total
   ascent & descent, ascent still ahead, a smart ETA, grade, altitude, power,
   speed, heart rate, and calories (from the trainer), plus a full-route
@@ -91,8 +95,9 @@ If that sounds useful, contributions are very welcome — see
 - 🖥️ **Fullscreen ride HUD** — a distraction-free overlay for pairing with a
   smart TV or tablet on the handlebars. Pick exactly which tiles it shows
   (power, speed, heart rate, grade, ridden, remaining, ascent left, ETA) in
-  ⚙ Settings → Display & HUD — where you can also hide the minimap or turn
-  on **place labels** (roads, towns) on the 3D map.
+  ⚙ Settings → HUD & data fields — where you can also hide the minimap.
+  **Place labels** (roads, towns) on the 3D map toggle in ⚙ Settings →
+  Rendering.
 - 🚀 **Ready to ride on first open** — with nothing loaded yet, the first
   gallery route is loaded automatically so the app never starts on an
   empty map.
@@ -142,33 +147,36 @@ as GPX files ready to load into GPX Rider.
 1. Open the page in Chrome and paste in your Google Maps API key (saved
    locally, one-time setup). The settings dialog opens by itself on first
    run; later it's behind the ⚙ icon at the top right.
-2. Choose a GPX file with track points and elevation, or pick one from the
-   ride gallery. (If nothing is loaded yet, the first gallery ride is
-   loaded for you automatically.)
-3. Click `Connect KICKR` and select your trainer. Optionally click
-   `Connect HR` to pair a Bluetooth heart-rate strap.
+2. Open a GPX file with track points and elevation, or pick a route from
+   the `Browse gallery` overlay. (If nothing is loaded yet, the first
+   gallery ride is loaded for you automatically.)
+3. Click `Connect` on the Smart trainer row and select your trainer.
+   Optionally connect a Bluetooth heart-rate strap the same way.
 4. Just start pedaling — the map follows your real trainer speed and stops
    when you stop. GPX Rider converts local route grade into FTMS
    indoor-bike simulation parameters in real time.
-5. Not on the bike? `Start simulation` rides the route at the slider speed
-   instead; pedaling automatically stops the simulation and takes over.
-6. While you ride, the **Ride recording** panel shows exactly what has been
-   collected (distance, time, track points, heart rate, calories) — all of
-   it stored only in your browser. Hit `Download FIT` at any time to export
-   the ride as a `.fit` file tagged as a virtual ride for Strava, Garmin
-   Connect, etc.; afterwards the app offers to clear the collected data.
+5. Not on the bike? The Simulation card's `Start` button rides the route at
+   the slider speed instead; pedaling automatically stops the simulation
+   and takes over.
+6. While you ride, the **FIT data buffer** card shows exactly what has been
+   collected (distance, time, track points, heart rate, energy) — all of
+   it stored only in your browser. Hit `Download .FIT` at any time to
+   export the ride as a `.fit` file tagged as a virtual ride for Strava,
+   Garmin Connect, etc.; afterwards the app offers to clear the collected
+   data.
 7. A freshly loaded route is framed whole from above right away; the camera
    stays on that overview (or wherever you drag it) until movement starts,
    then flies down behind the rider. While riding, the map follows the route
    with a forward-facing camera based on GPX bearing. Everything
-   configurable lives in the ⚙ settings dialog: camera
-   tuning (`Zoom`, `Camera angle`, `Camera behind`), km/mi and kcal/kJ
-   display units, the **Display & HUD** section (minimap on/off, place
-   labels on the 3D map, and which tiles the fullscreen ride HUD shows),
-   the trainer grade update interval, and the **Rendering**
-   section — the rider beacon (the translucent cylinder that marks your
-   position above the trees — on/off, diameter, height, opacity, color)
-   and the *keep camera above terrain* behavior with its clearance margin.
+   configurable lives in the ⚙ settings dialog, organized into categories:
+   **Camera & view** (`Zoom`, `Camera angle`, `Camera behind`, keep rider
+   centered), **Rendering** — the rider beacon (the translucent cylinder
+   that marks your position above the trees — on/off, diameter, height,
+   opacity, color), the *keep camera above terrain* behavior with its
+   clearance margin, and place labels on the 3D map — **HUD & data
+   fields** (which tiles the fullscreen ride HUD shows, minimap on/off),
+   **Units** (km/mi and kcal/kJ), **Trainer & sensors** (the grade update
+   interval), **Screenshots**, and **Data & storage** (your API key).
    All of it is remembered locally. If you host your own copy, every other
    behavior parameter (pedaling thresholds, ETA model factors, camera
    physics, ascent noise filtering, …) lives documented in one file:
