@@ -112,8 +112,12 @@ export function applyCameraLift({ tiltDegrees, rangeMeters, liftMeters, minTiltD
 export function computeRouteOverviewCamera(route, {
   tiltDegrees = 45,
   viewportAspect = 16 / 9,
-  fovYDegrees = 55,
-  marginFactor = 1.35,
+  // Map3DElement renders with a 35° field of view by default (its `fov`
+  // property). The docs don't say which axis that measures, so the fit
+  // conservatively applies it to the larger viewport dimension — the route
+  // stays whole under either reading, at worst slightly smaller.
+  fovDegrees = 35,
+  marginFactor = 1.3,
   minRangeMeters = 250,
 } = {}) {
   if (!Array.isArray(route) || route.length < 2) return null;
@@ -165,23 +169,70 @@ export function computeRouteOverviewCamera(route, {
   const center = destinationPoint(centerOnAxis, normalizeHeading(axisBearing + 90), (minCross + maxCross) / 2);
 
   const tilt = clamp(Number(tiltDegrees) || 45, MIN_3D_CAMERA_TILT_DEGREES, MAX_3D_CAMERA_TILT_DEGREES);
-  const halfWidth = ((maxAlong - minAlong) / 2) * marginFactor;
-  const halfDepth = ((maxCross - minCross) / 2) * marginFactor;
-  const halfHeight = ((maxEle - minEle) / 2) * marginFactor;
-  const tanHalfY = Math.tan(toRad(clamp(Number(fovYDegrees) || 55, 10, 120) / 2));
-  const tanHalfX = tanHalfY * Math.max(0.1, Number(viewportAspect) || 16 / 9);
+  const centerAltitude = (minEle + maxEle) / 2;
 
-  // The along-axis extent spans the screen horizontally; the cross extent and
-  // the elevation span project onto the screen's vertical axis, foreshortened
-  // by the tilt.
-  const rangeForWidth = halfWidth / tanHalfX;
-  const rangeForDepth = (halfDepth * Math.sin(toRad(tilt)) + halfHeight * Math.cos(toRad(tilt))) / tanHalfY;
+  // Fit the range exactly: project every route point through the actual
+  // camera frustum and binary-search the smallest range where they all land
+  // inside it, shrunk by the margin. The straightforward extent/FOV formula
+  // undershoots because the route's near edge sits closer to the eye than
+  // the look-at center and so subtends a wider angle.
+  const tanLarge = Math.tan(toRad(clamp(Number(fovDegrees) || 35, 5, 80) / 2));
+  const aspect = Math.max(0.1, Number(viewportAspect) || 16 / 9);
+  const margin = Math.max(1, Number(marginFactor) || 1);
+  const limitX = (aspect >= 1 ? tanLarge : tanLarge * aspect) / margin;
+  const limitY = (aspect >= 1 ? tanLarge / aspect : tanLarge) / margin;
+
+  // Everything below works in flat [east, north, up] meters around the
+  // look-at center — plenty accurate for framing. The eye moves along a
+  // fixed unit direction as the range grows, so the camera basis vectors
+  // are computed once.
+  const points = route.map((point) => {
+    const distance = haversine(center, point);
+    const pointBearing = toRad(bearing(center, point));
+    return [
+      distance * Math.sin(pointBearing),
+      distance * Math.cos(pointBearing),
+      (Number(point.ele) || 0) - centerAltitude,
+    ];
+  });
+  const backBearing = toRad(heading + 180);
+  const sinTilt = Math.sin(toRad(tilt));
+  const eyeDirection = [Math.sin(backBearing) * sinTilt, Math.cos(backBearing) * sinTilt, Math.cos(toRad(tilt))];
+  const forward = eyeDirection.map((c) => -c);
+  const flat = Math.hypot(forward[0], forward[1]);
+  const rightAxis = [forward[1] / flat, -forward[0] / flat, 0];
+  const upAxis = [
+    rightAxis[1] * forward[2] - rightAxis[2] * forward[1],
+    rightAxis[2] * forward[0] - rightAxis[0] * forward[2],
+    rightAxis[0] * forward[1] - rightAxis[1] * forward[0],
+  ];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+  const fitsAtRange = (range) => points.every((point) => {
+    const v = [
+      point[0] - eyeDirection[0] * range,
+      point[1] - eyeDirection[1] * range,
+      point[2] - eyeDirection[2] * range,
+    ];
+    const depth = dot(v, forward);
+    if (depth <= 1) return false;
+    return Math.abs(dot(v, rightAxis)) <= depth * limitX && Math.abs(dot(v, upAxis)) <= depth * limitY;
+  });
+
+  let high = Math.max(minRangeMeters, 1);
+  while (!fitsAtRange(high) && high < 2e7) high *= 2;
+  let low = high / 2;
+  for (let i = 0; i < 30; i++) {
+    const middle = (low + high) / 2;
+    if (fitsAtRange(middle)) high = middle;
+    else low = middle;
+  }
 
   return {
-    center: { lat: center.lat, lng: center.lng, altitude: (minEle + maxEle) / 2 },
+    center: { lat: center.lat, lng: center.lng, altitude: centerAltitude },
     heading,
     tilt,
-    range: Math.max(minRangeMeters, rangeForWidth, rangeForDepth),
+    range: Math.max(minRangeMeters, high),
   };
 }
 

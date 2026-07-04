@@ -498,3 +498,53 @@ test("distance-scaled chase flights arrive without overshooting", () => {
     assert.ok(overshoot < 1, `flight over ${targetDistance} m overshoots ${overshoot} m`);
   }
 });
+
+test("overview keeps every route point safely inside the viewport", () => {
+  // Cross-check the frustum fit through cameraEyePosition (a spherical eye
+  // reconstruction, independent of the fit's flat-earth search): every route
+  // point — start and end included — must project inside the default 35°
+  // field of view with visible slack left by the margin.
+  const route = [
+    { lat: 50, lng: 14, ele: 200 },
+    { lat: 50.06, lng: 14.02, ele: 900 }, // tall detour on the near side
+    { lat: 49.98, lng: 14.08, ele: 100 },
+    { lat: 50, lng: 14.15, ele: 300 },
+  ];
+  const aspect = 16 / 9;
+  const camera = computeRouteOverviewCamera(route, { viewportAspect: aspect });
+  const eye = cameraEyePosition(camera);
+
+  const enuFrom = (origin, originAltitude, point, pointAltitude) => {
+    const distance = geo.haversine(origin, point);
+    const b = geo.toRad(geo.bearing(origin, point));
+    return [distance * Math.sin(b), distance * Math.cos(b), pointAltitude - originAltitude];
+  };
+  const normalize = (v) => {
+    const length = Math.hypot(...v);
+    return v.map((c) => c / length);
+  };
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+  const forward = normalize(enuFrom(eye, eye.altitude, camera.center, camera.center.altitude));
+  const flat = Math.hypot(forward[0], forward[1]);
+  const right = [forward[1] / flat, -forward[0] / flat, 0];
+  const up = [
+    right[1] * forward[2] - right[2] * forward[1],
+    right[2] * forward[0] - right[0] * forward[2],
+    right[0] * forward[1] - right[1] * forward[0],
+  ];
+
+  // 35° on the larger (horizontal) axis, scaled down for the vertical.
+  const tanHalfX = Math.tan(geo.toRad(35 / 2));
+  const tanHalfY = tanHalfX / aspect;
+
+  for (const point of route) {
+    const v = enuFrom(eye, eye.altitude, point, point.ele);
+    const depth = dot(v, forward);
+    assert.ok(depth > 0, "point is in front of the camera");
+    const x = Math.abs(dot(v, right)) / depth;
+    const y = Math.abs(dot(v, up)) / depth;
+    assert.ok(x < tanHalfX * 0.9, `horizontal projection ${x} leaves slack (limit ${tanHalfX})`);
+    assert.ok(y < tanHalfY * 0.9, `vertical projection ${y} leaves slack (limit ${tanHalfY})`);
+  }
+});
