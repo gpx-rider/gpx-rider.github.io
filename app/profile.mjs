@@ -15,36 +15,35 @@ const ELEVATION_STEP_CANDIDATES = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 
 const DISTANCE_STEP_METERS_CANDIDATES = [50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000];
 const DISTANCE_STEP_KM_CANDIDATES = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
 
-const PROFILE_THEME_LIGHT = {
-  background: "#f9faf8",
-  gridline: "rgba(23, 33, 31, 0.12)",
-  label: "#66716d",
-  line: "#24312e",
-  axisLine: "rgba(23, 33, 31, 0.25)",
-  marker: "#24312e",
-  hoverGuide: "rgba(23, 33, 31, 0.45)",
+// The canvas sits on a dark card in the control panel (transparent
+// background — the card paints the surface); the fullscreen HUD variant
+// (`dark`) adds its own translucent scrim behind the chart.
+const PROFILE_THEME_PANEL = {
+  background: null,
+  gridline: "rgba(255, 255, 255, 0.08)",
+  label: "rgba(255, 255, 255, 0.45)",
+  line: "rgba(232, 234, 239, 0.85)",
+  axisLine: "rgba(255, 255, 255, 0.2)",
+  marker: "#f6a52c",
+  hoverGuide: "rgba(255, 255, 255, 0.55)",
 };
 const PROFILE_THEME_DARK = {
-  background: "rgba(23, 33, 31, 0.55)",
-  gridline: "rgba(255, 255, 255, 0.16)",
-  label: "rgba(255, 255, 255, 0.8)",
-  line: "#ffffff",
-  axisLine: "rgba(255, 255, 255, 0.35)",
-  marker: "#ffffff",
-  hoverGuide: "rgba(255, 255, 255, 0.55)",
+  ...PROFILE_THEME_PANEL,
+  background: "rgba(13, 16, 21, 0.55)",
+  label: "rgba(255, 255, 255, 0.6)",
 };
 
 export function drawEmptyProfile(canvas, { dark = false } = {}) {
   const ctx = configureCanvas(canvas);
   const { width, height } = canvas.getBoundingClientRect();
-  const theme = dark ? PROFILE_THEME_DARK : PROFILE_THEME_LIGHT;
+  const theme = dark ? PROFILE_THEME_DARK : PROFILE_THEME_PANEL;
   fillProfileBackground(ctx, theme, width, height, dark);
 }
 
 export function drawProfile(canvas, { route, progress = 0, hoverMeters = null, dark = false, distanceUnits = "metric" }) {
   const ctx = configureCanvas(canvas);
   const { width, height } = canvas.getBoundingClientRect();
-  const theme = dark ? PROFILE_THEME_DARK : PROFILE_THEME_LIGHT;
+  const theme = dark ? PROFILE_THEME_DARK : PROFILE_THEME_PANEL;
 
   fillProfileBackground(ctx, theme, width, height, dark);
 
@@ -99,6 +98,7 @@ export function distanceAtProfileX(canvas, clientX, route) {
 
 function fillProfileBackground(ctx, theme, width, height, dark) {
   ctx.clearRect(0, 0, width, height);
+  if (!theme.background) return;
   ctx.fillStyle = theme.background;
   if (dark) {
     ctx.beginPath();
@@ -122,7 +122,7 @@ function drawElevationGridlines(ctx, { min, max, chartLeft, chartRight, chartTop
 
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
-  ctx.font = "10px Inter, ui-sans-serif, system-ui, sans-serif";
+  ctx.font = "10px 'IBM Plex Mono', ui-monospace, monospace";
 
   for (let value = first; value <= displayMax; value += step) {
     const y = yFor(fromDisplay(value));
@@ -210,7 +210,7 @@ function drawDistanceAxis(ctx, { totalDistance, chartLeft, chartRight, chartBott
 
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.font = "10px Inter, ui-sans-serif, system-ui, sans-serif";
+  ctx.font = "10px 'IBM Plex Mono', ui-monospace, monospace";
   ctx.fillStyle = theme.label;
   ctx.strokeStyle = theme.axisLine;
 
@@ -248,7 +248,7 @@ function drawProfileHover(ctx, { route, hoverMeters, totalDistance, chartLeft, c
 
   const displayDistance = kmToDisplay(distance / 1000, distanceUnits);
   const label = `${displayDistance.toFixed(2)} ${distanceUnitLabel(distanceUnits)}  ${grade >= 0 ? "+" : ""}${grade.toFixed(1)}%`;
-  ctx.font = "11px Inter, ui-sans-serif, system-ui, sans-serif";
+  ctx.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
   const textWidth = ctx.measureText(label).width;
   const boxWidth = textWidth + 16;
   const boxHeight = 22;
@@ -256,7 +256,7 @@ function drawProfileHover(ctx, { route, hoverMeters, totalDistance, chartLeft, c
   boxX = clamp(boxX, chartLeft, chartRight - boxWidth);
   const boxY = chartTop + 4;
 
-  ctx.fillStyle = "rgba(36, 49, 46, 0.92)";
+  ctx.fillStyle = "rgba(13, 16, 21, 0.92)";
   ctx.beginPath();
   ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 5);
   ctx.fill();
@@ -274,12 +274,16 @@ function niceStep(range, candidates) {
   return candidates.at(-1);
 }
 
+// Stepped grade palette shared with the panel legend and the gallery's mini
+// profiles: green for descents, gray for flat, amber → orange → red as the
+// climb steepens.
 function gradeColor(grade) {
-  const intensity = clamp(Math.abs(grade) / PROFILE_GRADE_STEEP_PERCENT, 0, 1);
-  const lightness = 88 - intensity * 40;
-  if (grade > 0.3) return `hsl(4, 72%, ${lightness}%)`;
-  if (grade < -0.3) return `hsl(142, 55%, ${lightness}%)`;
-  return "hsl(60, 6%, 84%)";
+  if (grade <= -3) return "#3fae6a";
+  if (grade <= -0.6) return "#57b877";
+  if (grade < 0.8) return "rgba(125, 138, 134, 0.55)";
+  if (grade < 3.5) return "#e8b74e";
+  if (grade < 7) return "#e8823c";
+  return "#d9542f";
 }
 
 function configureCanvas(canvas) {

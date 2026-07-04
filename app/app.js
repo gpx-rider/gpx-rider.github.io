@@ -205,14 +205,20 @@ const els = {
   settingsBtn: document.querySelector("#settingsBtn"),
   settingsDialog: document.querySelector("#settingsDialog"),
   settingsCloseBtn: document.querySelector("#settingsCloseBtn"),
+  settingsDoneBtn: document.querySelector("#settingsDoneBtn"),
+  settingsTabs: document.querySelectorAll("#settingsDialog [data-settings-tab]"),
+  settingsPanels: document.querySelectorAll("#settingsDialog [data-settings-panel]"),
+  settingsPanelTitle: document.querySelector("#settingsPanelTitle"),
+  settingsPanelSubtitle: document.querySelector("#settingsPanelSubtitle"),
   apiKeySection: document.querySelector("#apiKeySection"),
   mapsApiKeyInput: document.querySelector("#mapsApiKeyInput"),
   mapsApiKeySaveBtn: document.querySelector("#mapsApiKeySaveBtn"),
   gpxFile: document.querySelector("#gpxFile"),
-  routeOverview: document.querySelector("#routeOverview"),
-  routeNameHeading: document.querySelector("#routeNameHeading"),
-  routeClassSummary: document.querySelector("#routeClassSummary"),
-  routeClassDetail: document.querySelector("#routeClassDetail"),
+  gpxChip: document.querySelector("#gpxChip"),
+  gpxChipName: document.querySelector("#gpxChipName"),
+  difficultyStat: document.querySelector("#difficultyStat"),
+  difficultyDetail: document.querySelector("#difficultyDetail"),
+  galleryDialog: document.querySelector("#galleryDialog"),
   climbsSection: document.querySelector("#climbsSection"),
   climbStatus: document.querySelector("#climbStatus"),
   climbStatusHeadline: document.querySelector("#climbStatusHeadline"),
@@ -262,7 +268,13 @@ const els = {
   connectBtn: document.querySelector("#connectBtn"),
   connectHrBtn: document.querySelector("#connectHrBtn"),
   startBtn: document.querySelector("#startBtn"),
+  startBtnLabel: document.querySelector("#startBtnLabel"),
   resetBtn: document.querySelector("#resetBtn"),
+  trainerDot: document.querySelector("#trainerDot"),
+  hrDot: document.querySelector("#hrDot"),
+  hrConnectionStat: document.querySelector("#hrConnectionStat"),
+  recIndicator: document.querySelector("#recIndicator"),
+  centerRiderBtn: document.querySelector("#centerRiderBtn"),
   progress: document.querySelector("#progress"),
   progressLabel: document.querySelector("#progressLabel"),
   ascentProgress: document.querySelector("#ascentProgress"),
@@ -333,7 +345,30 @@ async function startApp() {
   // keeps the "paste your key" flow front and center instead).
   void initGallery(loadGpxFromUrl, {
     shouldAutoLoadFirst: () => state.route.length < 2 && Boolean(state.map),
+    getCurrentRouteName: () => state.routeName,
+    getDistanceUnits: () => state.distanceUnits,
   });
+}
+
+// --- Settings dialog: category rail + panel ---------------------------------
+
+function selectSettingsTab(name) {
+  els.settingsTabs.forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.settingsTab === name);
+  });
+  els.settingsPanels.forEach((panel) => {
+    panel.hidden = panel.dataset.settingsPanel !== name;
+  });
+  const active = [...els.settingsTabs].find((tab) => tab.dataset.settingsTab === name);
+  if (active) {
+    els.settingsPanelTitle.textContent = active.dataset.panelTitle;
+    els.settingsPanelSubtitle.textContent = active.dataset.panelSubtitle;
+  }
+}
+
+function openSettings(tab = "camera") {
+  selectSettingsTab(tab);
+  els.settingsDialog.showModal();
 }
 
 function getStoredMapsApiKey() {
@@ -360,8 +395,9 @@ async function initMap() {
   const apiKey = resolveMapsApiKey();
   if (!apiKey) {
     updateProgressLabel("Add your Google Maps API key in Settings (⚙, top right) to load the map.");
-    // First run: the key input now lives in the settings dialog, so open it.
-    els.settingsDialog.showModal();
+    // First run: the key input lives in the settings dialog's Data &
+    // storage panel, so open the dialog on that panel.
+    openSettings("data");
     return;
   }
 
@@ -451,8 +487,12 @@ function loadGoogleMaps(apiKey) {
 }
 
 function bindEvents() {
-  els.settingsBtn.addEventListener("click", () => els.settingsDialog.showModal());
+  els.settingsBtn.addEventListener("click", () => openSettings());
   els.settingsCloseBtn.addEventListener("click", () => els.settingsDialog.close());
+  els.settingsDoneBtn.addEventListener("click", () => els.settingsDialog.close());
+  els.settingsTabs.forEach((tab) => {
+    tab.addEventListener("click", () => selectSettingsTab(tab.dataset.settingsTab));
+  });
   els.settingsDialog.addEventListener("click", (event) => {
     // A click on the dialog element itself (not its content) is the backdrop.
     if (event.target === els.settingsDialog) els.settingsDialog.close();
@@ -479,6 +519,10 @@ function bindEvents() {
   els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraBehindInput.addEventListener("input", updateCameraSettingsFromControls);
   els.centerRiderInput.addEventListener("change", updateCenterRiderFromControl);
+  els.centerRiderBtn.addEventListener("click", () => {
+    els.centerRiderInput.checked = !els.centerRiderInput.checked;
+    updateCenterRiderFromControl();
+  });
   els.resetCameraBtn.addEventListener("click", resetCameraView);
   els.beaconEnabledInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.beaconDiameterInput.addEventListener("input", updateRenderingSettingsFromControls);
@@ -506,9 +550,12 @@ function bindEvents() {
   document.addEventListener("fullscreenchange", handleFullscreenChange);
   document.addEventListener("visibilitychange", handleVisibilityChange);
   document.addEventListener("keydown", (event) => {
-    // When the settings dialog is open, Escape closes it (natively) and must
-    // not also kick the rider out of fullscreen.
-    if (event.key === "Escape" && state.mapFullscreen && !els.settingsDialog.open) exitMapFullscreen();
+    // When the settings or gallery dialog is open, Escape closes it
+    // (natively) and must not also kick the rider out of fullscreen.
+    if (
+      event.key === "Escape" && state.mapFullscreen &&
+      !els.settingsDialog.open && !els.galleryDialog.open
+    ) exitMapFullscreen();
   });
   window.addEventListener("beforeunload", () => {
     saveRide();
@@ -531,7 +578,6 @@ async function loadGpxFromUrl(url, overrideName) {
   const response = await fetch(url);
   const text = await response.text();
   applyGpxText(text, { overrideName });
-  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function filenameToRouteName(filename) {
@@ -566,33 +612,34 @@ function applyGpxText(text, { overrideName = null, fallbackName = null } = {}) {
   els.resetBtn.disabled = false;
 }
 
-// Route classification and detected climbs, shown on the setup page once a
-// GPX loads. Both are cheap single passes over the whole route and only
-// depend on its fixed distance/elevation totals, so this runs once per load
-// rather than on every ride-progress tick like updateRideUi.
+// Route name (top-bar GPX chip), classification (difficulty stat tile) and
+// detected climbs, shown once a GPX loads. All are cheap single passes over
+// the whole route and only depend on its fixed distance/elevation totals,
+// so this runs once per load rather than on every ride-progress tick like
+// updateRideUi.
 function updateRouteOverview() {
+  els.gpxChip.hidden = !state.routeName;
+  els.gpxChipName.textContent = state.routeName ?? "";
+
   if (!state.route.length) {
     state.climbs = [];
-    els.routeOverview.hidden = true;
+    els.climbsSection.hidden = true;
+    els.difficultyStat.textContent = "--";
+    els.difficultyDetail.textContent = "";
     return;
   }
 
   const totalDistance = routeTotalDistance(state.route);
   const totalAscent = routeTotalAscent(state.route);
   const classification = classifyRoute(totalDistance, totalAscent);
-  if (!classification) {
-    state.climbs = [];
-    els.routeOverview.hidden = true;
-    return;
+  if (classification) {
+    els.difficultyStat.textContent = classification.difficulty;
+    els.difficultyDetail.textContent =
+      `${classification.distanceClass} · ${classification.terrainClass}`;
+  } else {
+    els.difficultyStat.textContent = "--";
+    els.difficultyDetail.textContent = "";
   }
-
-  els.routeOverview.hidden = false;
-  els.routeNameHeading.hidden = !state.routeName;
-  els.routeNameHeading.textContent = state.routeName ?? "";
-  els.routeClassSummary.textContent =
-    `${formatDistance(totalDistance, state.distanceUnits, 1)} · ${formatAltitude(totalAscent, state.distanceUnits)}`;
-  els.routeClassDetail.textContent =
-    `${classification.distanceClass} - ${classification.terrainClass} · ${classification.difficulty}`;
 
   state.climbs = detectClimbs(state.route);
   els.climbsSection.hidden = state.climbs.length === 0;
@@ -892,7 +939,7 @@ function toggleSimulation() {
 }
 
 function updateStartButton() {
-  els.startBtn.textContent = state.simulating ? "Stop simulation" : "Start simulation";
+  els.startBtnLabel.textContent = state.simulating ? "Stop" : "Start";
 }
 
 function updatePedalingFromSpeed() {
@@ -1187,6 +1234,9 @@ function currentRideProgress() {
 // --- Telemetry ---------------------------------------------------------------
 
 function handleTrainerTelemetry(telemetry) {
+  // Live telemetry is the one dependable "actually connected" signal.
+  els.trainerDot.classList.toggle("connected", Boolean(telemetry));
+
   if (!telemetry) {
     state.trainerSpeedKph = null;
     state.trainerPowerWatts = null;
@@ -1234,9 +1284,11 @@ function updateTelemetryUi() {
 
   els.powerStat.textContent = powerText;
   els.speedStat.textContent = speedText;
-  els.heartRateStat.textContent = heartRate !== null
-    ? heartRateText
-    : (state.heartRateStatusText || "--");
+  els.heartRateStat.textContent = heartRateText;
+  els.hrConnectionStat.textContent = state.strapHeartRateBpm !== null
+    ? `${state.strapHeartRateBpm} bpm`
+    : (state.heartRateStatusText || "Not connected");
+  els.hrDot.classList.toggle("connected", state.strapHeartRateBpm !== null);
   els.caloriesStat.textContent = caloriesText;
   els.hudPowerStat.textContent = powerText;
   els.hudSpeedStat.textContent = speedText;
@@ -1246,6 +1298,10 @@ function updateTelemetryUi() {
 // --- Ride recording & FIT export ----------------------------------------------
 
 function updateRecordingUi() {
+  // The bucket only grows while the rider is actually moving — mirror that
+  // with the pulsing RECORDING indicator on the FIT buffer card.
+  els.recIndicator.hidden = !isMoving();
+
   const summary = rideLogSummary();
   els.recDistanceStat.textContent = formatDistance(summary.distanceMeters, state.distanceUnits);
   els.recTimeStat.textContent = formatDuration(summary.timerSeconds);
@@ -2013,10 +2069,17 @@ function updateCenterRiderFromControl() {
     state.cameraOffsetRightMeters = 0;
     state.cameraCenterAltitudeOffsetMeters = 0;
   }
+  syncCenterRiderButton();
   saveSettings();
   updateCameraSettingsLabels();
 
   updateRideUi();
+}
+
+// The map-corner toggle mirrors the settings checkbox; aria-pressed drives
+// its dimmed/lit styling.
+function syncCenterRiderButton() {
+  els.centerRiderBtn.setAttribute("aria-pressed", String(state.centerRider));
 }
 
 // --- Screenshots -----------------------------------------------------------------
@@ -2047,8 +2110,9 @@ function toggleMapFullscreen() {
 
 function enterMapFullscreen() {
   state.mapFullscreen = true;
+  // The button's enter/exit icons swap on this class (see styles.css).
   els.mapViewport.classList.add("fullscreen-mode");
-  els.fullscreenBtn.textContent = "⤢ Exit fullscreen";
+  els.fullscreenBtn.title = "Exit fullscreen";
   els.fullscreenOverlayBottom.hidden = false;
 
   // Move the elevation profile into the fullscreen HUD stack so it renders as
@@ -2068,10 +2132,12 @@ function enterMapFullscreen() {
 function exitMapFullscreen() {
   state.mapFullscreen = false;
   els.mapViewport.classList.remove("fullscreen-mode");
-  els.fullscreenBtn.textContent = "⛶ Fullscreen";
+  els.fullscreenBtn.title = "Enter fullscreen";
   els.fullscreenOverlayBottom.hidden = true;
 
-  els.mapViewport.after(els.profile);
+  // The profile canvas lives in the panel's elevation card, right above the
+  // climbs section it was pulled out from when fullscreen started.
+  els.climbsSection.before(els.profile);
   els.profile.classList.remove("profile-translucent");
 
   if (document.fullscreenElement === els.mapViewport) document.exitFullscreen?.().catch(() => {});
@@ -2209,6 +2275,7 @@ function restoreSettings() {
   }
 
   els.centerRiderInput.checked = state.centerRider;
+  syncCenterRiderButton();
   els.gradeIntervalInput.value = String(state.gradeUpdateIntervalSeconds);
   els.gradeIntervalOutput.value = `${state.gradeUpdateIntervalSeconds} s`;
   els.distanceUnitSelect.value = state.distanceUnits;
