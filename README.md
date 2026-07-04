@@ -11,7 +11,7 @@ account.
 **[Try the live demo →](https://ziizii.github.io/gpx-rider/)**
 (runs entirely in your browser — bring your own free Google Maps API key)
 
-![GPX Rider](docs/screenshot.jpg)
+![GPX Rider](gallery/0100_goldengate/screenshot.jpeg)
 
 ## Why GPX Rider?
 
