@@ -62,12 +62,13 @@ If that sounds useful, contributions are very welcome — see
   elevation chart. Switch between km/mi and kcal/kJ display units.
 - 🖥️ **Fullscreen ride HUD** — a distraction-free overlay for pairing with a
   smart TV or tablet on the handlebars.
-- 📷 **One-click ride screenshots** — the `📷 Screenshot` button on the map
-  saves a JPG of the exact view including the HUD, minimap, elevation
-  profile, and the Google attribution (Chrome asks to share the tab — pick
-  “This Tab”). Shots are center-cropped to a configurable aspect ratio
-  (16:9 by default) and scaled to a fixed width, so every ride screenshot
-  comes out at the same resolution — e.g. 1920×1080.
+- 📷 **One-click ride screenshots** — an optional `📷 Screenshot` button on
+  the map (off by default; enable it in ⚙ Settings → Screenshots) saves a
+  JPG of the exact view including the HUD, minimap, elevation profile, and
+  the Google attribution (Chrome asks to share the tab — pick “This Tab”).
+  Shots are center-cropped to a configurable aspect ratio (16:9 by
+  default) and scaled to a fixed width, so every ride screenshot comes out
+  at the same resolution — e.g. 1920×1080.
 - 🔑 **Bring your own API key** — your Google Maps key is typed into the app
   and saved only in your browser's `localStorage`; it's never sent anywhere
   but Google.
