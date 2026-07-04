@@ -205,6 +205,80 @@ export const DEFAULT_HUD_ELEMENTS = {
   eta: true,
 };
 
+// --- Route difficulty classification --------------------------------------------
+//
+// Classifies a loaded route from distance and total elevation gain alone —
+// no power, speed, weight, weather, surface, or ride-effort data. See
+// app/difficulty.mjs. Every threshold below is the inclusive lower bound of
+// its class, in ascending order; edit freely to retune the scale.
+
+// One "equivalent kilometer" is this many meters of elevation gain, added to
+// the raw distance as a simple overall-effort estimate. Lower = climbing
+// counts for more; higher = climbing counts for less.
+export const EQUIVALENT_KM_CLIMB_METERS = 100;
+
+// Distance class, by route distance in km.
+export const DISTANCE_CLASS_THRESHOLDS_KM = [
+  { min: 0, label: "XS" },
+  { min: 20, label: "S" },
+  { min: 40, label: "M" },
+  { min: 70, label: "L" },
+  { min: 110, label: "XL" },
+  { min: 160, label: "XXL" },
+];
+
+// Terrain class, by meters of elevation gain per km of distance.
+export const TERRAIN_CLASS_THRESHOLDS_M_PER_KM = [
+  { min: 0, label: "Flat" },
+  { min: 5, label: "Gentle" },
+  { min: 10, label: "Rolling" },
+  { min: 20, label: "Hilly" },
+  { min: 35, label: "Mountainous" },
+];
+
+// Overall difficulty, by equivalent km (distance + elevation gain converted
+// via EQUIVALENT_KM_CLIMB_METERS).
+export const DIFFICULTY_THRESHOLDS_EQUIVALENT_KM = [
+  { min: 0, label: "Very Easy" },
+  { min: 25, label: "Easy" },
+  { min: 50, label: "Moderate" },
+  { min: 85, label: "Hard" },
+  { min: 130, label: "Very Hard" },
+  { min: 190, label: "Epic" },
+];
+
+// --- Climb detection -------------------------------------------------------------
+
+// Detected climbs shown on the route overview when a GPX loads, and used
+// during the ride to report the current/next climb (see app/climbs.mjs). A
+// candidate climb only ends once elevation has dropped
+// CLIMB_DESCENT_TOLERANCE_METERS below its peak *and* the route has moved on
+// past the peak by at least CLIMB_MERGE_GAP_METERS — so a short flat stretch
+// or a few meters of downhill (a switchback dip, a road dropping briefly
+// before kicking back up) doesn't end the climb and start a new one. Both
+// are deliberately separate from CLIMB_NOISE_THRESHOLD_METERS (route.mjs's
+// ascent/descent total noise filter) so tuning one doesn't move the other.
+
+// How far past a climb's peak the route can travel while still elevated
+// (but not climbing) before the climb is considered over. ~100 m covers a
+// short flat stretch at the top of a ramp; raise it to merge climbs across
+// longer flat/rolling gaps, lower it to split on shorter ones.
+export const CLIMB_MERGE_GAP_METERS = 100;
+
+// How far elevation can drop below a climb's peak — a few meters of
+// downhill — before that drop, combined with CLIMB_MERGE_GAP_METERS of
+// distance, is treated as the climb actually ending.
+export const CLIMB_DESCENT_TOLERANCE_METERS = 5;
+
+// A candidate climb is only reported if it gains at least this much
+// elevation...
+export const CLIMB_MIN_GAIN_METERS = 30;
+
+// ...AND averages at least this grade, in percent. Both must hold, so a
+// long gentle drag and a short punchy ramp are each filtered out on their
+// own terms rather than by a single combined score.
+export const CLIMB_MIN_AVERAGE_GRADE_PERCENT = 3;
+
 // --- Ride recording -----------------------------------------------------------------
 
 // While moving, a track sample is appended roughly every SAMPLE interval and

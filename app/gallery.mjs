@@ -12,7 +12,7 @@ export async function initGallery(onLoadRoute, { shouldAutoLoadFirst = () => fal
     // instead of an empty map. shouldAutoLoadFirst is re-checked here (after
     // the await) in case a saved ride or a user pick landed in the meantime.
     if (data.routes[0].gpx && shouldAutoLoadFirst()) {
-      await onLoadRoute(data.routes[0].gpx);
+      await onLoadRoute(data.routes[0].gpx, data.routes[0].title);
     }
   } catch {
     // gallery.json not present — gallery stays hidden
@@ -57,7 +57,7 @@ function renderGallery(routes, onLoadRoute) {
     btn.type = "button";
     btn.className = "gallery-card-btn";
     btn.textContent = "Load ride";
-    btn.addEventListener("click", () => onLoadRoute(route.gpx));
+    btn.addEventListener("click", () => onLoadRoute(route.gpx, route.title));
 
     body.appendChild(title);
     body.appendChild(desc);
