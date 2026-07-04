@@ -1397,8 +1397,17 @@ function updateRiderDot(position) {
 }
 
 function riderCircleCoordinates(center, radiusMeters, altitude = 0, stepDegrees = 6) {
+  // Walking compass bearings upward (N, E, S, W, ...) traces the ring
+  // clockwise as seen from above. A filled polygon's normal follows the
+  // right-hand rule from its vertex order, so a clockwise-from-above ring
+  // faces its front side down into the ground — the lit fill then reads as
+  // almost black (no light hits the face pointing away from the sky) even
+  // though the stroke, which isn't lit the same way, still shows its true
+  // color. Walking bearings downward instead traces the ring
+  // counter-clockwise from above so the fill faces up and renders its real
+  // color.
   const points = [];
-  for (let angle = 0; angle < 360; angle += stepDegrees) {
+  for (let angle = 360; angle > 0; angle -= stepDegrees) {
     const point = destinationPoint(center, angle, radiusMeters);
     points.push({ ...point, altitude });
   }
