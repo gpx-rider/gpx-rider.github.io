@@ -62,6 +62,12 @@ body {
   height: 100%;
 }
 
+/* visibility (not display:none) keeps the Google map instance laid out, so
+   re-enabling the minimap never shows stale gray tiles needing a resize */
+#minimap.minimap-hidden {
+  visibility: hidden;
+}
+
 #minimap {
   position: absolute;
   left: 14px;
@@ -121,7 +127,9 @@ body {
 
 .fullscreen-hud {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  /* auto-fit so tiles hidden in the settings collapse instead of leaving
+     gaps, and the row reflows as elements are toggled on and off */
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 10px;
 }
 
@@ -546,6 +554,25 @@ progress::-webkit-progress-bar {
 
 progress::-webkit-progress-value {
   background: var(--accent);
+}
+
+progress::-moz-progress-bar {
+  background: var(--accent);
+}
+
+/* Ascent progress: amber so climbing progress reads apart from distance. */
+progress.ascent-progress::-webkit-progress-value {
+  background: #b45309;
+}
+
+progress.ascent-progress::-moz-progress-bar {
+  background: #b45309;
+}
+
+.hud-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
 }
 
 code {

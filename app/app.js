@@ -19,13 +19,68 @@ import {
 } from "./camera.mjs";
 import { bearing, clamp, destinationPoint, haversine, lerp, roundCoordinate, toRad } from "./geo.mjs";
 import { deployedMapsApiKey } from "./config.mjs";
-import { densifyRoute, enrichRoute, gradeAt, interpolateRoutePoint, maxElevationNear, parseGpx, routeTotalDistance } from "./route.mjs";
+import {
+  ascentAt,
+  densifyRoute,
+  descentAt,
+  enrichRoute,
+  gradeAt,
+  interpolateRoutePoint,
+  maxElevationNear,
+  parseGpx,
+  routeTotalAscent,
+  routeTotalDescent,
+  routeTotalDistance,
+} from "./route.mjs";
+import { createRideEstimator, estimateRemainingSeconds, recordEstimatorTick } from "./eta.mjs";
 import { distanceAtProfileX, drawEmptyProfile, drawProfile } from "./profile.mjs";
 import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatSpeed } from "./units.mjs";
 import { readJson, removeStored, writeJson } from "./storage.mjs";
 import {
+  CAMERA_CENTER_ALTITUDE_LIMIT_METERS,
+  CAMERA_PAN_LIMIT_METERS,
+  CAMERA_TILT_MAX,
+  CAMERA_TILT_MIN,
+  CAMERA_ZOOM_MAX,
+  CAMERA_ZOOM_MIN,
+  DEFAULT_BEACON_COLOR,
+  DEFAULT_BEACON_DIAMETER_METERS,
+  DEFAULT_BEACON_ENABLED,
+  DEFAULT_BEACON_HEIGHT_METERS,
+  DEFAULT_BEACON_OPACITY,
+  DEFAULT_CAMERA_ANGLE_DEGREES,
+  DEFAULT_CAMERA_BEHIND_METERS,
+  DEFAULT_CAMERA_ZOOM,
+  DEFAULT_GRADE_INTERVAL_SECONDS,
+  DEFAULT_HUD_ELEMENTS,
+  DEFAULT_MAP_LABELS_ENABLED,
+  DEFAULT_SCREENSHOT_ASPECT,
+  DEFAULT_SCREENSHOT_WIDTH,
+  DEFAULT_SHOW_MINIMAP,
+  DEFAULT_SHOW_SCREENSHOT_BUTTON,
+  DEFAULT_TERRAIN_AVOID_ENABLED,
+  DEFAULT_TERRAIN_CLEARANCE_METERS,
   GRADE_INTERVAL_MAX_SECONDS,
   GRADE_INTERVAL_MIN_SECONDS,
+  HEADING_SAMPLE_METERS,
+  INTERACTION_SETTLE_MS,
+  MAX_TICK_SECONDS,
+  OVERVIEW_TILT_DEGREES,
+  PEDALING_START_KPH,
+  PEDALING_STOP_KPH,
+  RIDE_SAVE_THROTTLE_MS,
+  ROUTE_LINE_ALTITUDE_METERS,
+  ROUTE_LINE_MAX_POINTS,
+  ROUTE_LINE_SPACING_METERS,
+  SCREENSHOT_WIDTH_MAX,
+  SCREENSHOT_WIDTH_MIN,
+  SLOW_UI_INTERVAL_MS,
+  TERRAIN_LIFT_FALL_TAU_SECONDS,
+  TERRAIN_LIFT_RECOMPUTE_MS,
+  TERRAIN_LIFT_RISE_TAU_SECONDS,
+  TERRAIN_SAMPLE_RADIUS_METERS,
+} from "./tuning.mjs";
+import {
   OP_START_OR_RESUME,
   OP_STOP_OR_PAUSE,
   connectTrainer,
@@ -49,90 +104,20 @@ import { encodeFitActivity } from "./fit.mjs";
 import { initGallery } from "./gallery.mjs";
 import { captureViewportJpeg, parseAspectRatio, screenshotSupported } from "./screenshot.mjs";
 
+// All tunable behavior parameters live in tuning.mjs — the constants below
+// are wiring, not knobs.
 const MAPS_API_KEY_STORAGE_KEY = "gpx-rider:maps-api-key";
 const SETTINGS_STORAGE_KEY = "gpx-rider:settings";
 const RIDE_STORAGE_KEY = "gpx-rider:last-ride";
 
-const DEFAULT_CAMERA_ZOOM = 2.5;
-const DEFAULT_CAMERA_ANGLE_DEGREES = 75;
-const DEFAULT_CAMERA_BEHIND_METERS = 800;
-const HEADING_SAMPLE_METERS = 4;
-const INTERACTION_SETTLE_MS = 600;
-// Deliberately huge bounds: they exist only to keep corrupted saved settings
-// from wedging the camera, not to restrict framing — wide shots for
-// screenshots need extreme zoom-outs and pans.
-const CAMERA_ZOOM_MIN = 0.001;
-const CAMERA_ZOOM_MAX = 1000;
-const CAMERA_PAN_LIMIT_METERS = 100000;
-const CAMERA_CENTER_ALTITUDE_LIMIT_METERS = 20000;
-const CAMERA_TILT_MIN = 1;
-const CAMERA_TILT_MAX = 89;
-const DEFAULT_GRADE_INTERVAL_SECONDS = 2;
+const BEACON_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
-// Route overview shown instantly when a route loads: the whole route framed
-// from a 45° side view (see computeRouteOverviewCamera in camera.mjs).
-// Movement starting is what hands the camera over to the follow view.
-const OVERVIEW_TILT_DEGREES = 45;
 // Physical camera motion: after the load-time snap, every camera move chases
 // its target like an object with bounded acceleration — it eases into
 // motion, brakes to arrive without snapping, and never jumps. The
 // acceleration budget scales with the remaining distance (chaseTuning in
 // camera.mjs): steady follow tracking stays gentle while transition flights
 // (overview down to the rider, long seeks) cross fast.
-
-// Rider beacon: a translucent extruded cylinder standing on the rider so the
-// position stays visible when trees or buildings hide the ground dot.
-const DEFAULT_BEACON_ENABLED = true;
-const DEFAULT_BEACON_DIAMETER_METERS = 5;
-const DEFAULT_BEACON_HEIGHT_METERS = 20;
-const DEFAULT_BEACON_OPACITY = 0.35;
-const DEFAULT_BEACON_COLOR = "#ffffff";
-const BEACON_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
-
-// Camera terrain avoidance: lift the camera when the eye would sink into a
-// hillside (typically when the route turns in front of rising terrain), then
-// ease back down once the terrain allows. Route elevations within
-// TERRAIN_SAMPLE_RADIUS_METERS of the eye act as the terrain estimate — no
-// Elevation API calls, which would cost real money at follow-camera rates.
-const DEFAULT_TERRAIN_AVOID_ENABLED = true;
-const DEFAULT_TERRAIN_CLEARANCE_METERS = 20;
-
-// Ride screenshots come out at a constant size so gallery shots line up.
-// The button is opt-in — most riders never need it on the map.
-const DEFAULT_SHOW_SCREENSHOT_BUTTON = false;
-const DEFAULT_SCREENSHOT_ASPECT = "16:9";
-const DEFAULT_SCREENSHOT_WIDTH = 1920;
-const SCREENSHOT_WIDTH_MIN = 640;
-const SCREENSHOT_WIDTH_MAX = 3840;
-// Switchback roads (e.g. the Amalfi Coast) fold back on themselves, so a
-// hairpin's higher hillside can sit a couple of hundred meters away in
-// straight-line terms while being far along the route path — a narrow radius
-// only ever sees the (lower) stretch of road right at the sample point and
-// misses that the ground behind it keeps climbing. Cast a wide net; slightly
-// overestimating nearby terrain just holds the camera a bit higher; missing it
-// puts the eye inside the hillside.
-const TERRAIN_SAMPLE_RADIUS_METERS = 400;
-const TERRAIN_LIFT_RECOMPUTE_MS = 150;
-// Rise fast enough to clear an approaching hill, settle back slowly so the
-// camera does not pump up and down on rolling terrain.
-const TERRAIN_LIFT_RISE_TAU_SECONDS = 0.3;
-const TERRAIN_LIFT_FALL_TAU_SECONDS = 4;
-
-// Pedaling detection with hysteresis so a spinning-down flywheel does not
-// flap the movement source on/off around a single threshold.
-const PEDALING_START_KPH = 3;
-const PEDALING_STOP_KPH = 1;
-// A backgrounded tab stops requestAnimationFrame; without this cap the first
-// frame after returning would teleport the rider minutes down the road.
-const MAX_TICK_SECONDS = 5;
-
-// Route line rendering: the line floats slightly above the terrain instead of
-// being draped onto it (see renderGoogle3DRoute), so segments between points
-// must stay short enough to follow the ground. Spacing grows on very long
-// routes to cap the total vertex count the map engine has to handle.
-const ROUTE_LINE_ALTITUDE_METERS = 2.5;
-const ROUTE_LINE_SPACING_METERS = 15;
-const ROUTE_LINE_MAX_POINTS = 5000;
 
 const state = {
   route: [],
@@ -200,6 +185,11 @@ const state = {
   mapFullscreen: false,
   distanceUnits: "metric",
   energyUnits: "kcal",
+  showMinimap: DEFAULT_SHOW_MINIMAP,
+  mapLabelsEnabled: DEFAULT_MAP_LABELS_ENABLED,
+  hudElements: { ...DEFAULT_HUD_ELEMENTS },
+  // Per-session pace tracker feeding the smart ETA; reset on new GPX load.
+  rideEstimator: createRideEstimator(),
 };
 
 const els = {
@@ -211,6 +201,12 @@ const els = {
   mapsApiKeySaveBtn: document.querySelector("#mapsApiKeySaveBtn"),
   gpxFile: document.querySelector("#gpxFile"),
   distanceStat: document.querySelector("#distanceStat"),
+  riddenStat: document.querySelector("#riddenStat"),
+  remainingStat: document.querySelector("#remainingStat"),
+  etaStat: document.querySelector("#etaStat"),
+  ascentStat: document.querySelector("#ascentStat"),
+  descentStat: document.querySelector("#descentStat"),
+  ascentLeftStat: document.querySelector("#ascentLeftStat"),
   gradeStat: document.querySelector("#gradeStat"),
   altitudeStat: document.querySelector("#altitudeStat"),
   powerStat: document.querySelector("#powerStat"),
@@ -251,6 +247,8 @@ const els = {
   resetBtn: document.querySelector("#resetBtn"),
   progress: document.querySelector("#progress"),
   progressLabel: document.querySelector("#progressLabel"),
+  ascentProgress: document.querySelector("#ascentProgress"),
+  ascentProgressLabel: document.querySelector("#ascentProgressLabel"),
   profile: document.querySelector("#profile"),
   mapViewport: document.querySelector("#mapViewport"),
   minimap: document.querySelector("#minimap"),
@@ -267,6 +265,12 @@ const els = {
   hudGradeStat: document.querySelector("#hudGradeStat"),
   hudRiddenStat: document.querySelector("#hudRiddenStat"),
   hudRemainingStat: document.querySelector("#hudRemainingStat"),
+  hudAscentLeftStat: document.querySelector("#hudAscentLeftStat"),
+  hudEtaStat: document.querySelector("#hudEtaStat"),
+  hudTiles: document.querySelectorAll("#fullscreenHud [data-hud]"),
+  hudToggles: document.querySelectorAll("#settingsDialog [data-hud-toggle]"),
+  minimapInput: document.querySelector("#minimapInput"),
+  mapLabelsInput: document.querySelector("#mapLabelsInput"),
   recDistanceStat: document.querySelector("#recDistanceStat"),
   recTimeStat: document.querySelector("#recTimeStat"),
   recPointsStat: document.querySelector("#recPointsStat"),
@@ -302,7 +306,12 @@ async function startApp() {
   restoreSavedRide();
   void reconnectSavedTrainer();
   void reconnectSavedHeartRate();
-  void initGallery(loadGpxFromUrl);
+  // First open with no saved ride: start on the first gallery route instead
+  // of an empty map (only once the map is actually up — a missing API key
+  // keeps the "paste your key" flow front and center instead).
+  void initGallery(loadGpxFromUrl, {
+    shouldAutoLoadFirst: () => state.route.length < 2 && Boolean(state.map),
+  });
 }
 
 function getStoredMapsApiKey() {
@@ -387,7 +396,9 @@ async function initGooglePhotorealistic3DMap() {
   state.map = new Map3DElement({
     center: { ...camera.center, altitude: 0 },
     heading: camera.heading,
-    mode: MapMode?.SATELLITE,
+    // HYBRID adds place labels (roads, towns) on top of the satellite
+    // imagery; toggled in Settings → Display & HUD.
+    mode: state.mapLabelsEnabled ? MapMode?.HYBRID : MapMode?.SATELLITE,
     range: camera.range,
     tilt: camera.tilt,
     // Hide the default UI buttons (compass, zoom); gestures still work and
@@ -439,6 +450,9 @@ function bindEvents() {
   els.gradeIntervalInput.addEventListener("input", updateGradeIntervalFromControl);
   els.distanceUnitSelect.addEventListener("change", updateUnitsFromControls);
   els.energyUnitSelect.addEventListener("change", updateUnitsFromControls);
+  els.minimapInput.addEventListener("change", updateDisplaySettingsFromControls);
+  els.mapLabelsInput.addEventListener("change", updateDisplaySettingsFromControls);
+  els.hudToggles.forEach((input) => input.addEventListener("change", updateDisplaySettingsFromControls));
   els.cameraZoomInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraBehindInput.addEventListener("input", updateCameraSettingsFromControls);
@@ -508,6 +522,8 @@ function applyGpxText(text) {
   state.simulating = false;
   state.lastTick = 0;
   state.profileHoverMeters = null;
+  // A new route is a new ride: the ETA pace history starts over.
+  state.rideEstimator = createRideEstimator();
   enterOverviewMode({ instant: true });
   updateStartButton();
   renderRoute();
@@ -852,6 +868,17 @@ function tick(now) {
   const previousProgress = state.progressMeters;
   state.progressMeters = Math.min(totalDistance, state.progressMeters + metersPerSecond * elapsedSeconds);
 
+  // Feed the ETA pace history only from real pedaling — simulated movement
+  // rides at an artificial constant speed and would poison the estimate.
+  if (state.pedaling) {
+    recordEstimatorTick(state.rideEstimator, {
+      elapsedSeconds,
+      distanceMeters: state.progressMeters - previousProgress,
+      ascentMeters: ascentAt(state.route, state.progressMeters) - ascentAt(state.route, previousProgress),
+      descentMeters: descentAt(state.route, state.progressMeters) - descentAt(state.route, previousProgress),
+    });
+  }
+
   recordRideTick({
     elapsedSeconds,
     metersAdvanced: state.progressMeters - previousProgress,
@@ -893,32 +920,87 @@ function updateRideUi(options = {}) {
   // Per-frame work ends here. DOM stats, the profile canvas, and the trainer
   // grade only need a few updates per second while riding.
   const now = performance.now();
-  if (!options.force && isMoving() && now - state.lastSlowUiAt < 250) return;
+  if (!options.force && isMoving() && now - state.lastSlowUiAt < SLOW_UI_INTERVAL_MS) return;
   state.lastSlowUiAt = now;
 
   const totalDistance = routeTotalDistance(state.route);
   const grade = gradeAt(state.route, state.progressMeters);
   const progress = totalDistance ? state.progressMeters / totalDistance : 0;
+  const totalAscent = routeTotalAscent(state.route);
+  const totalDescent = routeTotalDescent(state.route);
+  const ascentSoFar = ascentAt(state.route, state.progressMeters);
+  const ascentLeft = Math.max(0, totalAscent - ascentSoFar);
+  const riddenText = formatDistance(state.progressMeters, state.distanceUnits);
+  const remainingText = formatDistance(totalDistance - state.progressMeters, state.distanceUnits);
+  const ascentLeftText = formatAltitude(ascentLeft, state.distanceUnits);
+  const etaSeconds = currentEtaSeconds(totalDistance, totalAscent, totalDescent);
+  const etaText = etaSeconds === null ? "--" : formatDuration(etaSeconds);
 
   els.distanceStat.textContent = formatDistance(totalDistance, state.distanceUnits, 1);
+  els.riddenStat.textContent = riddenText;
+  els.remainingStat.textContent = remainingText;
+  els.etaStat.textContent = etaText;
+  els.ascentStat.textContent = formatAltitude(totalAscent, state.distanceUnits);
+  els.descentStat.textContent = formatAltitude(totalDescent, state.distanceUnits);
+  els.ascentLeftStat.textContent = ascentLeftText;
   els.gradeStat.textContent = `${grade.toFixed(1)}%`;
   els.altitudeStat.textContent = formatAltitude(point.ele, state.distanceUnits);
   els.progress.value = progress;
   updateProgressLabel(
     `${formatDistance(state.progressMeters, state.distanceUnits)} of ${formatDistance(totalDistance, state.distanceUnits)}`,
   );
+  updateAscentProgress(ascentSoFar, totalAscent);
   renderProfile(progress);
   updateMinimapPosition(point);
   updateCameraSettingsLabels();
 
   els.hudGradeStat.textContent = `${grade.toFixed(1)}%`;
-  els.hudRiddenStat.textContent = formatDistance(state.progressMeters, state.distanceUnits);
-  els.hudRemainingStat.textContent = formatDistance(totalDistance - state.progressMeters, state.distanceUnits);
+  els.hudRiddenStat.textContent = riddenText;
+  els.hudRemainingStat.textContent = remainingText;
+  els.hudAscentLeftStat.textContent = ascentLeftText;
+  els.hudEtaStat.textContent = etaText;
 
   updateRecordingUi();
   queueTrainerGradeSample(grade, {
     force: options.force,
     intervalSeconds: state.gradeUpdateIntervalSeconds,
+  });
+}
+
+// Second progress bar under the distance one: how much of the route's total
+// climbing is already behind the rider. Hidden on flat routes, where it
+// would only ever show 0% or 100%.
+function updateAscentProgress(ascentSoFar, totalAscent) {
+  const show = totalAscent >= 1;
+  els.ascentProgress.hidden = !show;
+  els.ascentProgressLabel.hidden = !show;
+  if (!show) return;
+  els.ascentProgress.value = clamp(ascentSoFar / totalAscent, 0, 1);
+  els.ascentProgressLabel.textContent =
+    `${formatAltitude(ascentSoFar, state.distanceUnits)} of ${formatAltitude(totalAscent, state.distanceUnits)} climbed`;
+}
+
+// Estimated seconds to the finish (see eta.mjs for the model), or null when
+// there is nothing to base an estimate on yet.
+function currentEtaSeconds(totalDistance, totalAscent, totalDescent) {
+  const remainingMeters = totalDistance - state.progressMeters;
+  if (remainingMeters <= 0) return 0;
+
+  // The simulation rides at a constant slider speed — plain arithmetic is
+  // exact there, no model needed.
+  if (state.simulating && !state.pedaling) {
+    return remainingMeters / (Number(els.speedInput.value) / 3.6);
+  }
+
+  return estimateRemainingSeconds(state.rideEstimator, {
+    remainingMeters,
+    remainingAscentMeters: Math.max(0, totalAscent - ascentAt(state.route, state.progressMeters)),
+    remainingDescentMeters: Math.max(0, totalDescent - descentAt(state.route, state.progressMeters)),
+    // Before enough pedaling history exists: project the trainer speed while
+    // pedaling, otherwise preview at the simulation slider speed.
+    fallbackSpeedKph: state.pedaling && Number.isFinite(state.trainerSpeedKph)
+      ? state.trainerSpeedKph
+      : Number(els.speedInput.value),
   });
 }
 
@@ -1647,6 +1729,40 @@ function updateSpeedOutput() {
   els.speedOutput.value = formatSpeed(Number(els.speedInput.value), state.distanceUnits, 0);
 }
 
+// --- Display & HUD settings -----------------------------------------------------
+
+function updateDisplaySettingsFromControls() {
+  state.showMinimap = els.minimapInput.checked;
+  state.mapLabelsEnabled = els.mapLabelsInput.checked;
+  els.hudToggles.forEach((input) => {
+    state.hudElements[input.dataset.hudToggle] = input.checked;
+  });
+  saveSettings();
+  applyDisplaySettings();
+}
+
+function syncDisplayControls() {
+  els.minimapInput.checked = state.showMinimap;
+  els.mapLabelsInput.checked = state.mapLabelsEnabled;
+  els.hudToggles.forEach((input) => {
+    input.checked = state.hudElements[input.dataset.hudToggle] !== false;
+  });
+}
+
+function applyDisplaySettings() {
+  els.minimap.classList.toggle("minimap-hidden", !state.showMinimap);
+  els.hudTiles.forEach((tile) => {
+    tile.hidden = state.hudElements[tile.dataset.hud] === false;
+  });
+  applyMapMode();
+}
+
+function applyMapMode() {
+  const MapMode = state.maps3d?.MapMode;
+  if (!state.map || !MapMode) return;
+  state.map.mode = state.mapLabelsEnabled ? MapMode.HYBRID : MapMode.SATELLITE;
+}
+
 function updateCameraSettingsFromControls() {
   state.cameraZoom = Number(els.cameraZoomInput.value);
   state.cameraAngleDegrees = Number(els.cameraAngleInput.value);
@@ -1938,6 +2054,23 @@ function restoreSettings() {
     state.screenshotWidth = clamp(Math.round(savedShotWidth), SCREENSHOT_WIDTH_MIN, SCREENSHOT_WIDTH_MAX);
   }
 
+  if (typeof settings?.showMinimap === "boolean") {
+    state.showMinimap = settings.showMinimap;
+  }
+
+  if (typeof settings?.mapLabelsEnabled === "boolean") {
+    state.mapLabelsEnabled = settings.mapLabelsEnabled;
+  }
+
+  if (settings?.hudElements && typeof settings.hudElements === "object") {
+    // Only known keys, only booleans — unknown junk in storage is ignored.
+    for (const key of Object.keys(state.hudElements)) {
+      if (typeof settings.hudElements[key] === "boolean") {
+        state.hudElements[key] = settings.hudElements[key];
+      }
+    }
+  }
+
   els.centerRiderInput.checked = state.centerRider;
   els.gradeIntervalInput.value = String(state.gradeUpdateIntervalSeconds);
   els.gradeIntervalOutput.value = `${state.gradeUpdateIntervalSeconds} s`;
@@ -1952,6 +2085,8 @@ function restoreSettings() {
   els.screenshotAspectSelect.value = state.screenshotAspect;
   els.screenshotWidthSelect.value = String(state.screenshotWidth);
   applyScreenshotButtonVisibility();
+  syncDisplayControls();
+  applyDisplaySettings();
 }
 
 function saveSettings() {
@@ -1977,6 +2112,9 @@ function saveSettings() {
     gradeUpdateIntervalSeconds: state.gradeUpdateIntervalSeconds,
     distanceUnits: state.distanceUnits,
     energyUnits: state.energyUnits,
+    showMinimap: state.showMinimap,
+    mapLabelsEnabled: state.mapLabelsEnabled,
+    hudElements: { ...state.hudElements },
   });
 }
 
@@ -2023,7 +2161,7 @@ function restoreSavedRide() {
 
 function saveRideThrottled() {
   const now = performance.now();
-  if (now - state.lastRideSavedAt < 1500) return;
+  if (now - state.lastRideSavedAt < RIDE_SAVE_THROTTLE_MS) return;
   saveRide();
 }
 
