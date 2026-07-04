@@ -82,6 +82,8 @@ const DEFAULT_TERRAIN_AVOID_ENABLED = true;
 const DEFAULT_TERRAIN_CLEARANCE_METERS = 20;
 
 // Ride screenshots come out at a constant size so gallery shots line up.
+// The button is opt-in — most riders never need it on the map.
+const DEFAULT_SHOW_SCREENSHOT_BUTTON = false;
 const DEFAULT_SCREENSHOT_ASPECT = "16:9";
 const DEFAULT_SCREENSHOT_WIDTH = 1920;
 const SCREENSHOT_WIDTH_MIN = 640;
@@ -152,6 +154,7 @@ const state = {
   cameraCenterAltitudeOffsetMeters: 0,
   centerRider: true,
   screenshotInProgress: false,
+  showScreenshotButton: DEFAULT_SHOW_SCREENSHOT_BUTTON,
   screenshotAspect: DEFAULT_SCREENSHOT_ASPECT,
   screenshotWidth: DEFAULT_SCREENSHOT_WIDTH,
   beaconEnabled: DEFAULT_BEACON_ENABLED,
@@ -223,6 +226,7 @@ const els = {
   minimap: document.querySelector("#minimap"),
   fullscreenBtn: document.querySelector("#fullscreenBtn"),
   screenshotBtn: document.querySelector("#screenshotBtn"),
+  screenshotButtonInput: document.querySelector("#screenshotButtonInput"),
   screenshotAspectSelect: document.querySelector("#screenshotAspectSelect"),
   screenshotWidthSelect: document.querySelector("#screenshotWidthSelect"),
   fullscreenOverlayBottom: document.querySelector("#fullscreenOverlayBottom"),
@@ -419,7 +423,7 @@ function bindEvents() {
   els.profile.addEventListener("click", handleProfileClick);
   els.fullscreenBtn.addEventListener("click", toggleMapFullscreen);
   els.screenshotBtn.addEventListener("click", takeMapScreenshot);
-  if (!screenshotSupported()) els.screenshotBtn.hidden = true;
+  els.screenshotButtonInput.addEventListener("change", updateScreenshotSettingsFromControls);
   els.screenshotAspectSelect.addEventListener("change", updateScreenshotSettingsFromControls);
   els.screenshotWidthSelect.addEventListener("change", updateScreenshotSettingsFromControls);
   document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -1477,6 +1481,7 @@ function updateRenderingSettingsLabels() {
 }
 
 function updateScreenshotSettingsFromControls() {
+  state.showScreenshotButton = els.screenshotButtonInput.checked;
   const aspect = els.screenshotAspectSelect.value;
   state.screenshotAspect = aspect === "viewport" || parseAspectRatio(aspect) ? aspect : DEFAULT_SCREENSHOT_ASPECT;
   state.screenshotWidth = clamp(
@@ -1485,6 +1490,11 @@ function updateScreenshotSettingsFromControls() {
     SCREENSHOT_WIDTH_MAX,
   );
   saveSettings();
+  applyScreenshotButtonVisibility();
+}
+
+function applyScreenshotButtonVisibility() {
+  els.screenshotBtn.hidden = !state.showScreenshotButton || !screenshotSupported();
 }
 
 function updateCenterRiderFromControl() {
@@ -1658,6 +1668,10 @@ function restoreSettings() {
     state.terrainClearanceMeters = clamp(terrainClearance, Number(els.terrainClearanceInput.min), Number(els.terrainClearanceInput.max));
   }
 
+  if (typeof settings?.showScreenshotButton === "boolean") {
+    state.showScreenshotButton = settings.showScreenshotButton;
+  }
+
   const savedAspect = settings?.screenshotAspect;
   if (savedAspect === "viewport" || parseAspectRatio(savedAspect)) {
     state.screenshotAspect = savedAspect;
@@ -1678,8 +1692,10 @@ function restoreSettings() {
   updateCameraSettingsLabels();
   syncRenderingControls();
   updateRenderingSettingsLabels();
+  els.screenshotButtonInput.checked = state.showScreenshotButton;
   els.screenshotAspectSelect.value = state.screenshotAspect;
   els.screenshotWidthSelect.value = String(state.screenshotWidth);
+  applyScreenshotButtonVisibility();
 }
 
 function saveSettings() {
@@ -1699,6 +1715,7 @@ function saveSettings() {
     beaconColor: state.beaconColor,
     terrainAvoidEnabled: state.terrainAvoidEnabled,
     terrainClearanceMeters: state.terrainClearanceMeters,
+    showScreenshotButton: state.showScreenshotButton,
     screenshotAspect: state.screenshotAspect,
     screenshotWidth: state.screenshotWidth,
     gradeUpdateIntervalSeconds: state.gradeUpdateIntervalSeconds,
