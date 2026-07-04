@@ -13,6 +13,7 @@ make run       # serve the repo at http://127.0.0.1:5173/app/ (python3 http.serv
 make test      # node --test tests/*.test.mjs (no dependencies needed)
 make gallery   # regenerate the README gallery section from gallery/*/desc.md
 make gallery-data  # regenerate app/gallery.json (parses each GPX for distance/ascent/descent, difficulty classification, and ready-to-draw mini-profile bars) for the in-app ride gallery
+make rider-dot-model  # regenerate app/assets/rider-dot.glb (the 3D rider marker mesh) — only needed after editing scripts/generate_rider_dot_model.py, not part of the default `make`
 ```
 
 Always run `make test` after changing anything in `app/`. Browser-only
@@ -161,37 +162,56 @@ in place).
   `trainer.mjs` (one GATT operation at a time) and grade writes are
   throttled/averaged — read the comments there before changing timing.
 - **3D map geometry**: never render lines with `CLAMP_TO_GROUND` — draped
-  strokes smear down steep slopes into wide blobs. The route line and the
-  rider dot both float at `ROUTE_LINE_ALTITUDE_METERS`/`RIDER_DOT_ALTITUDE_METERS`
-  (2.5m — the two constants are kept in sync deliberately, though this is just
-  "no reason to differ," see below), with the route line's path densified
-  (`densifyRoute`) so elevated segments follow the terrain. The rider dot is
-  a single `Polygon3DElement` (fill + stroke, one geometry) at a fixed
-  real-world size (`RIDER_DOT_DIAMETER_METERS` in `tuning.mjs`) — deliberately
-  not scaled with camera distance, and deliberately not several stacked
-  circles, since separate geometries a fraction of a meter apart z-fight into
-  rendering glitches and muddy colors once the camera is far enough that
-  their altitude gap falls below depth precision.
-  `riderCircleCoordinates` must walk bearings so the ring winds
-  counter-clockwise as seen from above (see its comment) — the opposite
-  winding faces the fill's front side down into the ground, which reads as
-  near-black regardless of `fillColor`.
-  **Separately, there is a known unresolved issue** (see the `KNOWN ISSUE`
-  comment on `RIDER_DOT_DIAMETER_METERS`): at small diameters the fill
-  renders solid black at typical follow-camera distances even with correct
-  winding. Confirmed by real-browser testing that this is caused by neither
-  winding, nor altitude/z-fighting with terrain (tested 1m through 20m up,
-  no change), nor `extruded: true` — only a bigger diameter (~12m) makes it
-  render its true color at the same distance. Looks like a Maps 3D Alpha
-  renderer edge case for small on-screen filled polygons, not something
-  fixable from this app's geometry choices alone; left small pending a call
-  on whether to just render it bigger. The dot (and the minimap marker)
-  mirrors the brand "GPX Rider" logo dot — a solid amber center with a paler
-  amber ring — via the `RIDER_DOT_*` color constants in `app.js`. The rider
-  beacon is a real-world-sized extruded `Polygon3DElement` cylinder with
+  strokes smear down steep slopes into wide blobs. The route line floats at
+  `ROUTE_LINE_ALTITUDE_METERS` (2.5m) with its path densified (`densifyRoute`)
+  so elevated segments follow the terrain.
+  The rider dot is a `Model3DElement` loading `app/assets/rider-dot.glb` (see
+  `renderRiderDot`/`updateRiderDot` in `app.js`), **not** a `Polygon3DElement`
+  and **not** a `Marker3DElement`/`PinElement` billboard — both were tried
+  first, in that order, and both were confirmed by real-browser testing (not
+  just reasoned about) to fail:
+  - `Polygon3DElement`: meant for static terrain-draped areas, not a point
+    that moves every frame. Re-tessellating one every frame produced a
+    solid-black fill at ordinary follow-camera distances — independent of
+    polygon winding, altitude/z-fighting with terrain (tried 1–20m up), and
+    `extruded: true` (a short cylinder instead of a flat disc) — plus a
+    faceted/streaky look from the constant re-triangulation.
+  - `Marker3DElement` + `PinElement`: fixed the black-fill and faceting, but
+    a `PinElement` reads as a map-pin/teardrop, not a location dot, and its
+    `scale` is a screen-space billboard size that doesn't grow/shrink with
+    camera distance the way a real ground object should.
+
+  A real mesh avoids all of that. `app/assets/rider-dot.glb` is hand-rolled
+  by `scripts/generate_rider_dot_model.py` (no 3D modeling tool available in
+  this environment — the same "encode the binary format by hand" approach
+  `app/fit.mjs` takes for FIT files): a two-material puck, baked to a true 1
+  meter diameter so `RIDER_DOT_SCALE` in `tuning.mjs` is a plain real-world
+  size multiplier. Both materials use the `KHR_materials_unlit` glTF
+  extension — an ordinary lit PBR material rendered solid black here
+  regardless of normals/winding/doubleSided/texturing (confirmed by testing
+  many variants), and unlit is also the semantically correct choice for a
+  location marker anyway: it must stay clearly visible at any time of day or
+  camera angle, not dim to black in shadow like a real physical object would.
+  The model is placed with `orientation: {heading:0, tilt:90, roll:0})` —
+  without that correction the disc renders standing on its edge instead of
+  lying flat on the ground (confirmed by testing; the model's local up axis
+  does not map to world-up by default, and this doesn't appear to be
+  documented anywhere). Floated at `RIDER_DOT_ALTITUDE_METERS`, kept equal to
+  `ROUTE_LINE_ALTITUDE_METERS` since there's no reason for the dot to sit at
+  a different height than the line it's walking along. A `Polyline3DElement`
+  ring (via `riderCircleCoordinates`, whose winding must trace
+  counter-clockwise as seen from above — see its comment) is the fallback for
+  browsers without `Model3DElement`. The dot (and the minimap marker) mirrors
+  the brand "GPX Rider" logo dot — a solid amber center with a paler amber
+  ring — via the model's two materials and, for the minimap and fallback
+  ring, the `RIDER_DOT_COLOR` constant in `app.js`. The rider beacon is a
+  real-world-sized extruded `Polygon3DElement` cylinder with
   `drawsOccludedSegments` so trees never hide the rider's position; it is
-  **off by default** (`DEFAULT_BEACON_ENABLED`), opt-in from
-  the Rendering settings.
+  **off by default** (`DEFAULT_BEACON_ENABLED`), opt-in from the Rendering
+  settings — unlike the dot, it hasn't shown the same black-fill issue, but
+  it's also large enough that a small-on-screen-footprint problem wouldn't
+  reproduce the same way, and if it ever does, the fix here is the same:
+  switch it to a `Model3DElement` too, not more polygon tweaking.
 - **Camera modes & physical motion**: `state.cameraMode` is `"overview"`
   after a route loads (whole route framed via `computeRouteOverviewCamera`
   in `camera.mjs`: start→end reads left-to-right, the route's far side
