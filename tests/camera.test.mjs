@@ -7,6 +7,7 @@ import {
   cameraEyePosition,
   cameraFromEyeAndCenter,
   chaseStep,
+  chaseTuning,
   computeFollowCamera,
   computeRouteOverviewCamera,
   measureCameraOffset,
@@ -403,24 +404,27 @@ test("a camera flight converges from the overview to the follow camera", () => {
   const chaseGeoPoint = (current, velocity, target) => {
     const horizontal = haversine(current, target);
     const towardTarget = toRad(bearing(current, target));
+    const up = (target.altitude || 0) - (current.altitude || 0);
+    const tuning = chaseTuning(Math.hypot(horizontal, up));
     const step = chaseStep({
       position: [0, 0, 0],
       velocity,
       target: [
         horizontal * Math.cos(towardTarget),
         horizontal * Math.sin(towardTarget),
-        (target.altitude || 0) - (current.altitude || 0),
+        up,
       ],
-      maxAcceleration: 120,
+      maxAcceleration: tuning.acceleration,
+      maxSpeed: tuning.maxSpeed,
       dt: 1 / 60,
     });
-    const [north, east, up] = step.position;
+    const [north, east, lifted] = step.position;
     const moved = Math.hypot(north, east);
     const ground = moved > 0.001
       ? destinationPoint(current, Math.atan2(east, north) * 180 / Math.PI, moved)
       : { lat: current.lat, lng: current.lng };
     return {
-      point: { ...ground, altitude: (current.altitude || 0) + up },
+      point: { ...ground, altitude: (current.altitude || 0) + lifted },
       velocity: step.velocity,
       settled: step.settled,
     };
@@ -448,4 +452,49 @@ test("a camera flight converges from the overview to the follow camera", () => {
   assertHeadingNear(finalPose.heading, followTarget.heading, 0.5);
   assert.ok(Math.abs(finalPose.tilt - followTarget.tilt) < 0.5);
   assert.ok(Math.abs(finalPose.range - followTarget.range) < 2);
+});
+
+test("chase tuning is gentle up close and punchy over distance", () => {
+  const near = chaseTuning(1);
+  const mid = chaseTuning(1000);
+  const far = chaseTuning(1000000);
+
+  // Near the target the floor applies: steady follow tracking stays gentle.
+  assert.ok(Math.abs(near.acceleration - chaseTuning(0).acceleration) < 2);
+  assert.ok(mid.acceleration > near.acceleration);
+  // The ceiling caps runaway acceleration on continent-scale distances.
+  assert.equal(far.acceleration, chaseTuning(2000000).acceleration);
+  // The speed cap follows the margin-reduced braking curve.
+  assert.ok(Math.abs(mid.maxSpeed - Math.sqrt(0.7 * mid.acceleration * 1000)) < 1e-9);
+  assert.equal(chaseTuning(0).maxSpeed, 0);
+});
+
+test("distance-scaled chase flights arrive without overshooting", () => {
+  // The acceleration allowance shrinks as the target nears; the braking
+  // margin in chaseTuning must keep the approach speed low enough that the
+  // flight still lands on the target instead of sailing past it.
+  for (const targetDistance of [300, 3000, 100000]) {
+    let position = [0, 0, 0];
+    let velocity = [0, 0, 0];
+    let overshoot = 0;
+    let settled = false;
+    for (let i = 0; i < 60 * 300 && !settled; i++) {
+      const remaining = Math.hypot(targetDistance - position[0], position[1], position[2]);
+      const tuning = chaseTuning(remaining);
+      const step = chaseStep({
+        position,
+        velocity,
+        target: [targetDistance, 0, 0],
+        maxAcceleration: tuning.acceleration,
+        maxSpeed: tuning.maxSpeed,
+        dt: 1 / 60,
+      });
+      position = step.position;
+      velocity = step.velocity;
+      overshoot = Math.max(overshoot, position[0] - targetDistance);
+      settled = step.settled;
+    }
+    assert.ok(settled, `flight over ${targetDistance} m settles`);
+    assert.ok(overshoot < 1, `flight over ${targetDistance} m overshoots ${overshoot} m`);
+  }
 });

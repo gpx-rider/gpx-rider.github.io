@@ -9,6 +9,7 @@ import {
   cameraEyePosition,
   cameraFromEyeAndCenter,
   chaseStep,
+  chaseTuning,
   computeFollowCamera,
   computeRouteOverviewCamera,
   measureCameraOffset,
@@ -67,15 +68,16 @@ const CAMERA_TILT_MIN = 1;
 const CAMERA_TILT_MAX = 89;
 const DEFAULT_GRADE_INTERVAL_SECONDS = 2;
 
-// Route overview shown when a route loads: the whole route framed from a 45°
-// side view (see computeRouteOverviewCamera in camera.mjs). Movement starting
-// is what hands the camera over to the follow view.
+// Route overview shown instantly when a route loads: the whole route framed
+// from a 45° side view (see computeRouteOverviewCamera in camera.mjs).
+// Movement starting is what hands the camera over to the follow view.
 const OVERVIEW_TILT_DEGREES = 45;
-// Physical camera motion: the applied camera chases its target (overview or
-// follow) like an object with bounded acceleration — it eases into motion,
-// crosses long distances fast (overview → behind the rider), and brakes to
-// arrive without snapping. Close targets are approached slowly.
-const CAMERA_CHASE_ACCELERATION_MPS2 = 120;
+// Physical camera motion: after the load-time snap, every camera move chases
+// its target like an object with bounded acceleration — it eases into
+// motion, brakes to arrive without snapping, and never jumps. The
+// acceleration budget scales with the remaining distance (chaseTuning in
+// camera.mjs): steady follow tracking stays gentle while transition flights
+// (overview down to the rider, long seeks) cross fast.
 
 // Rider beacon: a translucent extruded cylinder standing on the rider so the
 // position stays visible when trees or buildings hide the ground dot.
@@ -486,7 +488,7 @@ function applyGpxText(text) {
   state.simulating = false;
   state.lastTick = 0;
   state.profileHoverMeters = null;
-  enterOverviewMode();
+  enterOverviewMode({ instant: true });
   updateStartButton();
   renderRoute();
   renderProfile();
@@ -1242,25 +1244,28 @@ function stepCameraFlight(now) {
 function chaseGeoPoint(current, velocity, target, dt) {
   const horizontal = haversine(current, target);
   const towardTarget = toRad(bearing(current, target));
+  const up = (Number(target.altitude) || 0) - (Number(current.altitude) || 0);
+  const tuning = chaseTuning(Math.hypot(horizontal, up));
   const step = chaseStep({
     position: [0, 0, 0],
     velocity,
     target: [
       horizontal * Math.cos(towardTarget),
       horizontal * Math.sin(towardTarget),
-      (Number(target.altitude) || 0) - (Number(current.altitude) || 0),
+      up,
     ],
-    maxAcceleration: CAMERA_CHASE_ACCELERATION_MPS2,
+    maxAcceleration: tuning.acceleration,
+    maxSpeed: tuning.maxSpeed,
     dt,
   });
 
-  const [north, east, up] = step.position;
+  const [north, east, lifted] = step.position;
   const moved = Math.hypot(north, east);
   const ground = moved > 0.001
     ? destinationPoint(current, Math.atan2(east, north) * 180 / Math.PI, moved)
     : { lat: current.lat, lng: current.lng };
   return {
-    point: { ...ground, altitude: (Number(current.altitude) || 0) + up },
+    point: { ...ground, altitude: (Number(current.altitude) || 0) + lifted },
     velocity: step.velocity,
     settled: step.settled,
   };
@@ -1309,8 +1314,10 @@ function ensureCameraFlightLoop() {
 
 // Frame the whole loaded route: start→end reads left-to-right, the side of
 // the route bulging furthest from that axis faces away, seen from 45° with
-// margin. The camera stays there until movement starts.
-function enterOverviewMode() {
+// margin. The camera stays there until movement starts. A fresh load snaps
+// there instantly (a new route can be on the other side of the world — no
+// flight); a reset flies back smoothly.
+function enterOverviewMode({ instant = false } = {}) {
   // A rider already moving (e.g. a new GPX loaded mid-pedaling) stays in the
   // follow view — the overview is for routes loaded at rest.
   if (!state.route.length || !state.map || isMoving()) return;
@@ -1322,7 +1329,31 @@ function enterOverviewMode() {
   });
   if (!state.overviewCamera) return;
   state.cameraMode = "overview";
+  if (instant) {
+    applyCameraNow(state.overviewCamera);
+    return;
+  }
   ensureCameraFlightLoop();
+}
+
+// Jump the map straight to `camera` with no flight, and park the chase state
+// there (zero velocity) so the next target change starts a fresh smooth move.
+function applyCameraNow(camera) {
+  state.map.center = { ...camera.center };
+  state.map.heading = camera.heading;
+  state.map.range = camera.range;
+  state.map.tilt = camera.tilt;
+
+  const eye = cameraEyePosition(camera);
+  state.cameraFlight = eye
+    ? {
+      eye,
+      center: { ...camera.center },
+      eyeVelocity: [0, 0, 0],
+      centerVelocity: [0, 0, 0],
+      lastStepMs: performance.now(),
+    }
+    : null;
 }
 
 // --- Terrain avoidance ---------------------------------------------------------
@@ -1946,7 +1977,7 @@ function restoreSavedRide() {
   state.simulating = false;
   state.lastTick = 0;
 
-  enterOverviewMode();
+  enterOverviewMode({ instant: true });
   updateStartButton();
   renderRoute();
   renderProfile();

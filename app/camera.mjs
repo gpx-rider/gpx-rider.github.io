@@ -215,6 +215,27 @@ export function chaseStep({ position, velocity, target, maxAcceleration, maxSpee
   return { position: nextPosition, velocity: nextVelocity, settled: false };
 }
 
+// Distance-scaled tuning for chaseStep: gentle acceleration when the camera
+// is near its target (steady follow tracking behind the rider), scaling up
+// with distance so transition flights — overview down to the rider, long
+// seeks — cross fast instead of dragging. The braking margin keeps the
+// speed cap below what the shrinking acceleration allowance can still brake,
+// so flights arrive without overshooting.
+export function chaseTuning(distanceMeters, {
+  minAcceleration = 60,
+  accelerationPerMeter = 1.2,
+  maxAcceleration = 20000,
+  brakingMargin = 0.7,
+} = {}) {
+  const distance = Math.max(0, Number(distanceMeters) || 0);
+  const acceleration = clamp(
+    minAcceleration + distance * accelerationPerMeter,
+    minAcceleration,
+    Math.max(minAcceleration, maxAcceleration),
+  );
+  return { acceleration, maxSpeed: Math.sqrt(brakingMargin * acceleration * distance) };
+}
+
 // Rebuild the map camera parameters from an eye and look-at pair — the
 // inverse of cameraEyePosition. Nearly-overhead poses keep the caller's
 // fallback heading, since the bearing degenerates there.
