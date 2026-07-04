@@ -188,19 +188,6 @@ body {
   gap: 12px;
 }
 
-.settings-btn {
-  flex: none;
-  min-width: 42px;
-  min-height: 42px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  color: var(--ink);
-  background: #fff;
-  font-size: 1.25rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
 .settings-dialog {
   width: min(520px, calc(100vw - 32px));
   max-height: min(88vh, 920px);
