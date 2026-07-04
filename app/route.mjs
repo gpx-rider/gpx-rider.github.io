@@ -70,6 +70,20 @@ export function densifyRoute(route, maxSpacingMeters) {
   return points;
 }
 
+// Highest route elevation within `radiusMeters` of a location, or null when
+// no track point is that close. Used as a free, offline terrain estimate for
+// camera terrain avoidance: on switchback climbs — where the follow camera is
+// most likely to clip into a hillside — the road itself covers the hill, so
+// nearby track points approximate the ground elevation off the route line.
+export function maxElevationNear(route, location, radiusMeters) {
+  let maxEle = null;
+  for (const point of route) {
+    if (haversine(point, location) > radiusMeters) continue;
+    if (maxEle === null || point.ele > maxEle) maxEle = point.ele;
+  }
+  return maxEle;
+}
+
 export function gradeAt(route, distance) {
   const lookBehind = Math.max(0, distance - GRADE_LOOKAROUND_METERS);
   const lookAhead = Math.min(routeTotalDistance(route), distance + GRADE_LOOKAROUND_METERS);

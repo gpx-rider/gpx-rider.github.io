@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyCameraLift,
   applyCameraOffset,
   cameraDistanceToPoint,
+  cameraEyePosition,
   computeFollowCamera,
   measureCameraOffset,
   normalizeHeading,
@@ -156,4 +158,43 @@ test("camera helper bounds are stable", () => {
   assert.equal(normalizeHeading(-1), 359);
   assert.equal(rangeForBehind(0, 67), 35);
   assert.ok(rangeForBehind(1000, 45) > 1000);
+});
+
+test("camera eye position matches the distance reconstruction", () => {
+  // Straight-down camera: the eye is directly above the center by `range`.
+  const overhead = cameraEyePosition({ center: { ...riderPosition, altitude: 50 }, range: 400, tilt: 0, heading: 90 });
+  assert.ok(Math.abs(overhead.lat - riderPosition.lat) < 0.000001);
+  assert.ok(Math.abs(overhead.lng - riderPosition.lng) < 0.000001);
+  assert.ok(Math.abs(overhead.altitude - 450) < 0.001);
+
+  // Tilted camera: the eye pulls back along the opposite heading and drops.
+  const tilted = cameraEyePosition({ center: { ...riderPosition, altitude: 0 }, range: 1000, tilt: 60, heading: 0 });
+  assert.ok(tilted.lat < riderPosition.lat, "eye is south of a north-facing camera");
+  assert.ok(Math.abs(tilted.altitude - 500) < 0.001, "eye height is range * cos(tilt)");
+
+  assert.equal(cameraEyePosition({ center: null, range: 100 }), null);
+  assert.equal(cameraEyePosition({ center: riderPosition, range: 0 }), null);
+});
+
+test("camera lift tilts toward overhead without changing range", () => {
+  const base = { tiltDegrees: 75, rangeMeters: 1000, liftMeters: 0 };
+  assert.deepEqual(applyCameraLift(base), { tilt: 75, extraCenterAltitude: 0 });
+
+  // eye height at 75 deg is ~259 m; lifting 200 m must reduce the tilt so
+  // that range * cos(tilt) covers the full desired height.
+  const lifted = applyCameraLift({ ...base, liftMeters: 200 });
+  assert.ok(lifted.tilt < 75);
+  assert.equal(lifted.extraCenterAltitude, 0);
+  const eyeHeight = 1000 * Math.cos(lifted.tilt * Math.PI / 180);
+  const desired = 1000 * Math.cos(75 * Math.PI / 180) + 200;
+  assert.ok(Math.abs(eyeHeight - desired) < 0.01);
+});
+
+test("camera lift beyond the tilt limit raises the look-at altitude", () => {
+  // A 2 km lift cannot come from tilting a 1 km range; the remainder must be
+  // reported as extra center altitude, and the tilt must respect its floor.
+  const lifted = applyCameraLift({ tiltDegrees: 75, rangeMeters: 1000, liftMeters: 2000, minTiltDegrees: 5 });
+  assert.ok(Math.abs(lifted.tilt - 5) < 0.01);
+  const achieved = 1000 * Math.cos(lifted.tilt * Math.PI / 180) - 1000 * Math.cos(75 * Math.PI / 180);
+  assert.ok(Math.abs(achieved + lifted.extraCenterAltitude - 2000) < 0.01);
 });
