@@ -18,6 +18,7 @@ import {
   signedHeadingDelta,
 } from "./camera.mjs";
 import { bearing, clamp, destinationPoint, haversine, lerp, roundCoordinate, toRad } from "./geo.mjs";
+import { deployedMapsApiKey } from "./config.mjs";
 import { densifyRoute, enrichRoute, gradeAt, interpolateRoutePoint, maxElevationNear, parseGpx, routeTotalDistance } from "./route.mjs";
 import { distanceAtProfileX, drawEmptyProfile, drawProfile } from "./profile.mjs";
 import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatSpeed } from "./units.mjs";
@@ -103,11 +104,18 @@ const DEFAULT_SCREENSHOT_ASPECT = "16:9";
 const DEFAULT_SCREENSHOT_WIDTH = 1920;
 const SCREENSHOT_WIDTH_MIN = 640;
 const SCREENSHOT_WIDTH_MAX = 3840;
-const TERRAIN_SAMPLE_RADIUS_METERS = 120;
-const TERRAIN_LIFT_RECOMPUTE_MS = 250;
+// Switchback roads (e.g. the Amalfi Coast) fold back on themselves, so a
+// hairpin's higher hillside can sit a couple of hundred meters away in
+// straight-line terms while being far along the route path — a narrow radius
+// only ever sees the (lower) stretch of road right at the sample point and
+// misses that the ground behind it keeps climbing. Cast a wide net; slightly
+// overestimating nearby terrain just holds the camera a bit higher; missing it
+// puts the eye inside the hillside.
+const TERRAIN_SAMPLE_RADIUS_METERS = 400;
+const TERRAIN_LIFT_RECOMPUTE_MS = 150;
 // Rise fast enough to clear an approaching hill, settle back slowly so the
 // camera does not pump up and down on rolling terrain.
-const TERRAIN_LIFT_RISE_TAU_SECONDS = 0.5;
+const TERRAIN_LIFT_RISE_TAU_SECONDS = 0.3;
 const TERRAIN_LIFT_FALL_TAU_SECONDS = 4;
 
 // Pedaling detection with hysteresis so a spinning-down flywheel does not
@@ -198,6 +206,7 @@ const els = {
   settingsBtn: document.querySelector("#settingsBtn"),
   settingsDialog: document.querySelector("#settingsDialog"),
   settingsCloseBtn: document.querySelector("#settingsCloseBtn"),
+  apiKeySection: document.querySelector("#apiKeySection"),
   mapsApiKeyInput: document.querySelector("#mapsApiKeyInput"),
   mapsApiKeySaveBtn: document.querySelector("#mapsApiKeySaveBtn"),
   gpxFile: document.querySelector("#gpxFile"),
@@ -246,6 +255,7 @@ const els = {
   mapViewport: document.querySelector("#mapViewport"),
   minimap: document.querySelector("#minimap"),
   fullscreenBtn: document.querySelector("#fullscreenBtn"),
+  resetCameraViewBtn: document.querySelector("#resetCameraViewBtn"),
   screenshotBtn: document.querySelector("#screenshotBtn"),
   screenshotButtonInput: document.querySelector("#screenshotButtonInput"),
   screenshotAspectSelect: document.querySelector("#screenshotAspectSelect"),
@@ -284,6 +294,9 @@ async function startApp() {
   restoreRideLog();
   updateRecordingUi();
   els.mapsApiKeyInput.value = getStoredMapsApiKey();
+  // A deployment with its own baked-in key has no need for visitors to see
+  // or manage one — hide the whole control instead of just leaving it empty.
+  els.apiKeySection.hidden = Boolean(deployedMapsApiKey());
   await initMap();
   bindEvents();
   restoreSavedRide();
@@ -294,6 +307,12 @@ async function startApp() {
 
 function getStoredMapsApiKey() {
   return localStorage.getItem(MAPS_API_KEY_STORAGE_KEY) || "";
+}
+
+// A key a visitor pasted into Settings always wins; otherwise fall back to
+// whatever this deployment baked in at build time (see config.mjs).
+function resolveMapsApiKey() {
+  return getStoredMapsApiKey() || deployedMapsApiKey();
 }
 
 function saveMapsApiKey() {
@@ -307,7 +326,7 @@ function saveMapsApiKey() {
 }
 
 async function initMap() {
-  const apiKey = getStoredMapsApiKey();
+  const apiKey = resolveMapsApiKey();
   if (!apiKey) {
     updateProgressLabel("Add your Google Maps API key in Settings (⚙, top right) to load the map.");
     // First run: the key input now lives in the settings dialog, so open it.
@@ -424,7 +443,7 @@ function bindEvents() {
   els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraBehindInput.addEventListener("input", updateCameraSettingsFromControls);
   els.centerRiderInput.addEventListener("change", updateCenterRiderFromControl);
-  els.resetCameraBtn.addEventListener("click", resetCameraToDefaults);
+  els.resetCameraBtn.addEventListener("click", resetCameraView);
   els.beaconEnabledInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.beaconDiameterInput.addEventListener("input", updateRenderingSettingsFromControls);
   els.beaconHeightInput.addEventListener("input", updateRenderingSettingsFromControls);
@@ -443,6 +462,7 @@ function bindEvents() {
   els.profile.addEventListener("mouseleave", handleProfileLeave);
   els.profile.addEventListener("click", handleProfileClick);
   els.fullscreenBtn.addEventListener("click", toggleMapFullscreen);
+  els.resetCameraViewBtn.addEventListener("click", resetCameraView);
   els.screenshotBtn.addEventListener("click", takeMapScreenshot);
   els.screenshotButtonInput.addEventListener("change", updateScreenshotSettingsFromControls);
   els.screenshotAspectSelect.addEventListener("change", updateScreenshotSettingsFromControls);
@@ -1362,11 +1382,12 @@ function applyCameraNow(camera) {
 // --- Terrain avoidance ---------------------------------------------------------
 //
 // The follow camera can end up inside a hillside when the rider turns in
-// front of rising terrain. Check the ground under the camera eye (and the
-// midpoint of the view ray) against nearby route elevations, and when the eye
-// would dip below terrain + clearance, lift the camera; the lift eases back to
-// zero once the terrain allows. The lift is always computed from the
-// configured (unlifted) camera, so it never feeds back on itself.
+// front of rising terrain. Check the ground at several points along the view
+// ray (eye through to the rider) against nearby route elevations, and when the
+// ray would dip below terrain + clearance anywhere along it, lift the camera;
+// the lift eases back to zero once the terrain allows. The lift is always
+// computed from the configured (unlifted) camera, so it never feeds back on
+// itself.
 
 function currentTerrainLift(camera, centerAltitude) {
   if (!state.terrainAvoidEnabled) {
@@ -1402,11 +1423,12 @@ function computeTerrainLiftTarget(camera, centerAltitude) {
   });
   if (!eye) return 0;
 
-  // Sample the view ray at the eye and halfway to the rider (a ridge between
-  // the two hides the rider just as badly as terrain at the eye itself). The
+  // Sample the view ray at several points between the eye and the rider (a
+  // ridge anywhere along it hides the rider just as badly as terrain at the
+  // eye itself, and hairpin turns can hide a rise close to either end). The
   // required clearance tapers toward the rider, who genuinely is on the ground.
   let target = 0;
-  for (const fraction of [0, 0.5]) {
+  for (const fraction of [0, 0.25, 0.5, 0.75]) {
     const samplePoint = {
       lat: lerp(eye.lat, camera.center.lat, fraction),
       lng: lerp(eye.lng, camera.center.lng, fraction),
@@ -1649,6 +1671,16 @@ function resetCameraToDefaults() {
   saveSettings();
 
   updateRideUi();
+}
+
+// The map-action-bar shortcut for resetCameraToDefaults: it also has to pull
+// the camera out of "manual" mode (parked overview the user dragged away from
+// while stationary — cameraMode can't be "manual" while moving, see
+// ensureMovementLoop), or the default settings would apply invisibly while
+// updateMapCamera keeps ignoring a manually-parked camera.
+function resetCameraView() {
+  resetCameraToDefaults();
+  if (!isMoving()) enterOverviewMode();
 }
 
 function updateRenderingSettingsFromControls() {

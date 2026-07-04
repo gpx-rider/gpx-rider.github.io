@@ -238,6 +238,10 @@ body {
   border-bottom: 1px solid var(--line);
 }
 
+.settings-section[hidden] {
+  display: none;
+}
+
 .settings-section:last-of-type {
   border-bottom: 0;
   padding-bottom: 4px;

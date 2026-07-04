@@ -40,6 +40,7 @@ module:
 | `app/screenshot.mjs` | One-click JPG of the map viewport via tab capture (`getDisplayMedia`) — the 3D map canvas sits in a closed shadow root and cannot be read directly |
 | `app/gallery.mjs` | Ride gallery cards from `app/gallery.json` |
 | `app/storage.mjs` | localStorage JSON helpers |
+| `app/config.mjs` | `deployedMapsApiKey()` — empty in source, rewritten at deploy time (see below) |
 
 Module conventions: browser modules use the `.mjs` extension (except the
 `app.js` entry point), pure logic goes in its own module with tests, and
@@ -104,6 +105,24 @@ state and talk back to `app.js` only through `init*()` callbacks.
 `gpx-rider:last-trainer`, `gpx-rider:last-heart-rate`. Never send any of
 these anywhere; the app's privacy story is "everything stays in the
 browser".
+
+## Deployed Maps API key
+
+The live GitHub Pages demo works without a visitor pasting a key: the
+`MAPS_API_KEY` repository secret (an HTTP referrer-restricted key, scoped to
+the Pages origin) is base64-encoded and baked into `app/config.mjs` at
+deploy time by `scripts/inject_maps_api_key.py`, run from `deploy-pages.yml`
+before the Pages artifact is uploaded. The encoding is cosmetic — a webapp's
+key is always visible in the network tab regardless — it just keeps the raw
+key out of the JS source as a greppable literal. `app.js`'s
+`resolveMapsApiKey()` prefers a key a visitor saved in Settings over this
+default, so self-hosters and forks without the secret get the exact same
+"paste your key" flow as before — `app/config.mjs` just stays empty. When a
+deployed key is present, `startApp()` hides the whole API-key section in
+Settings (`els.apiKeySection`) instead of showing an empty field nobody
+needs. Never widen the referrer restriction beyond the exact deployed
+origin, and don't add a second, unrestricted key anywhere in the client
+bundle.
 
 ## Documentation duties
 

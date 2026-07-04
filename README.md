@@ -9,7 +9,8 @@ account.
 [![Deploy to GitHub Pages](https://github.com/ziizii/gpx-rider/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/ziizii/gpx-rider/actions/workflows/deploy-pages.yml)
 
 **[Try the live demo →](https://ziizii.github.io/gpx-rider/)**
-(runs entirely in your browser — bring your own free Google Maps API key)
+(runs entirely in your browser — the demo ships with a domain-restricted
+Google Maps key, or paste in your own)
 
 ![GPX Rider](gallery/0100_goldengate/screenshot.jpeg)
 
@@ -76,9 +77,10 @@ If that sounds useful, contributions are very welcome — see
   Shots are center-cropped to a configurable aspect ratio (16:9 by
   default) and scaled to a fixed width, so every ride screenshot comes out
   at the same resolution — e.g. 1920×1080.
-- 🔑 **Bring your own API key** — your Google Maps key is typed into the app
-  and saved only in your browser's `localStorage`; it's never sent anywhere
-  but Google.
+- 🔑 **Bring your own API key** — self-hosted copies without a deployed key
+  ask for one on first run; it's typed into the app and saved only in your
+  browser's `localStorage`, never sent anywhere but Google. The live demo
+  ships with its own built-in key, so it skips this entirely.
 - 💾 **Remembers your session** — last route, ride progress, recorded ride
   data, fallback speed, camera settings, and previously paired trainer and
   heart-rate sensor all persist locally.
@@ -150,7 +152,7 @@ To turn it on for your fork: **Settings → Pages → Source: GitHub Actions**.
 
 Because the Google Maps key is entered per-visitor and stored in their own
 browser, you can publish a live demo without ever exposing a key of your
-own.
+own — visitors will be prompted to paste their own key on first load.
 
 ## Notes & limitations
 
