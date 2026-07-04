@@ -35,6 +35,13 @@ If that sounds useful, contributions are very welcome — see
 ## Features
 
 - 📍 **GPX import** — drag in any route with track points and elevation.
+- 🏔️ **Route difficulty & detected climbs** — as soon as a route loads, the
+  setup page shows its distance/terrain/difficulty classification (e.g.
+  `M - Rolling · Moderate`) plus a list of the sustained climbs found along
+  the way, each with its distance, length, elevation gain, and average
+  grade. Classification uses only distance and elevation gain — no power,
+  speed, or weather data — and every threshold is a documented constant in
+  `app/tuning.mjs`.
 - 🛰️ **Photorealistic 3D map** — a forward-facing follow camera tracks your
   position and heading along the route, with a satellite minimap overlay.
   Loading a route instantly shows a **whole-route overview**: the

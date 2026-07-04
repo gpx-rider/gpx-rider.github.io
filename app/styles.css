@@ -337,6 +337,67 @@ button {
   cursor: pointer;
 }
 
+.route-overview {
+  display: grid;
+  gap: 10px;
+}
+
+.route-classification {
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.route-classification strong {
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.route-classification span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.climbs-section h2 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.climbs-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.climbs-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 0.85rem;
+}
+
+.climbs-list .climb-index {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.climbs-list .climb-grade {
+  color: var(--accent-dark);
+  font-weight: 800;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

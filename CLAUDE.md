@@ -33,6 +33,8 @@ module:
 | `app/geo.mjs` | Pure geodesy helpers: haversine, bearing, destinationPoint, clamp, lerp |
 | `app/route.mjs` | GPX parsing, route enrichment (cumulative distance + noise-filtered ascent/descent), point interpolation, grade computation (tested) |
 | `app/eta.mjs` | Smart ETA: flat-equivalent pace model estimating remaining ride time (tested) |
+| `app/difficulty.mjs` | Route classification from distance + total elevation gain alone: distance/terrain classes and overall difficulty (tested) |
+| `app/climbs.mjs` | Detects sustained climbing segments in a route for the setup-page climbs overview (tested) |
 | `app/profile.mjs` | Elevation profile canvas drawing + hover/seek hit-testing |
 | `app/trainer.mjs` | FTMS trainer over Web Bluetooth: pairing, reconnect, control-point writes, Indoor Bike Data parsing (speed, power, calories, HR) |
 | `app/heartrate.mjs` | BLE heart-rate strap (standard Heart Rate service 0x180D) |
@@ -93,6 +95,19 @@ in place).
   `minimap-hidden`), not `display:none`, so the Google map never needs a
   resize kick when re-shown. Map labels toggle the `Map3DElement.mode`
   between `SATELLITE` and `HYBRID`.
+- **Route overview (classification + climbs)**: `updateRouteOverview` in
+  `app.js` runs once per route load (GPX import or restoring a saved ride),
+  not on every ride-progress tick — it only depends on the route's fixed
+  distance/ascent totals. `difficulty.mjs#classifyRoute` buckets distance,
+  meters-of-climb-per-km, and "equivalent km" (distance + ascent ÷
+  `EQUIVALENT_KM_CLIMB_METERS`) into named classes purely from distance and
+  elevation gain — no power/speed/weight/weather data. `climbs.mjs#detectClimbs`
+  walks the route once, extending a candidate climb through small dips
+  (same noise-anchor idea as `enrichRoute`'s ascent counter) and only
+  closing it once elevation has dropped `CLIMB_NOISE_THRESHOLD_METERS` below
+  the peak *and* the route has moved `CLIMB_MERGE_GAP_METERS` past that peak;
+  candidates under `CLIMB_MIN_GAIN_METERS` or `CLIMB_MIN_AVERAGE_GRADE_PERCENT`
+  are dropped as noise. All thresholds for both live in `tuning.mjs`.
 - **First-open auto-load**: with no saved ride and a working map,
   `initGallery` loads the first gallery route automatically
   (`shouldAutoLoadFirst` in `app.js`); it is skipped when the map/API key
