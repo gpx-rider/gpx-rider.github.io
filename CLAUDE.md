@@ -28,9 +28,11 @@ module:
 | File | Responsibility |
 |---|---|
 | `app/app.js` | Orchestrator: state, DOM, map rendering, camera capture, movement loop, settings & saved-ride persistence |
+| `app/tuning.mjs` | **All tunable behavior parameters**, one documented constant each (defaults, thresholds, model factors). New knobs go here, not inline |
 | `app/camera.mjs` | Pure follow-camera math (tested) |
 | `app/geo.mjs` | Pure geodesy helpers: haversine, bearing, destinationPoint, clamp, lerp |
-| `app/route.mjs` | GPX parsing, route enrichment, point interpolation, grade computation (tested) |
+| `app/route.mjs` | GPX parsing, route enrichment (cumulative distance + noise-filtered ascent/descent), point interpolation, grade computation (tested) |
+| `app/eta.mjs` | Smart ETA: flat-equivalent pace model estimating remaining ride time (tested) |
 | `app/profile.mjs` | Elevation profile canvas drawing + hover/seek hit-testing |
 | `app/trainer.mjs` | FTMS trainer over Web Bluetooth: pairing, reconnect, control-point writes, Indoor Bike Data parsing (speed, power, calories, HR) |
 | `app/heartrate.mjs` | BLE heart-rate strap (standard Heart Rate service 0x180D) |
@@ -47,6 +49,13 @@ Module conventions: browser modules use the `.mjs` extension (except the
 hardware/IO modules (`trainer.mjs`, `heartrate.mjs`) hold their own internal
 state and talk back to `app.js` only through `init*()` callbacks.
 
+Tunable parameters (defaults, thresholds, physics/model factors) live in
+`app/tuning.mjs` with a doc comment each — never as inline magic numbers —
+so users can adjust behavior in one place. Deliberate exceptions:
+`app/config.mjs` (rewritten at deploy time, see below) and the BLE
+write-queue timing internals in `trainer.mjs` (hardware-safety, documented
+in place).
+
 ## Key domain concepts
 
 - **Two movement sources.** The rider advances along the route from either
@@ -54,7 +63,7 @@ state and talk back to `app.js` only through `init*()` callbacks.
   (slider speed, toggled by the "Start simulation" button). Starting to
   pedal auto-stops a running simulation; the button must never control the
   trainer-driven movement. Pedaling detection uses hysteresis
-  (`PEDALING_START_KPH` / `PEDALING_STOP_KPH` in `app.js`).
+  (`PEDALING_START_KPH` / `PEDALING_STOP_KPH` in `tuning.mjs`).
 - **The movement loop** (`tick` in `app.js`) runs on requestAnimationFrame
   while the tab is visible and falls back to `setTimeout` when hidden, so
   rides keep advancing and recording in background tabs. Per-tick elapsed
@@ -66,6 +75,28 @@ state and talk back to `app.js` only through `init*()` callbacks.
   Strava/Garmin will misclassify uploads. `fit.mjs` is a hand-rolled
   little-endian encoder — if you touch it, keep the CRC and header tests
   green and verify a real download parses (e.g. with an online FIT viewer).
+- **Ascent/descent & the smart ETA.** `enrichRoute` adds cumulative
+  `ascent`/`descent` to every point, noise-filtered by
+  `CLIMB_NOISE_THRESHOLD_METERS` so GPX elevation jitter doesn't inflate
+  totals; `ascentAt`/`descentAt` interpolate them at any progress distance
+  (they feed the ascent progress bar and "ascent left" stats). The ETA
+  (`eta.mjs`) measures the rider's pace in *flat-equivalent meters* —
+  climbing charged, descending credited (factors in `tuning.mjs`) — and
+  projects it onto the remaining route. The estimator is fed **only from
+  real pedaling ticks** (simulation speed is artificial and would poison
+  it); a pure simulation ETA is plain remaining-distance ÷ slider-speed.
+  The estimator resets when a new GPX loads, not on ride reset.
+- **HUD & display settings.** Fullscreen HUD tiles are matched to settings
+  checkboxes by `data-hud="…"` / `data-hud-toggle="…"` keys, which must
+  also exist in `DEFAULT_HUD_ELEMENTS` (`tuning.mjs`) — add all three when
+  adding a tile. The minimap toggle uses `visibility` (class
+  `minimap-hidden`), not `display:none`, so the Google map never needs a
+  resize kick when re-shown. Map labels toggle the `Map3DElement.mode`
+  between `SATELLITE` and `HYBRID`.
+- **First-open auto-load**: with no saved ride and a working map,
+  `initGallery` loads the first gallery route automatically
+  (`shouldAutoLoadFirst` in `app.js`); it is skipped when the map/API key
+  is missing so the first-run key prompt stays front and center.
 - **Units**: all internal values are metric (meters, km/h, kcal). Only
   format at the display edge via `units.mjs`.
 - **BLE**: FTMS control-point writes must go through the write queue in
@@ -137,8 +168,8 @@ bundle.
 
 ## Testing & manual verification
 
-- Unit tests cover the pure modules (`camera`, `route`, `units`, `fit`).
-  Add tests alongside any new pure logic.
+- Unit tests cover the pure modules (`camera`, `route`, `units`, `fit`,
+  `eta`). Add tests alongside any new pure logic.
 - Web Bluetooth requires Chrome/Edge; hardware paths can't be unit-tested.
   When changing `trainer.mjs`/`heartrate.mjs`, preserve the existing
   logging (`[trainer]` console.debug lines) — it's the only field
