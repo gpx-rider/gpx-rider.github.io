@@ -1,21 +1,24 @@
 import {
+  CLIMB_DESCENT_TOLERANCE_METERS,
   CLIMB_MERGE_GAP_METERS,
   CLIMB_MIN_AVERAGE_GRADE_PERCENT,
   CLIMB_MIN_GAIN_METERS,
-  CLIMB_NOISE_THRESHOLD_METERS,
 } from "./tuning.mjs";
 
 // Detects sustained climbing segments in an enriched route (the `distance`
-// and `ele` fields added by route.mjs#enrichRoute). Uses the same
-// noise-anchor idea as the total ascent/descent counters there: a climb
-// keeps extending through small dips and only closes once elevation has
-// dropped CLIMB_NOISE_THRESHOLD_METERS below its peak *and* the route has
-// moved on past that peak by CLIMB_MERGE_GAP_METERS — so GPX jitter and
-// switchback dips don't fragment one climb into many. Candidates below
-// CLIMB_MIN_GAIN_METERS of gain or CLIMB_MIN_AVERAGE_GRADE_PERCENT of
+// and `ele` fields added by route.mjs#enrichRoute). A climb keeps extending
+// through small dips and only closes once elevation has dropped
+// CLIMB_DESCENT_TOLERANCE_METERS below its peak *and* the route has moved on
+// past that peak by CLIMB_MERGE_GAP_METERS — so a short flat stretch or a
+// few meters of downhill doesn't fragment one climb into many. Candidates
+// below CLIMB_MIN_GAIN_METERS of gain or CLIMB_MIN_AVERAGE_GRADE_PERCENT of
 // average grade are dropped as not being a "climb" worth reporting.
+//
+// Each returned climb also carries its start/peak elevation so a live ride
+// can work out how much ascent and grade remain partway through it, without
+// re-scanning the route.
 export function detectClimbs(route, options = {}) {
-  const noiseThreshold = options.noiseThresholdMeters ?? CLIMB_NOISE_THRESHOLD_METERS;
+  const descentTolerance = options.descentToleranceMeters ?? CLIMB_DESCENT_TOLERANCE_METERS;
   const minGain = options.minGainMeters ?? CLIMB_MIN_GAIN_METERS;
   const minAverageGrade = options.minAverageGradePercent ?? CLIMB_MIN_AVERAGE_GRADE_PERCENT;
   const mergeGap = options.mergeGapMeters ?? CLIMB_MERGE_GAP_METERS;
@@ -34,6 +37,8 @@ export function detectClimbs(route, options = {}) {
       climbs.push({
         startDistanceMeters: start.distance,
         endDistanceMeters: peak.distance,
+        startElevationMeters: start.ele,
+        endElevationMeters: peak.ele,
         lengthMeters,
         gainMeters,
         averageGradePercent: (gainMeters / lengthMeters) * 100,
@@ -63,7 +68,7 @@ export function detectClimbs(route, options = {}) {
 
     const droppedBelowPeak = peak.ele - point.ele;
     const distancePastPeak = point.distance - peak.distance;
-    if (droppedBelowPeak >= noiseThreshold && distancePastPeak >= mergeGap) closeCandidate();
+    if (droppedBelowPeak >= descentTolerance && distancePastPeak >= mergeGap) closeCandidate();
   }
   closeCandidate();
 

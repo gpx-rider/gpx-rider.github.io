@@ -249,13 +249,26 @@ export const DIFFICULTY_THRESHOLDS_EQUIVALENT_KM = [
 
 // --- Climb detection -------------------------------------------------------------
 
-// Detected climbs shown on the route overview when a GPX loads (see
-// app/climbs.mjs). A candidate climb only ends once elevation has dropped
-// CLIMB_NOISE_THRESHOLD_METERS below its peak *and* the route has moved on
-// past the peak by at least this many meters — so a switchback's brief dip
-// doesn't split one climb into several. Raise it to merge climbs more
-// aggressively, lower it to split on shorter dips.
-export const CLIMB_MERGE_GAP_METERS = 200;
+// Detected climbs shown on the route overview when a GPX loads, and used
+// during the ride to report the current/next climb (see app/climbs.mjs). A
+// candidate climb only ends once elevation has dropped
+// CLIMB_DESCENT_TOLERANCE_METERS below its peak *and* the route has moved on
+// past the peak by at least CLIMB_MERGE_GAP_METERS — so a short flat stretch
+// or a few meters of downhill (a switchback dip, a road dropping briefly
+// before kicking back up) doesn't end the climb and start a new one. Both
+// are deliberately separate from CLIMB_NOISE_THRESHOLD_METERS (route.mjs's
+// ascent/descent total noise filter) so tuning one doesn't move the other.
+
+// How far past a climb's peak the route can travel while still elevated
+// (but not climbing) before the climb is considered over. ~100 m covers a
+// short flat stretch at the top of a ramp; raise it to merge climbs across
+// longer flat/rolling gaps, lower it to split on shorter ones.
+export const CLIMB_MERGE_GAP_METERS = 100;
+
+// How far elevation can drop below a climb's peak — a few meters of
+// downhill — before that drop, combined with CLIMB_MERGE_GAP_METERS of
+// distance, is treated as the climb actually ending.
+export const CLIMB_DESCENT_TOLERANCE_METERS = 5;
 
 // A candidate climb is only reported if it gains at least this much
 // elevation...

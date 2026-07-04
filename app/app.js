@@ -123,6 +123,13 @@ const BEACON_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 
 const state = {
   route: [],
+  // Display name shown above the route classification: a gallery ride's
+  // curated title, else the GPX's own <name>, else the uploaded filename.
+  routeName: null,
+  // Detected climbs for the loaded route (see climbs.mjs), recomputed once
+  // per route load in updateRouteOverview and read every ride tick to drive
+  // the live "current climb" / "next climb" status.
+  climbs: [],
   progressMeters: 0,
   simulating: false,
   pedaling: false,
@@ -203,9 +210,13 @@ const els = {
   mapsApiKeySaveBtn: document.querySelector("#mapsApiKeySaveBtn"),
   gpxFile: document.querySelector("#gpxFile"),
   routeOverview: document.querySelector("#routeOverview"),
+  routeNameHeading: document.querySelector("#routeNameHeading"),
   routeClassSummary: document.querySelector("#routeClassSummary"),
   routeClassDetail: document.querySelector("#routeClassDetail"),
   climbsSection: document.querySelector("#climbsSection"),
+  climbStatus: document.querySelector("#climbStatus"),
+  climbStatusHeadline: document.querySelector("#climbStatusHeadline"),
+  climbStatusDetail: document.querySelector("#climbStatusDetail"),
   climbsList: document.querySelector("#climbsList"),
   distanceStat: document.querySelector("#distanceStat"),
   riddenStat: document.querySelector("#riddenStat"),
@@ -506,18 +517,25 @@ async function loadGpxFile(event) {
   if (!file) return;
 
   const text = await file.text();
-  applyGpxText(text);
+  applyGpxText(text, { fallbackName: filenameToRouteName(file.name) });
 }
 
-async function loadGpxFromUrl(url) {
+// Gallery rides pass their curated title as `overrideName`, which wins over
+// whatever technical name the GPX export itself carries (e.g. a
+// map-tool-generated "Route from A to B").
+async function loadGpxFromUrl(url, overrideName) {
   const response = await fetch(url);
   const text = await response.text();
-  applyGpxText(text);
+  applyGpxText(text, { overrideName });
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function applyGpxText(text) {
-  const route = parseGpx(text);
+function filenameToRouteName(filename) {
+  return filename.replace(/\.[^./\\]+$/, "").trim() || null;
+}
+
+function applyGpxText(text, { overrideName = null, fallbackName = null } = {}) {
+  const { points: route, name: gpxName } = parseGpx(text);
 
   if (route.length < 2) {
     updateProgressLabel("That GPX file does not contain enough track points.");
@@ -525,6 +543,7 @@ function applyGpxText(text) {
   }
 
   state.route = enrichRoute(route);
+  state.routeName = overrideName || gpxName || fallbackName;
   state.progressMeters = 0;
   state.simulating = false;
   state.lastTick = 0;
@@ -535,8 +554,8 @@ function applyGpxText(text) {
   updateStartButton();
   renderRoute();
   renderProfile();
-  updateRideUi({ force: true });
   updateRouteOverview();
+  updateRideUi({ force: true });
   saveRide();
 
   els.startBtn.disabled = false;
@@ -549,6 +568,7 @@ function applyGpxText(text) {
 // rather than on every ride-progress tick like updateRideUi.
 function updateRouteOverview() {
   if (!state.route.length) {
+    state.climbs = [];
     els.routeOverview.hidden = true;
     return;
   }
@@ -557,20 +577,23 @@ function updateRouteOverview() {
   const totalAscent = routeTotalAscent(state.route);
   const classification = classifyRoute(totalDistance, totalAscent);
   if (!classification) {
+    state.climbs = [];
     els.routeOverview.hidden = true;
     return;
   }
 
   els.routeOverview.hidden = false;
+  els.routeNameHeading.hidden = !state.routeName;
+  els.routeNameHeading.textContent = state.routeName ?? "";
   els.routeClassSummary.textContent =
     `${formatDistance(totalDistance, state.distanceUnits, 1)} · ${formatAltitude(totalAscent, state.distanceUnits)}`;
   els.routeClassDetail.textContent =
     `${classification.distanceClass} - ${classification.terrainClass} · ${classification.difficulty}`;
 
-  const climbs = detectClimbs(state.route);
-  els.climbsSection.hidden = climbs.length === 0;
+  state.climbs = detectClimbs(state.route);
+  els.climbsSection.hidden = state.climbs.length === 0;
   els.climbsList.replaceChildren(
-    ...climbs.map((climb, index) => {
+    ...state.climbs.map((climb, index) => {
       const item = document.createElement("li");
       const index_ = document.createElement("span");
       index_.className = "climb-index";
@@ -590,6 +613,51 @@ function updateRouteOverview() {
       return item;
     }),
   );
+}
+
+// Live "current climb" / "next climb" status shown above the climbs list
+// while riding. Reuses the climbs detected once at route load (state.climbs)
+// rather than re-scanning the route every tick — those boundaries already
+// tolerate the flat/downhill noise a naive live-grade check would flicker
+// on (see CLIMB_MERGE_GAP_METERS / CLIMB_DESCENT_TOLERANCE_METERS).
+function updateClimbStatus(point) {
+  if (!state.climbs.length) return;
+
+  const progress = state.progressMeters;
+  const currentIndex = state.climbs.findIndex(
+    (climb) => progress >= climb.startDistanceMeters && progress <= climb.endDistanceMeters,
+  );
+
+  [...els.climbsList.children].forEach((item, index) => {
+    item.classList.toggle("active", index === currentIndex);
+  });
+
+  if (currentIndex !== -1) {
+    const climb = state.climbs[currentIndex];
+    const remainingDistance = Math.max(0, climb.endDistanceMeters - progress);
+    const remainingAscent = Math.max(0, climb.endElevationMeters - point.ele);
+    const remainingGrade = remainingDistance > 0 ? (remainingAscent / remainingDistance) * 100 : 0;
+    els.climbStatusHeadline.textContent = `Climbing — climb ${currentIndex + 1} of ${state.climbs.length}`;
+    els.climbStatusDetail.textContent =
+      `${formatDistance(remainingDistance, state.distanceUnits, 1)} left · ` +
+      `${formatAltitude(remainingAscent, state.distanceUnits)} to climb · ` +
+      `${remainingGrade.toFixed(1)}% avg remaining`;
+    return;
+  }
+
+  const next = state.climbs.find((climb) => climb.startDistanceMeters > progress);
+  if (!next) {
+    els.climbStatusHeadline.textContent = "No more climbs";
+    els.climbStatusDetail.textContent = "";
+    return;
+  }
+
+  const distanceToClimb = next.startDistanceMeters - progress;
+  els.climbStatusHeadline.textContent = `Next climb in ${formatDistance(distanceToClimb, state.distanceUnits, 1)}`;
+  els.climbStatusDetail.textContent =
+    `${formatDistance(next.lengthMeters, state.distanceUnits, 1)} · ` +
+    `${formatAltitude(next.gainMeters, state.distanceUnits)} · ` +
+    `${next.averageGradePercent.toFixed(1)}% avg`;
 }
 
 function renderRoute() {
@@ -1007,6 +1075,7 @@ function updateRideUi(options = {}) {
     `${formatDistance(state.progressMeters, state.distanceUnits)} of ${formatDistance(totalDistance, state.distanceUnits)}`,
   );
   updateAscentProgress(ascentSoFar, totalAscent);
+  updateClimbStatus(point);
   renderProfile(progress);
   updateMinimapPosition(point);
   updateCameraSettingsLabels();
@@ -2203,6 +2272,7 @@ function restoreSavedRide() {
   }
 
   state.route = enrichRoute(route);
+  state.routeName = typeof savedRide.name === "string" ? savedRide.name : null;
   state.progressMeters = clamp(Number(savedRide.progressMeters) || 0, 0, routeTotalDistance(state.route));
   state.simulating = false;
   state.lastTick = 0;
@@ -2211,8 +2281,8 @@ function restoreSavedRide() {
   updateStartButton();
   renderRoute();
   renderProfile();
-  updateRideUi({ force: true });
   updateRouteOverview();
+  updateRideUi({ force: true });
   els.startBtn.disabled = false;
   els.resetBtn.disabled = false;
 }
@@ -2239,6 +2309,7 @@ function saveRide() {
 
   const saved = writeJson(RIDE_STORAGE_KEY, {
     route,
+    name: state.routeName,
     progressMeters: Math.round(state.progressMeters),
     speedKph: Number(els.speedInput.value),
     savedAt: new Date().toISOString(),

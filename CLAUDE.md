@@ -95,19 +95,34 @@ in place).
   `minimap-hidden`), not `display:none`, so the Google map never needs a
   resize kick when re-shown. Map labels toggle the `Map3DElement.mode`
   between `SATELLITE` and `HYBRID`.
-- **Route overview (classification + climbs)**: `updateRouteOverview` in
-  `app.js` runs once per route load (GPX import or restoring a saved ride),
-  not on every ride-progress tick — it only depends on the route's fixed
-  distance/ascent totals. `difficulty.mjs#classifyRoute` buckets distance,
+- **Route overview (name + classification + climbs)**: `updateRouteOverview`
+  in `app.js` runs once per route load (GPX import or restoring a saved
+  ride), not on every ride-progress tick — it only depends on the route's
+  fixed distance/ascent totals and populates `state.routeName`/`state.climbs`
+  for later use. `state.routeName` prefers a gallery ride's curated title,
+  then the GPX's own `<name>` (`parseGpx` in `route.mjs` returns
+  `{ points, name }`), then the uploaded filename, and is persisted/restored
+  with the saved ride. `difficulty.mjs#classifyRoute` buckets distance,
   meters-of-climb-per-km, and "equivalent km" (distance + ascent ÷
   `EQUIVALENT_KM_CLIMB_METERS`) into named classes purely from distance and
   elevation gain — no power/speed/weight/weather data. `climbs.mjs#detectClimbs`
   walks the route once, extending a candidate climb through small dips
-  (same noise-anchor idea as `enrichRoute`'s ascent counter) and only
-  closing it once elevation has dropped `CLIMB_NOISE_THRESHOLD_METERS` below
-  the peak *and* the route has moved `CLIMB_MERGE_GAP_METERS` past that peak;
-  candidates under `CLIMB_MIN_GAIN_METERS` or `CLIMB_MIN_AVERAGE_GRADE_PERCENT`
-  are dropped as noise. All thresholds for both live in `tuning.mjs`.
+  (same noise-anchor idea as `enrichRoute`'s ascent counter, but with its own
+  dedicated thresholds, deliberately decoupled from
+  `CLIMB_NOISE_THRESHOLD_METERS`) and only closing it once elevation has
+  dropped `CLIMB_DESCENT_TOLERANCE_METERS` below the peak *and* the route has
+  moved `CLIMB_MERGE_GAP_METERS` past that peak — so a short flat stretch or
+  a few meters of downhill doesn't end a climb; candidates under
+  `CLIMB_MIN_GAIN_METERS` or `CLIMB_MIN_AVERAGE_GRADE_PERCENT` are dropped as
+  noise. All thresholds live in `tuning.mjs`. `updateClimbStatus` (`app.js`,
+  called from `updateRideUi` on the same slow-UI cadence as the other live
+  stats) looks up `state.progressMeters` against `state.climbs` each tick: if
+  progress falls inside a climb's `[startDistanceMeters, endDistanceMeters]`
+  it reports that climb's remaining distance/ascent/grade and highlights it
+  in the climbs list; otherwise it reports the next upcoming climb and the
+  distance to it. It never re-detects climbs itself — the tolerance already
+  baked into `detectClimbs`'s boundaries is what keeps this from flickering
+  on GPX noise.
 - **First-open auto-load**: with no saved ride and a working map,
   `initGallery` loads the first gallery route automatically
   (`shouldAutoLoadFirst` in `app.js`); it is skipped when the map/API key

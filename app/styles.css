@@ -351,6 +351,13 @@ button {
   background: rgba(255, 255, 255, 0.62);
 }
 
+.route-name {
+  margin: 0 0 2px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--accent-dark);
+}
+
 .route-classification strong {
   font-size: 1.05rem;
   color: var(--ink);
@@ -388,6 +395,11 @@ button {
   font-size: 0.85rem;
 }
 
+.climbs-list li.active {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.9);
+}
+
 .climbs-list .climb-index {
   color: var(--muted);
   font-weight: 700;
@@ -396,6 +408,27 @@ button {
 .climbs-list .climb-grade {
   color: var(--accent-dark);
   font-weight: 800;
+}
+
+.climb-status {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.climb-status strong {
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.climb-status span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .stats-grid {

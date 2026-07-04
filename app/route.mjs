@@ -6,16 +6,23 @@ import {
   GRADE_MIN_PERCENT,
 } from "./tuning.mjs";
 
+// Returns `{ points, name }`: track/route points plus the GPX's own name
+// (from <metadata><name>, <trk><name>, or <rte><name>, in that preference
+// order), or a null name when the file doesn't carry one.
 export function parseGpx(text) {
   const doc = new DOMParser().parseFromString(text, "application/xml");
   const parserError = doc.querySelector("parsererror");
-  if (parserError) return [];
+  if (parserError) return { points: [], name: null };
 
-  return [...doc.querySelectorAll("trkpt, rtept")].map((point) => ({
+  const points = [...doc.querySelectorAll("trkpt, rtept")].map((point) => ({
     lat: Number(point.getAttribute("lat")),
     lng: Number(point.getAttribute("lon")),
     ele: Number(point.querySelector("ele")?.textContent ?? 0),
   })).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+
+  const name = doc.querySelector("metadata > name, trk > name, rte > name")?.textContent.trim() || null;
+
+  return { points, name };
 }
 
 // Adds cumulative track fields to each point: `distance` ridden so far plus

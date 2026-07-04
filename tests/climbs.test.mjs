@@ -17,27 +17,42 @@ test("detects a single steady climb", () => {
   assert.equal(climbs.length, 1);
   assert.equal(climbs[0].startDistanceMeters, 0);
   assert.equal(climbs[0].endDistanceMeters, 3000);
+  assert.equal(climbs[0].startElevationMeters, 0);
+  assert.equal(climbs[0].endElevationMeters, 300);
   assert.equal(climbs[0].gainMeters, 300);
   assert.equal(climbs[0].lengthMeters, 3000);
   assert.ok(Math.abs(climbs[0].averageGradePercent - 10) < 1e-9);
 });
 
-test("merges a short dip within the noise threshold and merge gap", () => {
+test("merges a short flat stretch within the default merge gap", () => {
   const climbs = detectClimbs(
     route([
       [0, 0],
       [1000, 150],
-      [1050, 149], // 1 m dip: below the 2 m noise threshold, ignored
+      [1050, 150], // flat for 50 m: well within the default 100 m merge gap
       [1100, 152],
       [2000, 300],
     ]),
-    { mergeGapMeters: 200 },
   );
   assert.equal(climbs.length, 1);
   assert.equal(climbs[0].gainMeters, 300);
 });
 
-test("splits into two climbs when a dip clears the noise threshold and merge gap", () => {
+test("merges a short dip within the descent tolerance and merge gap", () => {
+  const climbs = detectClimbs(
+    route([
+      [0, 0],
+      [1000, 150],
+      [1050, 149], // 1 m dip: below the default 5 m descent tolerance, ignored
+      [1100, 152],
+      [2000, 300],
+    ]),
+  );
+  assert.equal(climbs.length, 1);
+  assert.equal(climbs[0].gainMeters, 300);
+});
+
+test("splits into two climbs when a dip clears the descent tolerance and merge gap", () => {
   const climbs = detectClimbs(
     route([
       [0, 0],
@@ -45,11 +60,23 @@ test("splits into two climbs when a dip clears the noise threshold and merge gap
       [1500, 100], // dropped 50 m, 500 m past the peak: clears both bars
       [1600, 250], // climb 2 starts and gains 150 m
     ]),
-    { mergeGapMeters: 200, noiseThresholdMeters: 2 },
   );
   assert.equal(climbs.length, 2);
   assert.equal(climbs[0].gainMeters, 150);
   assert.equal(climbs[1].gainMeters, 150);
+});
+
+test("does not close a climb over a 100 m flat stretch or a few meters of downhill", () => {
+  const climbs = detectClimbs(
+    route([
+      [0, 0],
+      [1000, 200], // peak
+      [1090, 197], // 3 m down, 90 m past the peak: within both default tolerances
+      [1200, 250], // keeps climbing to a new peak
+    ]),
+  );
+  assert.equal(climbs.length, 1);
+  assert.equal(climbs[0].gainMeters, 250);
 });
 
 test("drops candidates below the minimum gain or average grade", () => {
