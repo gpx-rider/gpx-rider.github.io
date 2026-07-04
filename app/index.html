@@ -74,6 +74,22 @@
 
         <button id="browseGalleryBtn" type="button" hidden>or browse the ride gallery</button>
 
+        <div id="routeOverview" class="route-overview" hidden>
+          <div id="routeClassification" class="route-classification">
+            <h2 id="routeNameHeading" class="route-name" hidden>--</h2>
+            <strong id="routeClassSummary">--</strong>
+            <span id="routeClassDetail">--</span>
+          </div>
+          <div id="climbsSection" class="climbs-section" hidden>
+            <h2>Detected climbs</h2>
+            <div id="climbStatus" class="climb-status" aria-live="polite">
+              <strong id="climbStatusHeadline">--</strong>
+              <span id="climbStatusDetail">--</span>
+            </div>
+            <ol id="climbsList" class="climbs-list"></ol>
+          </div>
+        </div>
+
         <div class="stats-grid" aria-live="polite">
           <div>
             <span>Distance</span>
