@@ -8,10 +8,11 @@ the user explicitly asks for one.
 ## Commands
 
 ```sh
+make           # default: gallery-data + gallery + test (the deploy Action runs the same generation)
 make run       # serve the repo at http://127.0.0.1:5173/app/ (python3 http.server)
 make test      # node --test tests/*.test.mjs (no dependencies needed)
 make gallery   # regenerate the README gallery section from gallery/*/desc.md
-make gallery-data  # regenerate app/gallery.json for the in-app ride gallery
+make gallery-data  # regenerate app/gallery.json (parses each GPX for distance/ascent/descent, difficulty classification, and ready-to-draw mini-profile bars) for the in-app ride gallery
 ```
 
 Always run `make test` after changing anything in `app/`. Browser-only
@@ -42,7 +43,7 @@ module:
 | `app/fit.mjs` | Minimal FIT activity encoder — tags rides as sport=cycling, sub_sport=virtual_activity (tested) |
 | `app/units.mjs` | km/mi + kcal/kJ display formatting; internal state is always metric (tested) |
 | `app/screenshot.mjs` | One-click JPG of the map viewport via tab capture (`getDisplayMedia`) — the 3D map canvas sits in a closed shadow root and cannot be read directly |
-| `app/gallery.mjs` | Ride gallery cards from `app/gallery.json` |
+| `app/gallery.mjs` | Fullscreen ride-gallery overlay (`<dialog#galleryDialog>`): route cards from `app/gallery.json` — all card content (mini-profile bars, difficulty classification, length/ascent/descent) is precomputed by `generate_gallery_json.py`; this module only lays it out and formats the totals for the km/mi setting, plus a live "loaded" marker. Attribution text is a constant here |
 | `app/storage.mjs` | Persistence: IndexedDB behind a sync in-memory cache (localStorage fallback + one-time migration; tested) |
 | `app/config.mjs` | `deployedMapsApiKey()` — empty in source, rewritten at deploy time (see below) |
 
@@ -89,18 +90,44 @@ in place).
   real pedaling ticks** (simulation speed is artificial and would poison
   it); a pure simulation ETA is plain remaining-distance ÷ slider-speed.
   The estimator resets when a new GPX loads, not on ride reset.
+- **UI layout & reusable components.** The app is a dark, single-viewport
+  shell (`index.html`): a fixed top bar (brand, GPX chip, Open/Browse/Settings),
+  a 3D map filling the left, and a fixed-width right control panel. CSS
+  components in `styles.css` are meant to be reused, not re-invented per
+  screen: `.btn` (+ `-ghost`/`-blue`/`-accent`/`-outline-*`/`-sm`),
+  `.panel-card` (+ `-head`/`-title`/`-hint`), `.stat-grid` + `.stat-tile`,
+  `.switch` (the amber toggle used everywhere a checkbox appears in the
+  settings dialog), `.setting-row` / `.setting-slider`, `.icon-btn`, and
+  `.status-dot`. A global `[hidden] { display: none !important }` rule lets
+  the `hidden` attribute win over a component's own `display`. Fonts: Space
+  Grotesk (UI), JetBrains Mono / IBM Plex Mono (numbers), Spectral (serif
+  titles). The grade palette (green→gray→amber→orange→red) is duplicated in
+  three places by design — `profile.mjs#gradeColor`, the gallery generator's
+  `generate_gallery_json.py#mini_bar_color` (which bakes the mini-profile bar
+  colors into `gallery.json`), and the `.profile-legend` swatches — keep them
+  in sync.
+- **Settings dialog.** A single `<dialog#settingsDialog>` with a left
+  category rail (`[data-settings-tab]`) and a right panel per category
+  (`[data-settings-panel]`); `selectSettingsTab` in `app.js` toggles the
+  `active` tab, shows the matching panel, and copies the tab's
+  `data-panel-title`/`data-panel-subtitle` into the header. `openSettings(tab)`
+  opens on a given category (first-run key prompt opens on `"data"`). All the
+  underlying inputs kept their IDs, so the settings-restore/sync code is
+  unchanged — only their grouping moved.
 - **HUD & display settings.** Fullscreen HUD tiles are matched to settings
-  checkboxes by `data-hud="…"` / `data-hud-toggle="…"` keys, which must
+  toggles by `data-hud="…"` / `data-hud-toggle="…"` keys, which must
   also exist in `DEFAULT_HUD_ELEMENTS` (`tuning.mjs`) — add all three when
-  adding a tile. The minimap toggle uses `visibility` (class
-  `minimap-hidden`), not `display:none`, so the Google map never needs a
-  resize kick when re-shown. Map labels toggle the `Map3DElement.mode`
-  between `SATELLITE` and `HYBRID`.
+  adding a tile (the toggle markup is a `.field-toggle` with a `.switch`).
+  The minimap toggle uses `visibility` (class `minimap-hidden`), not
+  `display:none`, so the Google map never needs a resize kick when re-shown.
+  Map labels toggle the `Map3DElement.mode` between `SATELLITE` and `HYBRID`.
 - **Route overview (name + classification + climbs)**: `updateRouteOverview`
   in `app.js` runs once per route load (GPX import or restoring a saved
   ride), not on every ride-progress tick — it only depends on the route's
   fixed distance/ascent totals and populates `state.routeName`/`state.climbs`
-  for later use. `state.routeName` prefers a gallery ride's curated title,
+  for later use. It fills the top-bar GPX chip (`#gpxChip`), the Difficulty
+  stat tile (`#difficultyStat` + `#difficultyDetail`), and the climbs list
+  inside the elevation card. `state.routeName` prefers a gallery ride's curated title,
   then the GPX's own `<name>` (`parseGpx` in `route.mjs` returns
   `{ points, name }`), then the uploaded filename, and is persisted/restored
   with the saved ride. `difficulty.mjs#classifyRoute` buckets distance,
@@ -138,9 +165,13 @@ in place).
   dot use `RELATIVE_TO_GROUND` a couple of meters up, with the path
   densified (`densifyRoute`) so elevated segments follow the terrain. The
   rider dot's ground radius scales with the camera-eye distance
-  (`cameraDistanceToPoint`) to keep a constant apparent size. The rider
-  beacon is a real-world-sized extruded `Polygon3DElement` cylinder with
-  `drawsOccludedSegments` so trees never hide the rider's position.
+  (`cameraDistanceToPoint`) to keep a constant apparent size. The dot (and
+  the minimap marker) mirrors the brand "GPX Rider" logo dot — a solid amber
+  center with a paler amber ring — via the `RIDER_DOT_*` color constants in
+  `app.js`. The rider beacon is a real-world-sized extruded `Polygon3DElement`
+  cylinder with `drawsOccludedSegments` so trees never hide the rider's
+  position; it is **off by default** (`DEFAULT_BEACON_ENABLED`), opt-in from
+  the Rendering settings.
 - **Camera modes & physical motion**: `state.cameraMode` is `"overview"`
   after a route loads (whole route framed via `computeRouteOverviewCamera`
   in `camera.mjs`: start→end reads left-to-right, the route's far side

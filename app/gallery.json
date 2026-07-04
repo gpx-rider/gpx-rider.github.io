@@ -5,63 +5,1737 @@
       "title": "Golden Gate Bridge",
       "description": "A short scenic ride along the San Francisco coast, heading toward the iconic red towers of the Golden Gate Bridge. Expect big ocean views, rolling hills, glimpses of San Francisco Bay, and a finish near Point Lobos.\n\n**10 km** · **184 m up** · **184 m down**",
       "screenshot": "gallery/0100_goldengate/screenshot.jpeg",
-      "gpx": "gallery/0100_goldengate/export.gpx"
+      "gpx": "gallery/0100_goldengate/export.gpx",
+      "distanceMeters": 10020,
+      "ascentMeters": 192,
+      "descentMeters": 192,
+      "bars": [
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 9.3,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 30.3,
+          "c": "#e8823c"
+        },
+        {
+          "h": 38.2,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 47.4,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 47.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 64.3,
+          "c": "#e8823c"
+        },
+        {
+          "h": 75.6,
+          "c": "#e8823c"
+        },
+        {
+          "h": 93.4,
+          "c": "#e8823c"
+        },
+        {
+          "h": 100.0,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 100.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 88.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 61.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 35.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 10.5,
+          "c": "#57b877"
+        },
+        {
+          "h": 8.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 26.8,
+          "c": "#e8823c"
+        },
+        {
+          "h": 34.3,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 38.1,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 46.1,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 48.8,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 64.5,
+          "c": "#e8823c"
+        },
+        {
+          "h": 77.7,
+          "c": "#e8823c"
+        },
+        {
+          "h": 73.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 60.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 100.0,
+          "c": "#d9542f"
+        },
+        {
+          "h": 76.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 73.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 73.7,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 73.7,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 60.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 79.0,
+          "c": "#e8823c"
+        },
+        {
+          "h": 79.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 49.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 21.1,
+          "c": "#57b877"
+        },
+        {
+          "h": 8.0,
+          "c": "#57b877"
+        }
+      ],
+      "classification": {
+        "distanceClass": "XS",
+        "terrainClass": "Rolling",
+        "difficulty": "Very Easy"
+      }
     },
     {
       "id": "0200_stelvio_pass",
       "title": "Stelvio Pass",
       "description": "A high-alpine ride from Stilfs over the legendary Stelvio Pass and down toward Bormio. Expect towering mountain views, dramatic switchbacks, exposed slopes, and one of the most recognizable roads in cycling.\n\n**30 km** · **1,495 m up** · **866 m down**",
       "screenshot": "gallery/0200_stelvio_pass/screenshot.jpeg",
-      "gpx": "gallery/0200_stelvio_pass/export.gpx"
+      "gpx": "gallery/0200_stelvio_pass/export.gpx",
+      "distanceMeters": 30081,
+      "ascentMeters": 1494,
+      "descentMeters": 880,
+      "bars": [
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 9.1,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 12.2,
+          "c": "#e8823c"
+        },
+        {
+          "h": 15.1,
+          "c": "#e8823c"
+        },
+        {
+          "h": 19.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 21.9,
+          "c": "#e8823c"
+        },
+        {
+          "h": 25.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 28.9,
+          "c": "#d9542f"
+        },
+        {
+          "h": 32.7,
+          "c": "#d9542f"
+        },
+        {
+          "h": 36.3,
+          "c": "#d9542f"
+        },
+        {
+          "h": 39.4,
+          "c": "#d9542f"
+        },
+        {
+          "h": 43.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 47.3,
+          "c": "#d9542f"
+        },
+        {
+          "h": 51.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 54.9,
+          "c": "#d9542f"
+        },
+        {
+          "h": 59.0,
+          "c": "#d9542f"
+        },
+        {
+          "h": 62.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 66.5,
+          "c": "#d9542f"
+        },
+        {
+          "h": 70.3,
+          "c": "#d9542f"
+        },
+        {
+          "h": 74.1,
+          "c": "#d9542f"
+        },
+        {
+          "h": 77.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 81.6,
+          "c": "#d9542f"
+        },
+        {
+          "h": 85.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 89.0,
+          "c": "#d9542f"
+        },
+        {
+          "h": 92.7,
+          "c": "#d9542f"
+        },
+        {
+          "h": 96.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 100.0,
+          "c": "#d9542f"
+        },
+        {
+          "h": 97.8,
+          "c": "#57b877"
+        },
+        {
+          "h": 93.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 90.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 86.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 83.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 80.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 76.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 75.5,
+          "c": "#57b877"
+        },
+        {
+          "h": 73.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 71.1,
+          "c": "#57b877"
+        },
+        {
+          "h": 67.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 64.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 60.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 57.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 53.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 50.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 46.2,
+          "c": "#57b877"
+        }
+      ],
+      "classification": {
+        "distanceClass": "S",
+        "terrainClass": "Mountainous",
+        "difficulty": "Easy"
+      }
     },
     {
       "id": "0300_alpe_d_huez",
       "title": "Alpe d’Huez",
       "description": "A classic alpine climb from Le Bourg-d’Oisans to Alpe d’Huez, famous for its 21 hairpins and years of grand-tour drama. Expect tight switchbacks, big valley views, and a final stretch high above the mountains before an easy cooldown.\n\n**20 km** · **1,174 m up** · **124 m down**",
       "screenshot": "gallery/0300_alpe_d_huez/screenshot.jpeg",
-      "gpx": "gallery/0300_alpe_d_huez/export.gpx"
+      "gpx": "gallery/0300_alpe_d_huez/export.gpx",
+      "distanceMeters": 19954,
+      "ascentMeters": 1233,
+      "descentMeters": 183,
+      "bars": [
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.2,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 11.3,
+          "c": "#d9542f"
+        },
+        {
+          "h": 15.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 19.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 23.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 26.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 29.1,
+          "c": "#d9542f"
+        },
+        {
+          "h": 32.0,
+          "c": "#d9542f"
+        },
+        {
+          "h": 35.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 38.2,
+          "c": "#e8823c"
+        },
+        {
+          "h": 42.0,
+          "c": "#d9542f"
+        },
+        {
+          "h": 45.3,
+          "c": "#d9542f"
+        },
+        {
+          "h": 47.7,
+          "c": "#e8823c"
+        },
+        {
+          "h": 51.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 53.9,
+          "c": "#d9542f"
+        },
+        {
+          "h": 57.3,
+          "c": "#d9542f"
+        },
+        {
+          "h": 60.6,
+          "c": "#d9542f"
+        },
+        {
+          "h": 63.3,
+          "c": "#d9542f"
+        },
+        {
+          "h": 67.1,
+          "c": "#d9542f"
+        },
+        {
+          "h": 72.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 75.4,
+          "c": "#d9542f"
+        },
+        {
+          "h": 78.5,
+          "c": "#d9542f"
+        },
+        {
+          "h": 81.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 85.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 88.4,
+          "c": "#d9542f"
+        },
+        {
+          "h": 91.7,
+          "c": "#d9542f"
+        },
+        {
+          "h": 93.7,
+          "c": "#e8823c"
+        },
+        {
+          "h": 95.7,
+          "c": "#e8823c"
+        },
+        {
+          "h": 96.7,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 95.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 94.5,
+          "c": "#57b877"
+        },
+        {
+          "h": 96.3,
+          "c": "#e8823c"
+        },
+        {
+          "h": 98.8,
+          "c": "#e8823c"
+        },
+        {
+          "h": 100.0,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 98.5,
+          "c": "#57b877"
+        },
+        {
+          "h": 97.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 98.0,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 97.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 95.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 93.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 92.0,
+          "c": "#57b877"
+        }
+      ],
+      "classification": {
+        "distanceClass": "XS",
+        "terrainClass": "Mountainous",
+        "difficulty": "Easy"
+      }
     },
     {
       "id": "0400_zlate_navrsi",
       "title": "Zlaté návrší",
       "description": "Climb from Semily deep into the Krkonoše mountains, taking on a 40 km ascent toward Zlaté návrší - often claimed to be the longest climb in the Czech Republic. After the main climb, the route crosses the high ridges past Labská bouda, the source of the Elbe, and Vosecká bouda - including a protected stretch that is much easier to enjoy when your bike is virtual.\n\n**54.6 km** · **1,164 m up** · **711 m down**",
       "screenshot": "gallery/0400_zlate_navrsi/screenshot.jpeg",
-      "gpx": "gallery/0400_zlate_navrsi/export.gpx"
+      "gpx": "gallery/0400_zlate_navrsi/export.gpx",
+      "distanceMeters": 54569,
+      "ascentMeters": 1198,
+      "descentMeters": 745,
+      "bars": [
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.9,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 9.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 10.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 11.1,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 11.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 11.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 11.5,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 12.5,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 13.2,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 13.2,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 13.7,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 14.2,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 15.2,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 17.1,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 17.5,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 19.0,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 21.8,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 23.4,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 24.4,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 26.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 29.3,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 32.1,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 34.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 37.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 42.5,
+          "c": "#e8823c"
+        },
+        {
+          "h": 47.3,
+          "c": "#e8823c"
+        },
+        {
+          "h": 55.6,
+          "c": "#d9542f"
+        },
+        {
+          "h": 65.1,
+          "c": "#d9542f"
+        },
+        {
+          "h": 74.0,
+          "c": "#d9542f"
+        },
+        {
+          "h": 82.5,
+          "c": "#d9542f"
+        },
+        {
+          "h": 91.0,
+          "c": "#d9542f"
+        },
+        {
+          "h": 100.0,
+          "c": "#d9542f"
+        },
+        {
+          "h": 97.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 96.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 96.8,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 98.0,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 91.5,
+          "c": "#57b877"
+        },
+        {
+          "h": 81.5,
+          "c": "#57b877"
+        },
+        {
+          "h": 71.5,
+          "c": "#57b877"
+        },
+        {
+          "h": 63.8,
+          "c": "#57b877"
+        },
+        {
+          "h": 58.1,
+          "c": "#57b877"
+        },
+        {
+          "h": 52.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 46.8,
+          "c": "#57b877"
+        }
+      ],
+      "classification": {
+        "distanceClass": "M",
+        "terrainClass": "Hilly",
+        "difficulty": "Moderate"
+      }
     },
     {
       "id": "0500_amalfi_coast",
       "title": "Amalfi Coast",
       "description": "A punchy coastal ride along the Amalfi Coast, where the road keeps climbing out of seaside towns and dropping back toward the Mediterranean. Expect cliffside views, tight bends, short hard efforts, and plenty of downhill breaks before finishing at Piazza Giacomo Matteotti.\n\n**32.3 km** · **1,176 m up** · **1,237 m down**",
       "screenshot": "gallery/0500_amalfi_coast/screenshot.jpeg",
-      "gpx": "gallery/0500_amalfi_coast/export.gpx"
+      "gpx": "gallery/0500_amalfi_coast/export.gpx",
+      "distanceMeters": 31711,
+      "ascentMeters": 1480,
+      "descentMeters": 1541,
+      "bars": [
+        {
+          "h": 87.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 97.5,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 74.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 69.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 45.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 47.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 12.9,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 32.4,
+          "c": "#e8823c"
+        },
+        {
+          "h": 41.5,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 50.8,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 90.6,
+          "c": "#d9542f"
+        },
+        {
+          "h": 63.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 38.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 48.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 28.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 24.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 42.2,
+          "c": "#e8823c"
+        },
+        {
+          "h": 30.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 29.3,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 26.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 8.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 24.1,
+          "c": "#e8823c"
+        },
+        {
+          "h": 8.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 21.1,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 38.4,
+          "c": "#e8823c"
+        },
+        {
+          "h": 69.1,
+          "c": "#e8823c"
+        },
+        {
+          "h": 81.3,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 86.2,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 99.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 100.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 87.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 69.1,
+          "c": "#57b877"
+        },
+        {
+          "h": 50.8,
+          "c": "#57b877"
+        },
+        {
+          "h": 44.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 28.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 15.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 33.7,
+          "c": "#e8823c"
+        },
+        {
+          "h": 44.7,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 56.9,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 44.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 50.8,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 44.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 50.2,
+          "c": "#e8b74e"
+        }
+      ],
+      "classification": {
+        "distanceClass": "S",
+        "terrainClass": "Mountainous",
+        "difficulty": "Easy"
+      }
     },
     {
       "id": "0600_boulder",
       "title": "Boulder Foothills",
       "description": "A punchy ride through the Colorado foothills around Boulder, where the road keeps kicking up into short climbs before dropping into fast descents. Expect canyon roads, open mountain views, dry Rocky Mountain scenery, and a sawtooth profile that feels made for natural intervals.\n\n**48.2 km** · **1,473 m up** · **1,737 m down**",
       "screenshot": "gallery/0600_boulder/screenshot.jpeg",
-      "gpx": "gallery/0600_boulder/export.gpx"
+      "gpx": "gallery/0600_boulder/export.gpx",
+      "distanceMeters": 48202,
+      "ascentMeters": 1594,
+      "descentMeters": 1859,
+      "bars": [
+        {
+          "h": 62.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 69.9,
+          "c": "#e8823c"
+        },
+        {
+          "h": 80.5,
+          "c": "#d9542f"
+        },
+        {
+          "h": 78.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 75.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 64.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 51.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 43.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 36.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 30.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 20.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 14.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 8.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 10.9,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 16.9,
+          "c": "#e8823c"
+        },
+        {
+          "h": 24.7,
+          "c": "#d9542f"
+        },
+        {
+          "h": 34.2,
+          "c": "#d9542f"
+        },
+        {
+          "h": 42.6,
+          "c": "#d9542f"
+        },
+        {
+          "h": 48.3,
+          "c": "#e8823c"
+        },
+        {
+          "h": 54.8,
+          "c": "#e8823c"
+        },
+        {
+          "h": 58.3,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 62.9,
+          "c": "#e8823c"
+        },
+        {
+          "h": 70.6,
+          "c": "#e8823c"
+        },
+        {
+          "h": 81.6,
+          "c": "#d9542f"
+        },
+        {
+          "h": 90.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 96.7,
+          "c": "#e8823c"
+        },
+        {
+          "h": 100.0,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 86.5,
+          "c": "#57b877"
+        },
+        {
+          "h": 72.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 68.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 62.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 64.1,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 66.2,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 72.2,
+          "c": "#e8823c"
+        },
+        {
+          "h": 80.5,
+          "c": "#d9542f"
+        },
+        {
+          "h": 68.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 58.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 49.8,
+          "c": "#57b877"
+        },
+        {
+          "h": 41.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 39.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 31.1,
+          "c": "#57b877"
+        },
+        {
+          "h": 25.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 32.2,
+          "c": "#e8823c"
+        },
+        {
+          "h": 36.4,
+          "c": "#e8823c"
+        }
+      ],
+      "classification": {
+        "distanceClass": "M",
+        "terrainClass": "Hilly",
+        "difficulty": "Moderate"
+      }
     },
     {
       "id": "0700_los_angeles",
       "title": "Griffith Observatory",
       "description": "Ride from downtown Los Angeles into the Hollywood Hills, passing city landmarks before climbing through Griffith Park to one of LA’s most famous viewpoints. Expect skyline views, dry canyon scenery, rolling park roads, and a finish near Griffith Observatory above the city.\n\n**36.2 km** · **586 m up** · **341 m down**",
       "screenshot": "gallery/0700_los_angeles/screenshot.jpeg",
-      "gpx": "gallery/0700_los_angeles/export.gpx"
+      "gpx": "gallery/0700_los_angeles/export.gpx",
+      "distanceMeters": 36167,
+      "ascentMeters": 736,
+      "descentMeters": 492,
+      "bars": [
+        {
+          "h": 14.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 12.8,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 15.4,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 19.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 19.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 14.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 9.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 9.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 10.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 10.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 10.1,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 10.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 12.7,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 12.8,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 15.3,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 18.9,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 22.0,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 21.5,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 21.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 24.8,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 36.6,
+          "c": "#e8823c"
+        },
+        {
+          "h": 45.8,
+          "c": "#e8823c"
+        },
+        {
+          "h": 51.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 52.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 52.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 62.3,
+          "c": "#e8823c"
+        },
+        {
+          "h": 52.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 41.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 33.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 31.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 31.3,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 31.3,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 37.2,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 51.8,
+          "c": "#e8823c"
+        },
+        {
+          "h": 63.0,
+          "c": "#e8823c"
+        },
+        {
+          "h": 65.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 73.6,
+          "c": "#e8823c"
+        },
+        {
+          "h": 86.1,
+          "c": "#e8823c"
+        },
+        {
+          "h": 97.4,
+          "c": "#e8823c"
+        },
+        {
+          "h": 100.0,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 89.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 73.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 78.9,
+          "c": "#e8b74e"
+        }
+      ],
+      "classification": {
+        "distanceClass": "S",
+        "terrainClass": "Hilly",
+        "difficulty": "Easy"
+      }
     },
     {
       "id": "0800_kona",
       "title": "Big Island Full-Distance Ride",
       "description": "Ride a full-distance route across Hawaiʻi’s Big Island: lava fields, ocean views, long exposed roads, and a distance that turns “I’ll just try it for a bit” into a very serious conversation with your legs.\n\nNobody expects anyone to finish a 180 km virtual ride in one go. Except Jan, obviously. But the route is there whenever you feel dangerously optimistic.\n\n**182.4 km** · **781 m up** · **781 m down**",
       "screenshot": "gallery/0800_kona/screenshot.jpeg",
-      "gpx": "gallery/0800_kona/export.gpx"
+      "gpx": "gallery/0800_kona/export.gpx",
+      "distanceMeters": 182388,
+      "ascentMeters": 896,
+      "descentMeters": 896,
+      "bars": [
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 13.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 17.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 25.9,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 28.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 43.8,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 50.3,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 49.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 16.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 13.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 20.8,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 25.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 30.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 41.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 12.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 33.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 34.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 32.2,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 28.7,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 69.3,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 100.0,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 98.7,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 63.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 23.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 36.9,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 37.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 24.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 9.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 46.3,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 33.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 33.3,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 15.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 10.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 19.5,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 50.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 42.8,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 42.7,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 27.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 22.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 13.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 13.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 30.9,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 10.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        }
+      ],
+      "classification": {
+        "distanceClass": "XXL",
+        "terrainClass": "Flat",
+        "difficulty": "Epic"
+      }
     },
     {
       "id": "0900_prague",
       "title": "Prague Landmarks",
       "description": "A compact sightseeing ride through the heart of Prague, linking Vyšehrad, the National Theatre, Old Town Square, the Astronomical Clock, Charles Bridge, Petřín, Prague Castle, Letná, and Vítkov. Expect river views, historic squares, park climbs, castle panoramas, and a steady stream of postcard moments.\n\n**21.1 km** · **172 m up** · **200 m down**",
       "screenshot": "gallery/0900_prague/screenshot.jpeg",
-      "gpx": "gallery/0900_prague/export.gpx"
+      "gpx": "gallery/0900_prague/export.gpx",
+      "distanceMeters": 21087,
+      "ascentMeters": 201,
+      "descentMeters": 232,
+      "bars": [
+        {
+          "h": 44.2,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 45.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 37.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 22.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 14.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 14.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 14.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 14.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 15.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 17.8,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 12.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 11.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 11.3,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 13.3,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 11.3,
+          "c": "#57b877"
+        },
+        {
+          "h": 16.4,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 47.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 74.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 95.0,
+          "c": "#e8823c"
+        },
+        {
+          "h": 100.0,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 76.5,
+          "c": "#57b877"
+        },
+        {
+          "h": 64.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 55.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 52.8,
+          "c": "#57b877"
+        },
+        {
+          "h": 41.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 37.7,
+          "c": "#57b877"
+        },
+        {
+          "h": 37.7,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 34.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 21.8,
+          "c": "#57b877"
+        },
+        {
+          "h": 11.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 10.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 10.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 9.3,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 9.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 8.0,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 10.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 24.5,
+          "c": "#e8823c"
+        },
+        {
+          "h": 36.8,
+          "c": "#e8823c"
+        },
+        {
+          "h": 34.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 34.4,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 33.7,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 30.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 26.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 23.2,
+          "c": "#57b877"
+        }
+      ],
+      "classification": {
+        "distanceClass": "S",
+        "terrainClass": "Gentle",
+        "difficulty": "Very Easy"
+      }
     }
   ]
 }
