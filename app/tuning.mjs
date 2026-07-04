@@ -22,6 +22,14 @@
 export const PEDALING_START_KPH = 3;
 export const PEDALING_STOP_KPH = 1;
 
+// Simulation speed slider: the artificial speed used to auto-ride a route
+// with no trainer. DEFAULT is where the slider starts; MIN/MAX bound both
+// the slider and any saved value. These drive the range input's attributes
+// at startup, so this is the single source of truth for the slider's range.
+export const SIMULATION_SPEED_MIN_KPH = 8;
+export const SIMULATION_SPEED_MAX_KPH = 100;
+export const DEFAULT_SIMULATION_SPEED_KPH = 24;
+
 // A backgrounded tab stops requestAnimationFrame; without this cap the first
 // frame after returning would teleport the rider minutes down the road.
 // Raising it makes background riding smoother-looking on return but risks a
@@ -153,8 +161,9 @@ export const TERRAIN_LIFT_FALL_TAU_SECONDS = 4;
 // --- Rider beacon (defaults for the Rendering settings) ---------------------------
 
 // A translucent extruded cylinder standing on the rider so the position
-// stays visible when trees or buildings hide the ground dot.
-export const DEFAULT_BEACON_ENABLED = true;
+// stays visible when trees or buildings hide the ground dot. Off by default
+// — it's visually heavy; opt in from the Rendering settings.
+export const DEFAULT_BEACON_ENABLED = false;
 export const DEFAULT_BEACON_DIAMETER_METERS = 5;
 export const DEFAULT_BEACON_HEIGHT_METERS = 20;
 export const DEFAULT_BEACON_OPACITY = 0.35;
