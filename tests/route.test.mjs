@@ -5,6 +5,7 @@ import {
   enrichRoute,
   gradeAt,
   interpolateRoutePoint,
+  maxElevationNear,
   routeTotalDistance,
 } from "../app/route.mjs";
 
@@ -55,4 +56,16 @@ test("gradeAt reports climbing and descending", () => {
   const route = enrichRoute(points);
   assert.ok(gradeAt(route, route[1].distance / 2) > 0, "first leg climbs");
   assert.ok(gradeAt(route, (route[1].distance + route[2].distance) / 2) < 0, "second leg descends");
+});
+
+test("maxElevationNear reports the highest nearby track point", () => {
+  const route = enrichRoute(points);
+
+  // Right on the middle (highest) point.
+  assert.equal(maxElevationNear(route, { lat: 50.001, lng: 14.400 }, 50), 105);
+
+  // A wide radius sees the whole route; a tiny one near nothing sees nothing.
+  assert.equal(maxElevationNear(route, { lat: 50.001, lng: 14.400 }, 500), 105);
+  assert.equal(maxElevationNear(route, { lat: 50.000, lng: 14.400 }, 50), 100);
+  assert.equal(maxElevationNear(route, { lat: 51.000, lng: 14.400 }, 100), null);
 });
