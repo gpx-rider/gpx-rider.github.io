@@ -59,6 +59,7 @@ import {
   DEFAULT_SCREENSHOT_ASPECT,
   DEFAULT_SCREENSHOT_WIDTH,
   DEFAULT_SHOW_MINIMAP,
+  DEFAULT_SIMULATION_SPEED_KPH,
   DEFAULT_SHOW_SCREENSHOT_BUTTON,
   DEFAULT_TERRAIN_AVOID_ENABLED,
   DEFAULT_TERRAIN_CLEARANCE_METERS,
@@ -76,6 +77,8 @@ import {
   ROUTE_LINE_SPACING_METERS,
   SCREENSHOT_WIDTH_MAX,
   SCREENSHOT_WIDTH_MIN,
+  SIMULATION_SPEED_MAX_KPH,
+  SIMULATION_SPEED_MIN_KPH,
   SLOW_UI_INTERVAL_MS,
   TERRAIN_LIFT_FALL_TAU_SECONDS,
   TERRAIN_LIFT_RECOMPUTE_MS,
@@ -113,6 +116,12 @@ const SETTINGS_STORAGE_KEY = "gpx-rider:settings";
 const RIDE_STORAGE_KEY = "gpx-rider:last-ride";
 
 const BEACON_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+
+// The rider's ground marker mirrors the brand "GPX Rider" dot: a solid amber
+// center with a paler amber ring and a soft amber outer glow.
+const RIDER_DOT_COLOR = "#f6a52c";
+const RIDER_DOT_RING_COLOR = "rgba(246, 165, 44, 0.5)";
+const RIDER_DOT_HALO_COLOR = "rgba(246, 165, 44, 0.18)";
 
 // Physical camera motion: after the load-time snap, every camera move chases
 // its target like an object with bounded acceleration — it eases into
@@ -327,6 +336,12 @@ async function startApp() {
     onStatus: handleHeartRateStatus,
     onMessage: updateProgressLabel,
   });
+
+  // The simulation slider's range is defined once in tuning.mjs; apply it to
+  // the input before any saved speed is restored/clamped against it.
+  els.speedInput.min = String(SIMULATION_SPEED_MIN_KPH);
+  els.speedInput.max = String(SIMULATION_SPEED_MAX_KPH);
+  els.speedInput.value = String(DEFAULT_SIMULATION_SPEED_KPH);
 
   restoreSettings();
   restoreRideLog();
@@ -747,13 +762,16 @@ function renderMinimapRoute() {
       map: state.minimapMap,
       clickable: false,
       zIndex: 10,
+      // Amber brand dot with a translucent amber ring, matching the 3D
+      // rider marker and the "GPX Rider" logo dot.
       icon: {
         path: google.maps.SymbolPath.CIRCLE,
-        scale: 6,
-        fillColor: "#0a84ff",
+        scale: 5,
+        fillColor: RIDER_DOT_COLOR,
         fillOpacity: 1,
-        strokeColor: "#ffffff",
-        strokeWeight: 2,
+        strokeColor: RIDER_DOT_COLOR,
+        strokeOpacity: 0.35,
+        strokeWeight: 6,
       },
     });
   }
@@ -809,9 +827,9 @@ function renderRiderDot(point) {
 
   if (Polygon3DElement) {
     const styles = [
-      ["riderHalo", "rgba(10, 132, 255, 0.22)"],
-      ["riderDotOutline", "#ffffff"],
-      ["riderDot", "#0a84ff"],
+      ["riderHalo", RIDER_DOT_HALO_COLOR],
+      ["riderDotOutline", RIDER_DOT_RING_COLOR],
+      ["riderDot", RIDER_DOT_COLOR],
     ];
     styles.forEach(([key, fillColor]) => {
       state[key] = new Polygon3DElement({
@@ -830,7 +848,7 @@ function renderRiderDot(point) {
   state.riderDotOutline = new Polyline3DElement({
     altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
     path: riderCircleCoordinates(point, radius, 1),
-    strokeColor: "#ffffff",
+    strokeColor: RIDER_DOT_RING_COLOR,
     strokeWidth: 10,
   });
   state.map.append(state.riderDotOutline);
@@ -838,7 +856,7 @@ function renderRiderDot(point) {
   state.riderDot = new Polyline3DElement({
     altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
     path: riderCircleCoordinates(point, radius, 1.2),
-    strokeColor: "#0a84ff",
+    strokeColor: RIDER_DOT_COLOR,
     strokeWidth: 6,
   });
   state.map.append(state.riderDot);

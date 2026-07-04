@@ -8,10 +8,11 @@ the user explicitly asks for one.
 ## Commands
 
 ```sh
+make           # default: gallery-data + gallery + test (the deploy Action runs the same generation)
 make run       # serve the repo at http://127.0.0.1:5173/app/ (python3 http.server)
 make test      # node --test tests/*.test.mjs (no dependencies needed)
 make gallery   # regenerate the README gallery section from gallery/*/desc.md
-make gallery-data  # regenerate app/gallery.json (parses each GPX for distance/ascent/mini-profile) for the in-app ride gallery
+make gallery-data  # regenerate app/gallery.json (parses each GPX for distance/ascent/descent, difficulty classification, and ready-to-draw mini-profile bars) for the in-app ride gallery
 ```
 
 Always run `make test` after changing anything in `app/`. Browser-only
@@ -42,7 +43,7 @@ module:
 | `app/fit.mjs` | Minimal FIT activity encoder — tags rides as sport=cycling, sub_sport=virtual_activity (tested) |
 | `app/units.mjs` | km/mi + kcal/kJ display formatting; internal state is always metric (tested) |
 | `app/screenshot.mjs` | One-click JPG of the map viewport via tab capture (`getDisplayMedia`) — the 3D map canvas sits in a closed shadow root and cannot be read directly |
-| `app/gallery.mjs` | Fullscreen ride-gallery overlay (`<dialog#galleryDialog>`): route cards from `app/gallery.json` with class badge, grade-colored mini elevation profile, computed length/ascent, and a live "loaded" marker |
+| `app/gallery.mjs` | Fullscreen ride-gallery overlay (`<dialog#galleryDialog>`): route cards from `app/gallery.json` — all card content (mini-profile bars, difficulty classification, length/ascent/descent) is precomputed by `generate_gallery_json.py`; this module only lays it out and formats the totals for the km/mi setting, plus a live "loaded" marker. Attribution text is a constant here |
 | `app/storage.mjs` | Persistence: IndexedDB behind a sync in-memory cache (localStorage fallback + one-time migration; tested) |
 | `app/config.mjs` | `deployedMapsApiKey()` — empty in source, rewritten at deploy time (see below) |
 
@@ -101,8 +102,10 @@ in place).
   the `hidden` attribute win over a component's own `display`. Fonts: Space
   Grotesk (UI), JetBrains Mono / IBM Plex Mono (numbers), Spectral (serif
   titles). The grade palette (green→gray→amber→orange→red) is duplicated in
-  three places by design — `profile.mjs#gradeColor`, `gallery.mjs`'s mini
-  bars, and the `.profile-legend` swatches — keep them in sync.
+  three places by design — `profile.mjs#gradeColor`, the gallery generator's
+  `generate_gallery_json.py#mini_bar_color` (which bakes the mini-profile bar
+  colors into `gallery.json`), and the `.profile-legend` swatches — keep them
+  in sync.
 - **Settings dialog.** A single `<dialog#settingsDialog>` with a left
   category rail (`[data-settings-tab]`) and a right panel per category
   (`[data-settings-panel]`); `selectSettingsTab` in `app.js` toggles the
@@ -162,9 +165,13 @@ in place).
   dot use `RELATIVE_TO_GROUND` a couple of meters up, with the path
   densified (`densifyRoute`) so elevated segments follow the terrain. The
   rider dot's ground radius scales with the camera-eye distance
-  (`cameraDistanceToPoint`) to keep a constant apparent size. The rider
-  beacon is a real-world-sized extruded `Polygon3DElement` cylinder with
-  `drawsOccludedSegments` so trees never hide the rider's position.
+  (`cameraDistanceToPoint`) to keep a constant apparent size. The dot (and
+  the minimap marker) mirrors the brand "GPX Rider" logo dot — a solid amber
+  center with a paler amber ring — via the `RIDER_DOT_*` color constants in
+  `app.js`. The rider beacon is a real-world-sized extruded `Polygon3DElement`
+  cylinder with `drawsOccludedSegments` so trees never hide the rider's
+  position; it is **off by default** (`DEFAULT_BEACON_ENABLED`), opt-in from
+  the Rendering settings.
 - **Camera modes & physical motion**: `state.cameraMode` is `"overview"`
   after a route loads (whole route framed via `computeRouteOverviewCamera`
   in `camera.mjs`: start→end reads left-to-right, the route's far side

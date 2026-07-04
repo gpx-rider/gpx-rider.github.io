@@ -33,7 +33,7 @@ jobs:
         run: python3 scripts/inject_maps_api_key.py
 
       - name: Generate gallery data
-        run: python3 scripts/generate_gallery_json.py
+        run: make gallery-data
 
       - name: Upload app/ as the Pages artifact
         uses: actions/upload-pages-artifact@v3

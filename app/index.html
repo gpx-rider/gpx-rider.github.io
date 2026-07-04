@@ -46,7 +46,7 @@
               <button id="screenshotBtn" type="button" class="map-action-btn" title="Save a JPG of the map view" aria-label="Save a JPG of the map view">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
               </button>
-              <button id="fullscreenBtn" type="button" class="map-action-btn map-action-accent" title="Enter fullscreen" aria-label="Toggle fullscreen">
+              <button id="fullscreenBtn" type="button" class="map-action-btn" title="Enter fullscreen" aria-label="Toggle fullscreen">
                 <svg class="icon-fs-enter" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M16 3h3a2 2 0 0 1 2 2v3"></path><path d="M8 21H5a2 2 0 0 1-2-2v-3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>
                 <svg class="icon-fs-exit" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h3a2 2 0 0 0 2-2V3"></path><path d="M21 8h-3a2 2 0 0 1-2-2V3"></path><path d="M3 16h3a2 2 0 0 1 2 2v3"></path><path d="M21 16h-3a2 2 0 0 0-2 2v3"></path></svg>
               </button>
@@ -253,7 +253,7 @@
             </div>
             <div class="speed-control">
               <label for="speedInput" class="speed-label">Speed</label>
-              <input id="speedInput" type="range" min="8" max="55" step="1" value="24">
+              <input id="speedInput" type="range" min="8" max="100" step="1" value="24">
               <output id="speedOutput" for="speedInput">24 km/h</output>
             </div>
           </div>
@@ -593,7 +593,7 @@
           <span id="galleryCount" class="gallery-count">0 ROUTES</span>
         </div>
         <div class="gallery-head-actions">
-          <span class="gallery-attribution">screenshots from Google Maps Photorealistic 3D · map data © Google</span>
+          <span id="galleryAttribution" class="gallery-attribution"></span>
           <button id="galleryCloseBtn" type="button" class="icon-btn" aria-label="Close gallery">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg>
           </button>

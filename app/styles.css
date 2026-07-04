@@ -355,14 +355,11 @@ body {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-.map-action-accent {
+/* Toggle buttons (center-on-rider): amber while active, plain white when
+   off — matching the amber accent used for "on" states elsewhere. */
+.map-action-btn[aria-pressed="true"] {
   border-color: rgba(246, 165, 44, 0.5);
   color: var(--accent);
-}
-
-/* pressed = the rider is kept centered; unpressed reads dimmed */
-.map-action-btn[aria-pressed="false"] {
-  color: rgba(255, 255, 255, 0.38);
 }
 
 .icon-fs-exit {
@@ -1310,34 +1307,6 @@ input[type="color"] {
   pointer-events: none;
 }
 
-.gallery-card-badge {
-  position: absolute;
-  top: 11px;
-  left: 11px;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  background: rgba(11, 14, 19, 0.62);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-.gallery-card-badge i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.gallery-card-badge span {
-  font: 600 10px/1 var(--font-mono);
-  letter-spacing: 0.04em;
-  color: #eef0f3;
-}
-
 .gallery-card-loaded-badge {
   position: absolute;
   top: 11px;
@@ -1398,6 +1367,26 @@ input[type="color"] {
   color: var(--muted);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+.gallery-card-class {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gallery-card-class i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.gallery-card-class span {
+  font: 600 11px/1 var(--font-mono);
+  letter-spacing: 0.02em;
+  color: #c2c6cf;
 }
 
 .gallery-card-stats {

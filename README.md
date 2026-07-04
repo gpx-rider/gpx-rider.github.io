@@ -78,8 +78,12 @@ If that sounds useful, contributions are very welcome — see
   pedaling automatically takes over and stops the simulation.
 - 🗺️ **Ride gallery overlay** — the `Browse gallery` button opens a
   fullscreen catalogue of curated routes. Each card carries a screenshot,
-  a grade-colored mini elevation profile, the computed length, total
-  ascent, and difficulty class, and marks the currently loaded route.
+  a grade-colored mini elevation profile, the difficulty classification
+  (e.g. `Very Easy XS · Rolling`), and the computed length, ascent, and
+  descent, and marks the currently loaded route. All of it — the profile
+  bars, classification, and totals — is precomputed from each GPX by
+  `make gallery-data` and baked into `app/gallery.json`, so the browser
+  only lays it out.
 - 📈 **Live stats & elevation profile** — distance ridden/remaining, total
   ascent & descent, ascent still ahead, a smart ETA, grade, altitude, power,
   speed, heart rate, and calories (from the trainer), plus a full-route
@@ -137,6 +141,10 @@ Run the unit tests with:
 ```sh
 make test
 ```
+
+Or just `make` (the default target) to regenerate the derived gallery data
+and README gallery section and run the tests in one go — the same generation
+the deploy GitHub Action performs before publishing.
 
 ## How to use it
 
