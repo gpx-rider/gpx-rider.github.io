@@ -38,12 +38,12 @@ module:
 | `app/profile.mjs` | Elevation profile canvas drawing + hover/seek hit-testing |
 | `app/trainer.mjs` | FTMS trainer over Web Bluetooth: pairing, reconnect, control-point writes, Indoor Bike Data parsing (speed, power, calories, HR) |
 | `app/heartrate.mjs` | BLE heart-rate strap (standard Heart Rate service 0x180D) |
-| `app/recorder.mjs` | Ride "bucket": accumulates samples while moving, persists to localStorage |
+| `app/recorder.mjs` | Ride "bucket": accumulates samples while moving, persists via `storage.mjs` |
 | `app/fit.mjs` | Minimal FIT activity encoder — tags rides as sport=cycling, sub_sport=virtual_activity (tested) |
 | `app/units.mjs` | km/mi + kcal/kJ display formatting; internal state is always metric (tested) |
 | `app/screenshot.mjs` | One-click JPG of the map viewport via tab capture (`getDisplayMedia`) — the 3D map canvas sits in a closed shadow root and cannot be read directly |
 | `app/gallery.mjs` | Ride gallery cards from `app/gallery.json` |
-| `app/storage.mjs` | localStorage JSON helpers |
+| `app/storage.mjs` | Persistence: IndexedDB behind a sync in-memory cache (localStorage fallback + one-time migration; tested) |
 | `app/config.mjs` | `deployedMapsApiKey()` — empty in source, rewritten at deploy time (see below) |
 
 Module conventions: browser modules use the `.mjs` extension (except the
@@ -72,7 +72,8 @@ in place).
   time is clamped (`MAX_TICK_SECONDS`) to avoid teleporting.
 - **Ride recording** is independent of route progress: resetting or seeking
   the route does not touch the recorded bucket. The bucket only grows while
-  the rider is actually moving, and it survives reloads via localStorage.
+  the rider is actually moving, and it survives reloads via `storage.mjs`
+  (IndexedDB — a long ride no longer risks localStorage's ~5 MB quota).
 - **FIT export** must stay a *virtual ride* (sport 2 / sub_sport 58) or
   Strava/Garmin will misclassify uploads. `fit.mjs` is a hand-rolled
   little-endian encoder — if you touch it, keep the CRC and header tests
@@ -159,13 +160,22 @@ in place).
   API, which would cost real money at follow-camera query rates. Keep it
   that way.
 
-## Persistence (localStorage keys)
+## Persistence
 
-`gpx-rider:maps-api-key`, `gpx-rider:settings`, `gpx-rider:last-ride`
-(route + progress), `gpx-rider:ride-log` (recorded samples),
-`gpx-rider:last-trainer`, `gpx-rider:last-heart-rate`. Never send any of
-these anywhere; the app's privacy story is "everything stays in the
-browser".
+`app/storage.mjs` keeps everything in IndexedDB (database `gpx-rider`,
+object store `kv`), fronted by an in-memory cache that `initStorage()`
+loads once — `startApp()` awaits it before anything reads — so
+`readJson`/`writeJson`/`removeStored` stay synchronous for callers.
+Records saved by older versions in localStorage are migrated into
+IndexedDB on first load; browsers without working IndexedDB fall back to
+localStorage transparently. Keys: `gpx-rider:settings`,
+`gpx-rider:last-ride` (route + progress), `gpx-rider:ride-log` (recorded
+samples), `gpx-rider:last-trainer`, `gpx-rider:last-heart-rate`. The one
+deliberate exception is `gpx-rider:maps-api-key`, which stays in
+localStorage (handled directly in `app.js`): saving it reloads the page
+immediately, and only a synchronous write is guaranteed to survive that.
+Never send any of these anywhere; the app's privacy story is "everything
+stays in the browser".
 
 ## Deployed Maps API key
 

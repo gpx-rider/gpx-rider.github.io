@@ -3,8 +3,8 @@
 // Change a value here, reload the page, done: there is no build step. Each
 // constant says what it does, what unit it is in, and what happens when you
 // move it. Settings the user can change in the ⚙ dialog only get their
-// *defaults* from here — a value already saved in the browser's localStorage
-// wins until the user resets it (or clears site data).
+// *defaults* from here — a value already saved in the browser (see
+// app/storage.mjs) wins until the user resets it (or clears site data).
 //
 // Two things deliberately do NOT live here:
 // - app/config.mjs — the deploy-time Maps API key slot. It is rewritten by
@@ -33,8 +33,8 @@ export const MAX_TICK_SECONDS = 5;
 // frame; this only throttles text/canvas work.
 export const SLOW_UI_INTERVAL_MS = 250;
 
-// How often the ride (route + progress) is saved to localStorage while
-// moving. Lower = less progress lost on a crash, more storage churn.
+// How often the ride (route + progress) is persisted to browser storage
+// while moving. Lower = less progress lost on a crash, more storage churn.
 export const RIDE_SAVE_THROTTLE_MS = 1500;
 
 // --- Trainer grade updates -----------------------------------------------------
@@ -282,8 +282,8 @@ export const CLIMB_MIN_AVERAGE_GRADE_PERCENT = 3;
 // --- Ride recording -----------------------------------------------------------------
 
 // While moving, a track sample is appended roughly every SAMPLE interval and
-// the whole log is persisted to localStorage every PERSIST interval so a
+// the whole log is persisted to browser storage every PERSIST interval so a
 // reload or crash never loses a ride. Denser samples = bigger FIT files and
-// more localStorage use.
+// more storage churn.
 export const RIDE_SAMPLE_INTERVAL_MS = 1000;
 export const RIDE_PERSIST_INTERVAL_MS = 5000;
