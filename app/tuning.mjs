@@ -171,22 +171,43 @@ export const DEFAULT_BEACON_COLOR = "#ffffff";
 
 // --- Rider dot ---------------------------------------------------------------------
 
-// The ground marker showing the rider's position is a Model3DElement loading
-// app/assets/rider-dot.glb (a hand-rolled two-material puck, see
-// scripts/generate_rider_dot_model.py), not a filled Polygon3DElement.
-// Polygon3DElement is meant for static terrain-draped areas; re-tessellating
-// one every frame as the rider moves produced two separate failures
-// confirmed in a real browser (not just reasoned about): the fill rendering
-// solid black at ordinary follow-camera distances — independent of polygon
-// winding, altitude/z-fighting with terrain (tried 1m through 20m up), and
+// The ground marker showing the rider's position is a Model3DElement (see
+// renderRiderDot in app.js), not a filled Polygon3DElement. Polygon3DElement
+// is meant for static terrain-draped areas; re-tessellating one every frame
+// as the rider moves produced two separate failures confirmed in a real
+// browser (not just reasoned about): the fill rendering solid black at
+// ordinary follow-camera distances — independent of polygon winding,
+// altitude/z-fighting with terrain (tried 1m through 20m up), and
 // `extruded: true` (a short cylinder instead of a flat disc), none of which
 // changed it — and a faceted/streaky look from the constant re-triangulation.
-// A real mesh sidesteps both. The model is baked to a true 1 meter diameter,
-// so RIDER_DOT_SCALE is a plain real-world size multiplier, not a unitless
-// fudge factor — unlike a screen-space billboard (tried and rejected: it
-// doesn't grow/shrink with camera distance the way a real ground object
-// should, and Marker3DElement/PinElement's default pin shape doesn't read as
-// a location dot).
+// A real mesh sidesteps both.
+
+// A path, not a full URL — app.js resolves it against its own module URL
+// (not the page's), so it loads correctly regardless of what path GPX Rider
+// is served from. Swap this to experiment with other models — a couple of
+// things to expect when trying a new one, both confirmed by testing, neither
+// documented anywhere we could find:
+//   - A model's local "up" axis does not necessarily map to world-up; if a
+//     new model stands on its edge instead of lying flat, adjust
+//     RIDER_DOT_ORIENTATION below (the shipped puck needed tilt: 90).
+//   - An ordinary lit PBR material can render solid black on this renderer
+//     regardless of normals/winding/texturing — if a replacement model
+//     renders black, look for (or add) a KHR_materials_unlit extension on
+//     its materials, the same fix the shipped puck needed.
+export const RIDER_DOT_MODEL_PATH = "assets/rider-dot.glb";
+
+// heading/tilt/roll passed straight to Model3DElement's `orientation`. Not
+// meaningful in isolation — it corrects for the specific model at
+// RIDER_DOT_MODEL_PATH's own local axes, so re-tune this whenever that model
+// changes (see the note above).
+export const RIDER_DOT_ORIENTATION = { heading: 0, tilt: 90, roll: 0 };
+
+// The model at RIDER_DOT_MODEL_PATH is baked to a true 1 meter diameter, so
+// this is a plain real-world size multiplier, not a unitless fudge factor —
+// unlike a screen-space billboard (Marker3DElement + PinElement, tried and
+// rejected: doesn't grow/shrink with camera distance the way a real ground
+// object should, and a map-pin shape doesn't read as a location dot anyway).
+// A different model baked to a different base size will need this retuned.
 export const RIDER_DOT_SCALE = 5;
 
 // Only used by the Polyline3DElement fallback for browsers without
