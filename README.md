@@ -55,7 +55,7 @@ Contributions are very welcome. See [Contributing](#contributing) below.
 ## Highlights
 
 - **GPX import** — drag in any route with track points and elevation, or start from the built-in route gallery.
-- **Photorealistic 3D terrain** — Google Photorealistic 3D Maps render the route with a follow camera, minimap, rider beacon, terrain-aware camera lift, and a whole-route overview before the ride starts.
+- **Photorealistic 3D terrain** — Google Photorealistic 3D Maps render the route with a follow camera, minimap, rider beacon, terrain-aware camera lift, and a whole-route overview (static, orbit, ellipse fly-by, figure-eight fly-over, or straight-down satellite) available before and during the ride.
 - **Bluetooth FTMS trainer control** — connect Wahoo KICKR and other FTMS-compatible trainers over Web Bluetooth. Start pedaling and the map advances from your real trainer speed; stop pedaling and the ride stops.
 - **Heart-rate sensors** — pair a standard Bluetooth heart-rate strap and see live BPM in the stats and ride HUD.
 - **Route difficulty and climbs** — GPX Rider classifies the route, detects sustained climbs, lists each climb with distance/elevation/grade, and tracks live progress to the top while riding.
@@ -113,11 +113,26 @@ The classification uses distance and elevation gain only; it does not depend on 
 
 ## Camera And HUD
 
-A freshly loaded route starts in a whole-route overview, framed from above so you can understand the shape of the ride before moving. Once you start pedaling or simulation begins, the camera flies down behind the rider and follows the route using GPX bearing.
+A freshly loaded route starts in a whole-route overview, framed from above so you can understand the shape of the ride before moving. The map action bar has a split overview button: the plane toggles between overview and the rider camera, and the chevron opens the overview style menu. The overview has six styles (also available in Settings › Camera & view → Route overview):
+
+- **Static** — the classic framed still shot.
+- **Orbit** — a slow turntable rotation around the route.
+- **Fly-by** — a camera flies a PCA-aligned ellipse around the route, looking along its direction of travel.
+- **Fly-over** — a camera flies a figure-eight over the route, crossing the middle once per loop. It shares every fly-by setting; only the path differs. Because the eight changes turn direction between its two lobes, the camera banks and looks into whichever turn it's in — leaning slightly left on one lobe, straightening through the crossing, then slightly right on the other.
+- **Satellite** — a straight-down view with the route turned to lie across the screen and made as large as it fits.
+- **Satellite (north up)** — the same straight-down view, but locked north-up.
+
+The fly-by ellipse (and the fly-over figure-eight) can intentionally be smaller than the route footprint; altitude, pitch, field of view, inward horizontal look offset, and view distance determine how much of the route stays visible from the air. Direction, lap time, maximum speed, ellipse scale, minimum turning radius, baseline height, minimum terrain clearance, pitch, view distance, field of view, inward look offset, and maximum bank angle are configurable in `app/tuning.mjs`.
+
+Once you start pedaling or simulation begins, the camera flies down behind the rider and follows the route using GPX bearing. The overview turns on automatically when a route loads and turns off automatically the moment you start moving — but it's never locked out: the overview button stays available during a ride, so you can flip back to any overview style mid-ride if you want to watch the whole route, then flip back to the rider camera.
+
+The map reset-camera button restores the currently chosen camera surface after a manual drag. It does not turn the rider camera back into the route overview unless the overview button is active.
 
 The fullscreen HUD is designed for riding, not just watching. It keeps the map full bleed while showing configurable metric tiles, the road-ahead elevation profile, distance progress, climbing progress, elapsed time, minimap, and climb banner. You can collapse the data dock when you want maximum map.
 
-Settings are grouped into practical categories: camera and view, rendering, HUD and data fields, units, trainer and sensors, screenshots, and data storage. Preferences are remembered locally.
+Settings are grouped into practical categories: camera and view, rendering, HUD and data fields, units, trainer and sensors, screenshots, data storage, and debug. Preferences are remembered locally.
+
+The debug category has a **camera debug overlay** — a collapsible translucent box on the map showing the live camera values the 3D map actually applies (tilt, range, heading, roll, field of view, look-at center, eye altitude) alongside ride progress. When the selected overview mode is Orbit, Fly-by, or Fly-over, it also draws that mode's travel path in red, including after you drag the camera into manual mode.
 
 ## Hosting Your Own Copy
 

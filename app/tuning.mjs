@@ -111,7 +111,126 @@ export const DEFAULT_CAMERA_ANGLE_DEGREES = 75;
 export const DEFAULT_CAMERA_BEHIND_METERS = 800;
 
 // Route overview shown when a route loads: whole route framed from this tilt.
-export const OVERVIEW_TILT_DEGREES = 45;
+// Tilt is degrees from straight-down — 0 is top-down, ~89 is nearly at the
+// horizon (a low, terrain-revealing angle). NOTE: Google's 3D map limits how
+// far it will tilt toward the horizon when the camera is far out, so at the
+// large range needed to frame a long route a high tilt may be pulled back
+// toward top-down. Use the range knobs below to bring the camera closer if a
+// steeper tilt isn't taking effect (watch the Debug camera overlay).
+export const OVERVIEW_TILT_DEGREES = 70;
+
+// Which side the overview looks from, as a rotation (degrees) on top of the
+// side the algorithm auto-picks (which puts the route's bulk away from the
+// viewer, start-left/end-right). 0 = the auto choice; 180 = the exact opposite
+// side, still with the route's long axis horizontal — this is how you flip a
+// route to see it "from the other side". Other values swing the view to any
+// azimuth (the route then reads diagonally, but it's still fully framed).
+export const OVERVIEW_HEADING_OFFSET_DEGREES = 0;
+
+// Slack around the route when fitting it to the viewport. 1.0 hugs the route
+// to the screen edges; higher leaves more empty margin (camera further out).
+export const OVERVIEW_MARGIN_FACTOR = 0.9;
+
+// Multiplier on the fitted overview range. 1 frames the whole route; below 1
+// pulls the camera in closer (route edges crop off, but terrain relief reads
+// much better at a low tilt); above 1 pushes it further out. This is the main
+// knob for trading "see the whole route" against "see the 3D terrain".
+export const OVERVIEW_RANGE_FACTOR = 0.75;
+
+// Hard bounds (meters) on the overview range, applied after the factor. The
+// max cap is the other way to force a closer, more terrain-rich view on long
+// routes (at the cost of not framing the whole thing); leave it at Infinity to
+// always frame the entire route. Min keeps tiny routes from zooming in absurdly.
+export const OVERVIEW_MIN_RANGE_METERS = 250;
+export const OVERVIEW_MAX_RANGE_METERS = Infinity;
+
+// --- Overview motion (static / orbit / ellipse flyby) -----------------------------
+//
+// How the whole-route overview behaves when a route loads. This is a user
+// setting (Settings › Camera & view); the value here is only the default.
+//   "static"           — the framed still shot (the classic overview)
+//   "orbit"            — turntable: the static shot slowly rotates around the route
+//   "flyby"            — a camera flies a PCA-aligned ellipse around the route
+//   "flyover"          — a camera flies a figure-eight over the route (shares ELLIPSE_FLYBY)
+//   "satellite"        — straight-down, north-up view with the route framed as big as fits
+export const DEFAULT_OVERVIEW_MODE = "orbit";
+
+// Orbit mode: seconds for one full revolution, and spin direction (1 =
+// clockwise seen from above, -1 = counter-clockwise). Longer = statelier.
+export const OVERVIEW_ORBIT_SECONDS_PER_REV = 40;
+export const OVERVIEW_ORBIT_DIRECTION = 1;
+
+// Red overview travel line drawn while the camera debug overlay is enabled.
+// Orbit draws the orbit eye ground track; Fly-by draws its fitted ellipse.
+export const OVERVIEW_DEBUG_LINE_COLOR = "#ff2d2d";
+
+// Pixel width of the red overview debug line.
+export const OVERVIEW_DEBUG_LINE_WIDTH = 8;
+
+// Height above terrain for the red overview debug line.
+export const OVERVIEW_DEBUG_LINE_ALTITUDE_METERS = 8;
+
+// Number of samples used for the red overview debug line.
+export const OVERVIEW_DEBUG_LINE_SAMPLE_COUNT = 240;
+
+// Map3DElement's documented default field of view, in degrees. Used to reset
+// camera modes that do not deliberately tune FOV.
+export const DEFAULT_MAP_FOV_DEGREES = 35;
+
+// When an animated overview (orbit/flyby) starts from a different
+// camera pose, ease into the motion over this many seconds instead of jumping.
+export const OVERVIEW_ANIM_INTRO_SECONDS = 1.5;
+
+// Satellite overview: a straight-down (near-vertical), north-up still framing
+// the whole route as large as it fits. SATELLITE_TILT_DEGREES is how far from
+// vertical the camera leans — 1 is the closest to true top-down Map3D allows (0
+// breaks the framing math). SATELLITE_MARGIN_FACTOR is the fit margin: 1 fills
+// the viewport edge-to-edge, higher leaves more breathing room.
+export const SATELLITE_TILT_DEGREES = 1;
+export const SATELLITE_MARGIN_FACTOR = 1.12;
+
+// Ellipse flyby (also drives the figure-eight "flyover" — same settings, only
+// the path shape differs): a camera flies along an ellipse aligned to the
+// route's principal axis and looks along its direction of travel. ellipseScale below
+// 1 lets the flight path cut inside the route footprint; higher altitude,
+// viewDistance, and a flatter mountPitch keep more of the route in view.
+// secondsPerLap controls the target time for one complete ellipse circuit, like
+// orbit's revolution duration. maxSpeedMps caps the resulting speed; if the cap
+// is hit, the actual lap takes longer than secondsPerLap.
+// flyHeightMetersMin is the baseline height above the route's center altitude;
+// flyHeightMetersAboveTerrainMin keeps the camera at least that far above the
+// highest route terrain point under the ellipse. The actual fly height uses
+// whichever minimum requires the higher camera.
+// cameraFovDegrees is passed to Map3D's `fov` property while the fly-by runs;
+// 5 is telephoto, 80 is wide-angle, 35 matches the normal Map3D default.
+// inwardLookDegrees rotates the fly-by camera horizontally toward the inside
+// of the ellipse: clockwise flights look right, counter-clockwise flights left.
+// The fly-over (figure-eight) reuses this value but, since it changes turn
+// direction each lobe, looks into whichever turn it is currently in and eases
+// back to straight-ahead through the center crossings — so the same degrees
+// read as "slightly left, then straight, then slightly right" over one lap.
+// direction is 1 for clockwise seen from above, -1 for counter-clockwise.
+// minTurnRadiusMeters is a radius: 2500 m means the tightest possible circle
+// would be 5 km across. maxBankDegrees is the roll applied at that tightest
+// turn; broader turns roll proportionally less.
+export const ELLIPSE_FLYBY = {
+  ellipseScale: 0.78,
+  minSemiMajorMeters: 1200,
+  minSemiMinorMeters: 700,
+  minTurnRadiusMeters: 750,
+  direction: 1,
+  secondsPerLap: 40,
+  maxSpeedMps: 10000,
+  flyHeightMetersMin: 1400,
+  flyHeightMetersAboveTerrainMin: 300,
+  cameraFovDegrees: 60,
+  inwardLookDegrees: 20,
+  mountPitchDegrees: 15,
+  viewDistanceMeters: 3200,
+  maxBankDegrees: 60,
+  sampleCount: 360,
+  startAngleDegrees: 0,
+};
 
 // The rider's heading is sampled this many meters behind/ahead of the rider,
 // so the camera points the way the rider moves rather than at a distant spot.
@@ -263,6 +382,14 @@ export const DEFAULT_SHOW_MINIMAP = true;
 // satellite imagery, on = Google's hybrid mode with labels.
 export const DEFAULT_MAP_LABELS_ENABLED = false;
 
+// Developer overlay: a small translucent box on the map showing the live
+// camera values the 3D map actually applies (tilt/range/heading/center),
+// plus ride progress. Off by default — it's a diagnostics aid, e.g. for
+// reading what tilt Google honours after a manual drag versus what we ask
+// for. The overlay refreshes on this interval while it's visible.
+export const DEFAULT_CAMERA_DEBUG_ENABLED = false;
+export const CAMERA_DEBUG_REFRESH_MS = 100;
+
 // Which tiles the fullscreen ride HUD shows. Keys must match the
 // data-hud="…" attributes in index.html (HUD tiles) and the
 // data-hud-toggle="…" checkboxes in the settings dialog.
@@ -387,7 +514,7 @@ export const CLIMB_RESTING_GRADIENT_PERCENT = 0.5;
  * drains at 20% of the speed it fills. This forgiving drain rate allows climbs to 
  * "hold their breath" through false-flats and brief downhill dips.
  */
-export const CLIMB_RECOVERY_MULTIPLIER = 0.2;
+export const CLIMB_RECOVERY_MULTIPLIER = 0.4;
 
 /**
  * The number of data points used in the moving average pre-filter. Raw GPS 

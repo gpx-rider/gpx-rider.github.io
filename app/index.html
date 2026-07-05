@@ -50,9 +50,24 @@
                 <svg class="icon-fs-enter" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M16 3h3a2 2 0 0 1 2 2v3"></path><path d="M8 21H5a2 2 0 0 1-2-2v-3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>
                 <svg class="icon-fs-exit" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h3a2 2 0 0 0 2-2V3"></path><path d="M21 8h-3a2 2 0 0 1-2-2V3"></path><path d="M3 16h3a2 2 0 0 1 2 2v3"></path><path d="M21 16h-3a2 2 0 0 0-2 2v3"></path></svg>
               </button>
-              <button id="resetCameraViewBtn" type="button" class="map-action-btn" title="Reset the camera to its default view" aria-label="Reset the camera to its default view">
+              <button id="resetCameraViewBtn" type="button" class="map-action-btn" title="Reset the camera to its default view" aria-label="Reset the camera to its default view" disabled>
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a9 9 0 1 1-1.6 5"></path><path d="M3 3v5h5"></path></svg>
               </button>
+              <div id="mapOverviewControl" class="map-overview-control">
+                <button id="overviewToggleBtn" type="button" class="map-action-btn map-overview-toggle" title="Show route overview" aria-label="Show route overview" aria-pressed="true">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5c1-1 1.3-2.6.8-3.1s-2.1-.2-3.1.8L13.7 8.8 5.5 7 4 8.5l6.6 3.1-3.5 3.5-2.8-.6-1.2 1.2 4.1 2.1 2.1 4.1 1.2-1.2-.6-2.8 3.5-3.5 3.1 6.6z"></path></svg>
+                </button>
+                <button id="overviewMenuBtn" type="button" class="map-action-btn map-overview-menu-btn" title="Choose overview style" aria-label="Choose overview style" aria-haspopup="menu" aria-expanded="false">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                </button>
+                <div id="overviewModeMenu" class="map-overview-menu" role="menu" hidden>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="static">Static</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="orbit">Orbit</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="flyby">Fly-by</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="flyover">Fly-over</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="satellite">Satellite</button>
+                </div>
+              </div>
               <button id="centerRiderBtn" type="button" class="map-action-btn" title="Keep rider centered" aria-label="Keep rider centered" aria-pressed="true">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><line x1="12" y1="1.5" x2="12" y2="4.5"></line><line x1="12" y1="19.5" x2="12" y2="22.5"></line><line x1="1.5" y1="12" x2="4.5" y2="12"></line><line x1="19.5" y1="12" x2="22.5" y2="12"></line><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"></circle></svg>
               </button>
@@ -61,6 +76,19 @@
               <button id="fullscreenSettingsBtn" type="button" class="map-action-btn map-action-btn-fs-only" title="Settings" aria-label="Open settings">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
               </button>
+            </div>
+
+            <!-- Developer camera-debug overlay (Settings › Debug). A plain map
+                 overlay — shown in both windowed and fullscreen — its body is
+                 filled live from the map's current camera values. -->
+            <div id="cameraDebug" class="camera-debug" hidden aria-hidden="true">
+              <div class="camera-debug-head">
+                <div class="camera-debug-title">CAMERA DEBUG</div>
+                <button id="cameraDebugCollapseBtn" type="button" class="camera-debug-toggle" title="Collapse camera debug" aria-label="Collapse camera debug" aria-expanded="true">
+                  <svg class="camera-debug-toggle-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
+              <dl id="cameraDebugBody" class="camera-debug-body"></dl>
             </div>
 
             <!-- Fullscreen ride HUD (design 3a). These overlays are children of
@@ -378,6 +406,11 @@
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>
             <span>Data &amp; storage</span>
           </button>
+          <button type="button" class="settings-tab" data-settings-tab="debug"
+            data-panel-title="Debug" data-panel-subtitle="Developer overlays for inspecting the live camera.">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="6" width="8" height="14" rx="4"></rect><path d="M12 6V3M5 9l3 1.5M19 9l-3 1.5M4 15h4M16 15h4M6 20l2.5-1.5M18 20l-2.5-1.5"></path></svg>
+            <span>Debug</span>
+          </button>
         </nav>
         <div class="settings-rail-foot">GPX Rider · open source<br>settings saved locally</div>
       </div>
@@ -395,6 +428,20 @@
 
         <div class="settings-body">
           <section class="settings-panel" data-settings-panel="camera">
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Route overview</span>
+                <span class="setting-row-hint">how the whole route is framed in the overview</span>
+              </div>
+              <select id="overviewModeSelect">
+                <option value="static">Static</option>
+                <option value="orbit">Orbit</option>
+                <option value="flyby">Fly-by</option>
+                <option value="flyover">Fly-over</option>
+                <option value="satellite">Satellite</option>
+              </select>
+            </div>
+            <div class="settings-divider"></div>
             <div class="setting-slider">
               <div class="setting-slider-head">
                 <label for="cameraZoomInput">Zoom</label>
@@ -646,6 +693,24 @@
               recording are saved in this browser. Chrome may also reconnect to a
               previously permitted trainer or heart rate sensor when Web
               Bluetooth allows it.
+            </p>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="debug" hidden>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Camera debug overlay</span>
+                <span class="setting-row-hint">live tilt / range / heading the map actually applies</span>
+              </div>
+              <label class="switch">
+                <input id="cameraDebugInput" type="checkbox">
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+            <p class="settings-note">
+              Shows a small box on the map with the camera values Google's 3D
+              map reports — useful for comparing what you set against what the
+              map honours after dragging the view by hand.
             </p>
           </section>
         </div>

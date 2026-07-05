@@ -1,4 +1,4 @@
-# CLAUDE.md — instructions for AI agents working on GPX Rider
+# AGENTS.md — instructions for AI agents working on GPX Rider
 
 GPX Rider is a **no-build, static web app**: plain HTML/CSS/JS ES modules,
 no bundler, no framework, no `node_modules`. Keep it that way — do not

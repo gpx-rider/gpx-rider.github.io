@@ -49,10 +49,9 @@ export function applyCameraOffset(position, routeHeading, forwardMeters, rightMe
   return destinationPoint(position, normalizeHeading(routeHeading + offsetAngle), distance);
 }
 
-// The camera eye position. Map3DElement only exposes the look-at center plus
-// range/tilt/heading, so the eye is reconstructed from those: it sits `range`
-// away from the center, pulled back along the opposite heading and lifted by
-// the tilt.
+// The camera eye position. Map3DElement exposes the look-at center plus camera
+// range/tilt/heading/roll; roll does not move the eye, so the eye is
+// reconstructed from center/range/tilt/heading.
 export function cameraEyePosition({ center, range, tilt, heading }) {
   const safeRange = Number(range);
   const lat = Number(center?.lat);
@@ -94,13 +93,31 @@ export function applyCameraLift({ tiltDegrees, rangeMeters, liftMeters, minTiltD
   };
 }
 
-// Frame the whole route from a 45-degree side view: the start→end line
-// becomes the screen-horizontal axis and the camera looks at the route from
-// whichever side leaves the point furthest from that axis away from the
-// viewer. A straight (or symmetric) route defaults to looking from the
-// south side of the axis direction — start on the left, end on the right.
+// Frame the whole route from a 45-degree side view. The framing axis is the
+// route's *principal axis of horizontal spread* (PCA over every point), not
+// the straight start→end line: that keeps loops, lollipops, out-and-backs and
+// any route whose endpoints sit close together framed along their real long
+// dimension instead of collapsing onto a near-zero, arbitrary start→end axis
+// (the old fallback — aim at the point furthest from the start — could face
+// the camera almost anywhere for a loop). The long axis becomes the
+// screen-horizontal, and the camera looks at the route from whichever side
+// leaves the point furthest from that axis away from the viewer. A straight
+// (or symmetric) route defaults to looking from the south side of the axis
+// direction — start on the left, end on the right.
 export function computeRouteOverviewCamera(route, {
   tiltDegrees = 45,
+  // Rotates the whole overview around the route. 0 uses the auto-picked side
+  // (far side away, start-left/end-right); 180 views from the exact opposite
+  // side with the long axis still horizontal; any other value swings the
+  // azimuth freely (the route reads diagonally, but the range fit below still
+  // frames every point). Added on top of the auto side choice, so 180 always
+  // means "the other side" regardless of which side the algorithm picked.
+  headingOffsetDegrees = 0,
+  // Force an absolute compass heading, bypassing the auto side choice and the
+  // offset above (used by the north-up satellite view, which must look due
+  // north regardless of the route's principal axis). The range fit still
+  // frames every point under this heading.
+  headingDegrees = undefined,
   viewportAspect = 16 / 9,
   // Map3DElement renders with a 35° field of view by default (its `fov`
   // property). The docs don't say which axis that measures, so the fit
@@ -108,23 +125,60 @@ export function computeRouteOverviewCamera(route, {
   // stays whole under either reading, at worst slightly smaller.
   fovDegrees = 35,
   marginFactor = 1.3,
+  // Multiplier applied to the fitted range. 1 frames the whole route exactly;
+  // below 1 pulls the camera closer (route edges crop, but terrain relief
+  // reads much better at a low tilt); above 1 pushes it further out.
+  rangeFactor = 1,
   minRangeMeters = 250,
+  // Upper bound on the range. The whole-route fit can be many km out on a long
+  // route, which flattens terrain and makes a low tilt pointless; capping the
+  // range keeps the view closer at the cost of not framing the whole route.
+  maxRangeMeters = Infinity,
 } = {}) {
   if (!Array.isArray(route) || route.length < 2) return null;
 
   const start = route[0];
   const end = route[route.length - 1];
 
-  // Loop routes have no usable start→end axis; aim it at the point furthest
-  // from the start instead.
-  let axisEnd = end;
-  if (haversine(start, end) < 10) {
-    for (const point of route) {
-      if (haversine(start, point) > haversine(start, axisEnd)) axisEnd = point;
-    }
-    if (haversine(start, axisEnd) < 10) return null;
+  // Principal axis of the route's ground footprint. Working in local
+  // equirectangular units around `start` (longitude scaled by cos(lat) so east
+  // and north share a scale — the axis angle is scale-invariant), the
+  // covariance of the points about their centroid gives the direction of
+  // greatest spread. Unlike start→end, this is stable wherever the endpoints
+  // fall on the route, which is what lets loops frame along their real extent.
+  const cosLat = Math.cos(toRad(start.lat)) || 1e-6;
+  const local = route.map((point) => [(point.lng - start.lng) * cosLat, point.lat - start.lat]);
+  let meanEast = 0;
+  let meanNorth = 0;
+  for (const [e, n] of local) { meanEast += e; meanNorth += n; }
+  meanEast /= local.length;
+  meanNorth /= local.length;
+  let covEE = 0;
+  let covNN = 0;
+  let covEN = 0;
+  for (const [e, n] of local) {
+    const de = e - meanEast;
+    const dn = n - meanNorth;
+    covEE += de * de;
+    covNN += dn * dn;
+    covEN += de * dn;
   }
-  const axisBearing = bearing(start, axisEnd);
+  const principalAngle = 0.5 * Math.atan2(2 * covEN, covEE - covNN);
+  let majorEast = Math.cos(principalAngle);
+  let majorNorth = Math.sin(principalAngle);
+
+  // Orient the axis so the route generally progresses start→end along it,
+  // which reads start-on-the-left, end-on-the-right for open routes. When the
+  // endpoints coincide (a loop or out-and-back has no progression direction)
+  // fall back to pointing the axis eastward, so a symmetric route still
+  // defaults to a north-up view. (The axis *direction* only decides this
+  // reading; the far-side-away side choice below is independent of it.)
+  const progEast = (end.lng - start.lng) * cosLat;
+  const progNorth = end.lat - start.lat;
+  const progAlongAxis = progEast * majorEast + progNorth * majorNorth;
+  const flip = Math.abs(progAlongAxis) > 1e-9 ? progAlongAxis < 0 : majorEast < 0;
+  if (flip) { majorEast = -majorEast; majorNorth = -majorNorth; }
+  const axisBearing = normalizeHeading(Math.atan2(majorEast, majorNorth) * 180 / Math.PI);
 
   let minAlong = 0;
   let maxAlong = 0;
@@ -146,6 +200,10 @@ export function computeRouteOverviewCamera(route, {
     maxEle = Math.max(maxEle, ele);
   }
 
+  // No usable footprint — every point sits on essentially the same spot, so
+  // there is nothing to frame.
+  if ((maxAlong - minAlong) < 10 && (maxCross - minCross) < 10) return null;
+
   // Positive cross is to the right of the axis. Looking toward the side that
   // reaches further puts that side away from the viewer. The deadband keeps
   // near-straight and near-symmetric routes on the default left side — which
@@ -153,7 +211,9 @@ export function computeRouteOverviewCamera(route, {
   // view over a few meters of bulge.
   const sideDeadband = Math.max(20, (maxAlong - minAlong) * 0.02);
   const sideSign = maxCross > -minCross + sideDeadband ? 1 : -1;
-  const heading = normalizeHeading(axisBearing + 90 * sideSign);
+  const heading = Number.isFinite(headingDegrees)
+    ? normalizeHeading(headingDegrees)
+    : normalizeHeading(axisBearing + 90 * sideSign + (Number(headingOffsetDegrees) || 0));
 
   const centerOnAxis = destinationPoint(start, axisBearing, (minAlong + maxAlong) / 2);
   const center = destinationPoint(centerOnAxis, normalizeHeading(axisBearing + 90), (minCross + maxCross) / 2);
@@ -218,11 +278,17 @@ export function computeRouteOverviewCamera(route, {
     else low = middle;
   }
 
+  // The fitted range frames the whole route; the factor then zooms in/out and
+  // the bounds cap the result. minRangeMeters wins over maxRangeMeters if they
+  // cross (a bad config shouldn't invert the range).
+  const fittedRange = Math.max(minRangeMeters, high);
+  const scaledRange = fittedRange * Math.max(0.01, Number(rangeFactor) || 1);
+  const upperBound = Math.max(minRangeMeters, Number(maxRangeMeters) || Infinity);
   return {
     center: { lat: center.lat, lng: center.lng, altitude: centerAltitude },
     heading,
     tilt,
-    range: Math.max(minRangeMeters, high),
+    range: clamp(scaledRange, minRangeMeters, upperBound),
   };
 }
 

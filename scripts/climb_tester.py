@@ -2,13 +2,14 @@ import sys
 import xml.etree.ElementTree as ET
 import math
 
-# --- THE CAPPED BUCKET CONSTANTS ---
+# --- TUNING CONSTANTS ---
 CLIMB_FATIGUE_THRESHOLD = 300
-CLIMB_MAX_FATIGUE = 900  # THE FIX: Put a lid on the bucket!
+CLIMB_MAX_FATIGUE = 900  
 CLIMB_RESTING_GRADIENT_PERCENT = 0.5
-CLIMB_RECOVERY_MULTIPLIER = 0.2  # Bumped slightly to allow descents to clear the cap
+# THE FIX: Allow the rider to catch their breath much faster on flats
+CLIMB_RECOVERY_MULTIPLIER = 0.4  
 CLIMB_SMOOTHING_WINDOW_SIZE = 5
-CLIMB_MIN_GAIN_METERS = 20
+CLIMB_MIN_GAIN_METERS = 15
 CLIMB_MIN_AVERAGE_GRADE_PERCENT = 1.5  
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -59,31 +60,37 @@ def detect_climbs(route):
     candidate_start = None
     candidate_peak = None
     is_active_climb = False
+    
+    # THE FIX: Syncing Accumulated Gain logic from JS
+    running_accumulated_gain = 0
+    peak_accumulated_gain = 0
 
     def close_candidate():
         nonlocal candidate_start, candidate_peak, is_active_climb, fatigue, max_fatigue_this_candidate
+        nonlocal running_accumulated_gain, peak_accumulated_gain
         
         if candidate_start and candidate_peak:
             length_m = candidate_peak['distance'] - candidate_start['distance']
-            gain_m = candidate_peak['ele'] - candidate_start['ele']
-            avg_grade = (gain_m / length_m) * 100 if length_m > 0 else 0
+            net_gain_m = candidate_peak['ele'] - candidate_start['ele']
+            avg_grade = (net_gain_m / length_m) * 100 if length_m > 0 else 0
             
             start_km = candidate_start['distance'] / 1000
             end_km = candidate_peak['distance'] / 1000
             
-            print(f"      ↳ Segment Review: {start_km:.2f}km -> {end_km:.2f}km | Gain: {gain_m:.1f}m | Grade: {avg_grade:.2f}%")
+            print(f"      ↳ Segment Review: {start_km:.2f}km -> {end_km:.2f}km | Net Gain: {net_gain_m:.1f}m | Acc Gain: {peak_accumulated_gain:.1f}m | Grade: {avg_grade:.2f}%")
             
             if is_active_climb:
-                if length_m > 0 and gain_m >= CLIMB_MIN_GAIN_METERS and avg_grade >= CLIMB_MIN_AVERAGE_GRADE_PERCENT:
+                # Use accumulated gain for the threshold check, net gain for the grade check
+                if length_m > 0 and peak_accumulated_gain >= CLIMB_MIN_GAIN_METERS and avg_grade >= CLIMB_MIN_AVERAGE_GRADE_PERCENT:
                     climbs.append({
                         'start_km': start_km,
                         'end_km': end_km,
-                        'gain': gain_m,
+                        'gain': peak_accumulated_gain,
                         'grade': avg_grade
                     })
                     print("      ✅ STATUS: ACCEPTED AND LOGGED!")
                 else:
-                    reason = "Grade < 1.5%" if avg_grade < CLIMB_MIN_AVERAGE_GRADE_PERCENT else "Gain < 15m"
+                    reason = "Grade < 1.5%" if avg_grade < CLIMB_MIN_AVERAGE_GRADE_PERCENT else f"Acc Gain < {CLIMB_MIN_GAIN_METERS}m"
                     print(f"      ❌ STATUS: REJECTED BY SANITY CHECK ({reason})")
             else:
                 print(f"      👻 STATUS: GHOST CLIMB (Drained before hitting {CLIMB_FATIGUE_THRESHOLD} threshold)")
@@ -94,6 +101,8 @@ def detect_climbs(route):
         is_active_climb = False
         fatigue = 0
         max_fatigue_this_candidate = 0
+        running_accumulated_gain = 0
+        peak_accumulated_gain = 0
 
     for i in range(1, len(smoothed_route)):
         pt = smoothed_route[i]
@@ -111,8 +120,6 @@ def detect_climbs(route):
             delta_fatigue *= CLIMB_RECOVERY_MULTIPLIER
             
         was_empty = (fatigue == 0)
-        
-        # THE FIX: Apply the ceiling to the fatigue calculation
         fatigue = min(CLIMB_MAX_FATIGUE, max(0, fatigue + delta_fatigue))
         
         if fatigue > max_fatigue_this_candidate:
@@ -122,10 +129,16 @@ def detect_climbs(route):
             if was_empty:
                 candidate_start = {'distance': prev['distance'], 'ele': prev['ele']}
                 candidate_peak = {'distance': pt['distance'], 'ele': pt['ele']}
+                running_accumulated_gain = max(0, ele_change)
+                peak_accumulated_gain = running_accumulated_gain
                 print(f"[{pt_km:.2f}km] 💧 BUCKET FILLING (Base Ele: {prev['ele']:.1f}m)")
+            else:
+                if ele_change > 0:
+                    running_accumulated_gain += ele_change
                 
             if candidate_peak and pt['ele'] > candidate_peak['ele']:
                 candidate_peak = {'distance': pt['distance'], 'ele': pt['ele']}
+                peak_accumulated_gain = running_accumulated_gain
                 
             if fatigue >= CLIMB_FATIGUE_THRESHOLD and not is_active_climb:
                 is_active_climb = True

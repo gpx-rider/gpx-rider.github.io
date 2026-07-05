@@ -227,6 +227,23 @@ test("overview faces the side of the route furthest from the axis", () => {
   assertHeadingNear(bulgeRight.heading, 180, 1);
 });
 
+test("overview headingOffset flips the view to the other side", () => {
+  const bulge = [
+    { lat: 50, lng: 14, ele: 0 },
+    { lat: 50.05, lng: 14.05, ele: 0 },
+    { lat: 50, lng: 14.1, ele: 0 },
+  ];
+  const auto = computeRouteOverviewCamera(bulge);
+  const flipped = computeRouteOverviewCamera(bulge, { headingOffsetDegrees: 180 });
+  // 180° offset is exactly the opposite viewing side.
+  assertHeadingNear(flipped.heading, auto.heading + 180, 1);
+  // A 90° swing lands 90° off the auto heading, and the fit still returns a
+  // usable range (every point is reframed, not dropped).
+  const swung = computeRouteOverviewCamera(bulge, { headingOffsetDegrees: 90 });
+  assertHeadingNear(swung.heading, auto.heading + 90, 1);
+  assert.ok(swung.range > 0);
+});
+
 test("wider routes need longer overview ranges", () => {
   const short = computeRouteOverviewCamera([
     { lat: 50, lng: 14, ele: 0 },
@@ -239,8 +256,35 @@ test("wider routes need longer overview ranges", () => {
   assert.ok(long.range > short.range * 5);
 });
 
+test("overview rangeFactor zooms the fitted range in and out", () => {
+  const route = [
+    { lat: 50, lng: 14, ele: 0 },
+    { lat: 50, lng: 14.2, ele: 0 }, // ~14 km, well clear of the min-range floor
+  ];
+  const fit = computeRouteOverviewCamera(route);
+  const closer = computeRouteOverviewCamera(route, { rangeFactor: 0.5 });
+  const farther = computeRouteOverviewCamera(route, { rangeFactor: 2 });
+  assert.ok(Math.abs(closer.range - fit.range * 0.5) < 1, "0.5 halves the range");
+  assert.ok(Math.abs(farther.range - fit.range * 2) < 1, "2 doubles the range");
+  // Tilt/heading/center are unaffected — only the distance changes.
+  assert.equal(closer.tilt, fit.tilt);
+  assertHeadingNear(closer.heading, fit.heading, 0.001);
+});
+
+test("overview maxRangeMeters caps how far the camera pulls out", () => {
+  const route = [
+    { lat: 50, lng: 14, ele: 0 },
+    { lat: 50, lng: 14.3, ele: 0 },
+  ];
+  const capped = computeRouteOverviewCamera(route, { maxRangeMeters: 3000 });
+  assert.equal(capped.range, 3000);
+  // A min above the max still wins, so the range never inverts.
+  const floored = computeRouteOverviewCamera(route, { minRangeMeters: 5000, maxRangeMeters: 3000 });
+  assert.equal(floored.range, 5000);
+});
+
 test("overview handles loops and degenerate routes", () => {
-  // Loop: start and end coincide; the axis falls back to the farthest point.
+  // Loop: start and end coincide; the axis comes from the route's spread.
   const loop = computeRouteOverviewCamera([
     { lat: 50, lng: 14, ele: 0 },
     { lat: 50.02, lng: 14.02, ele: 0 },
@@ -258,6 +302,36 @@ test("overview handles loops and degenerate routes", () => {
   ]), null);
   assert.equal(computeRouteOverviewCamera([{ lat: 50, lng: 14, ele: 0 }]), null);
   assert.equal(computeRouteOverviewCamera([]), null);
+});
+
+test("overview frames a loop along its long axis, not the start→end line", () => {
+  // An east-west elongated loop (four times wider than it is tall) whose
+  // start/end sit at the NORTH tip. The old start→farthest-point axis would
+  // run north→south — the loop's short axis — and frame it side-on, letting
+  // the wide east-west extent overflow the viewport. PCA picks the true long
+  // (east-west) axis, so the camera looks across it (heading ≈ north/south)
+  // and the whole loop reads left-to-right.
+  const cx = 14;
+  const cy = 50;
+  const semiEast = 0.08; // ~5.7 km wide
+  const semiNorth = 0.02; // ~2.2 km tall
+  const loop = [];
+  for (let i = 0; i <= 24; i++) {
+    // Start the traversal at the north tip so start === end sits far from the
+    // east-west long axis, which is exactly what tripped up the old axis.
+    const angle = Math.PI / 2 + (i / 24) * 2 * Math.PI;
+    loop.push({ lat: cy + semiNorth * Math.sin(angle), lng: cx + semiEast * Math.cos(angle), ele: 0 });
+  }
+
+  const camera = computeRouteOverviewCamera(loop);
+  // Long axis is east-west, so the view must look across it: north or south.
+  const acrossLongAxis = Math.min(
+    Math.abs(((camera.heading - 0 + 540) % 360) - 180),
+    Math.abs(((camera.heading - 180 + 540) % 360) - 180),
+  );
+  assert.ok(acrossLongAxis < 5, `loop heading ${camera.heading} should look across the long axis`);
+  assert.ok(Math.abs(camera.center.lat - cy) < 0.001);
+  assert.ok(Math.abs(camera.center.lng - cx) < 0.001);
 });
 
 // --- Physical camera chase ------------------------------------------------------

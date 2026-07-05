@@ -327,6 +327,7 @@ body {
   top: 16px;
   right: 16px;
   display: flex;
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -334,6 +335,112 @@ body {
    Google's attribution must always stay in. */
 .map-viewport.capturing .map-actions {
   visibility: hidden;
+}
+
+/* Developer camera-debug overlay: a translucent readout under the action
+   buttons, top-right. Shown in windowed and fullscreen; kept out of
+   screenshots like the buttons. */
+.camera-debug {
+  position: absolute;
+  top: 70px;
+  right: 16px;
+  min-width: 168px;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(13, 16, 21, 0.62);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: rgba(255, 255, 255, 0.85);
+  /* Selectable: the box captures the pointer (so a drag over it selects text
+     to copy, rather than panning the map underneath) and allows text
+     selection. It's small and out of the way, so it doesn't get in the way of
+     map interaction elsewhere. */
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  z-index: 5;
+}
+
+.map-viewport.capturing .camera-debug {
+  visibility: hidden;
+}
+
+.camera-debug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.camera-debug-title {
+  font: 700 9px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.camera-debug-toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+}
+
+.camera-debug-toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.camera-debug-toggle-icon {
+  transition: transform 120ms ease;
+}
+
+.camera-debug.collapsed {
+  min-width: 128px;
+}
+
+.camera-debug.collapsed .camera-debug-head {
+  margin-bottom: 0;
+}
+
+.camera-debug.collapsed .camera-debug-toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.camera-debug.collapsed .camera-debug-body {
+  display: none;
+}
+
+.camera-debug-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font: 500 11px/1.35 var(--font-mono);
+}
+
+.camera-debug-body dt {
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.camera-debug-body dd {
+  margin: 0;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
 }
 
 .map-action-btn {
@@ -359,6 +466,106 @@ body {
    off — matching the amber accent used for "on" states elsewhere. */
 .map-action-btn[aria-pressed="true"] {
   border-color: rgba(246, 165, 44, 0.5);
+  color: var(--accent);
+}
+
+.map-action-btn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.map-action-btn:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.map-overview-control {
+  position: relative;
+  display: flex;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(13, 16, 21, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.map-overview-control:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.map-overview-control.active {
+  border-color: rgba(246, 165, 44, 0.5);
+  color: var(--accent);
+}
+
+.map-overview-control .map-action-btn {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: inherit;
+}
+
+.map-overview-control .map-action-btn:hover {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.map-overview-toggle {
+  border-radius: 11px 0 0 11px !important;
+}
+
+.map-overview-menu-btn {
+  width: 29px !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 0 11px 11px 0 !important;
+}
+
+.map-overview-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 132px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(13, 16, 21, 0.74);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  z-index: 8;
+}
+
+.map-overview-menu[hidden] {
+  display: none;
+}
+
+.map-overview-menu button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font: 700 12px/1 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-overview-menu button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+}
+
+.map-overview-menu button[aria-checked="true"] {
+  background: rgba(246, 165, 44, 0.16);
   color: var(--accent);
 }
 
