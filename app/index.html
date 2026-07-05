@@ -64,6 +64,9 @@
                   <button type="button" role="menuitemradio" data-map-overview-mode="static">Static</button>
                   <button type="button" role="menuitemradio" data-map-overview-mode="orbit">Orbit</button>
                   <button type="button" role="menuitemradio" data-map-overview-mode="flyby">Fly-by</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="flyover">Fly-over</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="satellite">Satellite</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="satellite-north">Satellite (north up)</button>
                 </div>
               </div>
               <button id="centerRiderBtn" type="button" class="map-action-btn" title="Keep rider centered" aria-label="Keep rider centered" aria-pressed="true">
@@ -429,12 +432,15 @@
             <div class="setting-row">
               <div class="setting-row-text">
                 <span class="setting-row-label">Route overview</span>
-                <span class="setting-row-hint">how the whole route is shown before a ride</span>
+                <span class="setting-row-hint">how the whole route is framed in the overview</span>
               </div>
               <select id="overviewModeSelect">
                 <option value="static">Static</option>
                 <option value="orbit">Orbit</option>
                 <option value="flyby">Fly-by</option>
+                <option value="flyover">Fly-over</option>
+                <option value="satellite">Satellite</option>
+                <option value="satellite-north">Satellite (north up)</option>
               </select>
             </div>
             <div class="settings-divider"></div>

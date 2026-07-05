@@ -146,11 +146,14 @@ export const OVERVIEW_MAX_RANGE_METERS = Infinity;
 
 // --- Overview motion (static / orbit / ellipse flyby) -----------------------------
 //
-// How the whole-route overview behaves when a route loads at rest. This is a
-// user setting (Settings › Camera & view); the value here is only the default.
-//   "static"   — the framed still shot (the classic overview)
-//   "orbit"    — turntable: the static shot slowly rotates around the route
-//   "flyby"    — a camera flies a PCA-aligned ellipse around the route
+// How the whole-route overview behaves when a route loads. This is a user
+// setting (Settings › Camera & view); the value here is only the default.
+//   "static"           — the framed still shot (the classic overview)
+//   "orbit"            — turntable: the static shot slowly rotates around the route
+//   "flyby"            — a camera flies a PCA-aligned ellipse around the route
+//   "flyover"          — a camera flies a figure-eight over the route (shares ELLIPSE_FLYBY)
+//   "satellite"        — straight-down view, route oriented long-axis-horizontal, as big as fits
+//   "satellite-north"  — straight-down view, north up, route as big as fits
 export const DEFAULT_OVERVIEW_MODE = "orbit";
 
 // Orbit mode: seconds for one full revolution, and spin direction (1 =
@@ -179,8 +182,19 @@ export const DEFAULT_MAP_FOV_DEGREES = 35;
 // camera pose, ease into the motion over this many seconds instead of jumping.
 export const OVERVIEW_ANIM_INTRO_SECONDS = 1.5;
 
-// Ellipse flyby: a camera flies along an ellipse aligned to the route's
-// principal axis and looks along its direction of travel. ellipseScale below
+// Satellite overview: a straight-down (near-vertical) still framing the whole
+// route as large as it fits. SATELLITE_TILT_DEGREES is how far from vertical
+// the camera leans — 1 is the closest to true top-down Map3D allows (0 breaks
+// the framing math). SATELLITE_MARGIN_FACTOR is the fit margin: 1 fills the
+// viewport edge-to-edge, higher leaves more breathing room. Both the oriented
+// ("satellite", long axis horizontal) and north-up ("satellite-north")
+// variants use these; only the heading differs.
+export const SATELLITE_TILT_DEGREES = 1;
+export const SATELLITE_MARGIN_FACTOR = 1.12;
+
+// Ellipse flyby (also drives the figure-eight "flyover" — same settings, only
+// the path shape differs): a camera flies along an ellipse aligned to the
+// route's principal axis and looks along its direction of travel. ellipseScale below
 // 1 lets the flight path cut inside the route footprint; higher altitude,
 // viewDistance, and a flatter mountPitch keep more of the route in view.
 // secondsPerLap controls the target time for one complete ellipse circuit, like
@@ -194,6 +208,10 @@ export const OVERVIEW_ANIM_INTRO_SECONDS = 1.5;
 // 5 is telephoto, 80 is wide-angle, 35 matches the normal Map3D default.
 // inwardLookDegrees rotates the fly-by camera horizontally toward the inside
 // of the ellipse: clockwise flights look right, counter-clockwise flights left.
+// The fly-over (figure-eight) reuses this value but, since it changes turn
+// direction each lobe, looks into whichever turn it is currently in and eases
+// back to straight-ahead through the center crossings — so the same degrees
+// read as "slightly left, then straight, then slightly right" over one lap.
 // direction is 1 for clockwise seen from above, -1 for counter-clockwise.
 // minTurnRadiusMeters is a radius: 2500 m means the tightest possible circle
 // would be 5 km across. maxBankDegrees is the roll applied at that tightest
@@ -209,7 +227,7 @@ export const ELLIPSE_FLYBY = {
   flyHeightMetersMin: 1400,
   flyHeightMetersAboveTerrainMin: 300,
   cameraFovDegrees: 60,
-  inwardLookDegrees: 10,
+  inwardLookDegrees: 20,
   mountPitchDegrees: 15,
   viewDistanceMeters: 3200,
   maxBankDegrees: 60,

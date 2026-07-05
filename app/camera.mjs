@@ -113,6 +113,11 @@ export function computeRouteOverviewCamera(route, {
   // frames every point). Added on top of the auto side choice, so 180 always
   // means "the other side" regardless of which side the algorithm picked.
   headingOffsetDegrees = 0,
+  // Force an absolute compass heading, bypassing the auto side choice and the
+  // offset above (used by the north-up satellite view, which must look due
+  // north regardless of the route's principal axis). The range fit still
+  // frames every point under this heading.
+  headingDegrees = undefined,
   viewportAspect = 16 / 9,
   // Map3DElement renders with a 35° field of view by default (its `fov`
   // property). The docs don't say which axis that measures, so the fit
@@ -206,7 +211,9 @@ export function computeRouteOverviewCamera(route, {
   // view over a few meters of bulge.
   const sideDeadband = Math.max(20, (maxAlong - minAlong) * 0.02);
   const sideSign = maxCross > -minCross + sideDeadband ? 1 : -1;
-  const heading = normalizeHeading(axisBearing + 90 * sideSign + (Number(headingOffsetDegrees) || 0));
+  const heading = Number.isFinite(headingDegrees)
+    ? normalizeHeading(headingDegrees)
+    : normalizeHeading(axisBearing + 90 * sideSign + (Number(headingOffsetDegrees) || 0));
 
   const centerOnAxis = destinationPoint(start, axisBearing, (minAlong + maxAlong) / 2);
   const center = destinationPoint(centerOnAxis, normalizeHeading(axisBearing + 90), (minCross + maxCross) / 2);

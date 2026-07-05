@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createEllipseFlyby, fitFlybyEllipse } from "../app/flyby.mjs";
+import {
+  createEllipseFlyby,
+  fitFlybyEllipse,
+  createFigureEightFlyover,
+  fitFlyoverFigureEight,
+} from "../app/flyby.mjs";
 
 const route = [];
 for (let i = 0; i <= 80; i++) {
@@ -76,9 +81,9 @@ test("fly height climbs to clear the highest terrain under the ellipse", () => {
   });
   assert.ok(flyby);
 
-  const expected = flyby.ellipse.highestTerrainAltitudeMeters +
+  const expected = flyby.curve.highestTerrainAltitudeMeters +
     700 -
-    flyby.ellipse.centerAltitude;
+    flyby.curve.centerAltitude;
   assert.equal(flyby.flyHeightMeters, expected);
   assert.equal(flyby.terrainClearanceMeters, 700);
 });
@@ -194,6 +199,100 @@ test("bank is strongest at the tightest turn", () => {
   const broad = Math.abs(flyby.bankAt(flyby.loopLength / 4));
   assert.ok(tight > broad, `tight bank ${tight} > broad bank ${broad}`);
   assert.ok(tight <= BASE.maxBankDegrees + 1e-6);
+});
+
+test("figure-eight fly-over returns null for routes too small to fly", () => {
+  assert.equal(createFigureEightFlyover([{ lat: 46, lng: 7, ele: 0 }], BASE), null);
+});
+
+test("figure-eight shares the ellipse footprint frame", () => {
+  const ellipse = fitFlybyEllipse(route, BASE);
+  const eight = fitFlyoverFigureEight(route, BASE);
+  assert.ok(eight);
+  assert.equal(eight.semiMajor, ellipse.semiMajor);
+  assert.equal(eight.semiMinor, ellipse.semiMinor);
+  assert.deepEqual(eight.center, ellipse.center);
+  assert.deepEqual(eight.major, ellipse.major);
+});
+
+test("figure-eight crosses its own center twice per lap", () => {
+  const eight = fitFlyoverFigureEight(route, BASE);
+  // u = π/2 and u = 3π/2 both land on the footprint center (the crossing).
+  const mid = eight.pointAt(Math.PI / 2);
+  const other = eight.pointAt(3 * Math.PI / 2);
+  assert.ok(Math.hypot(mid[0] - eight.center[0], mid[1] - eight.center[1]) < 1e-6);
+  assert.ok(Math.hypot(other[0] - eight.center[0], other[1] - eight.center[1]) < 1e-6);
+});
+
+test("figure-eight fly-over emits finite frames and advances around the loop", () => {
+  const flyover = createFigureEightFlyover(route, BASE);
+  assert.ok(flyover);
+  assert.ok(flyover.loopLength > 1000);
+  assert.ok(flyover.lapSeconds > 0);
+
+  let s = 0;
+  s = flyover.advance(s, 1);
+  assert.ok(s > 0);
+
+  const frame = flyover.frameAt(s);
+  for (const key of ["lat", "lng", "altitude"]) {
+    assert.ok(Number.isFinite(frame.eye[key]), `eye.${key} finite`);
+    assert.ok(Number.isFinite(frame.lookAt[key]), `lookAt.${key} finite`);
+  }
+  assert.ok(frame.eye.altitude > frame.lookAt.altitude, "camera is pitched down");
+});
+
+test("figure-eight fly-over looks in the direction of travel", () => {
+  const flyover = createFigureEightFlyover(route, { ...BASE, inwardLookDegrees: 0 });
+  const s = flyover.loopLength * 0.15;
+  const frame = flyover.frameAt(s);
+  const viewBearing = bearingLocal(frame.eye, frame.lookAt);
+  const p0 = flyover.positionAt(s);
+  const p1 = flyover.positionAt(s + 5);
+  const tangentBearing = Math.atan2(p1[0] - p0[0], p1[1] - p0[1]);
+  const delta = Math.abs(((viewBearing - tangentBearing + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+  assert.ok(delta < 0.1, `camera faces travel direction (off by ${delta} rad)`);
+});
+
+test("figure-eight inward look follows the changing turn direction", () => {
+  const offset = 20;
+  const flyover = createFigureEightFlyover(route, { ...BASE, inwardLookDegrees: offset });
+  const samples = 240;
+  let maxRight = -Infinity;
+  let maxLeft = Infinity;
+  let minAbs = Infinity;
+  for (let i = 0; i < samples; i++) {
+    const s = flyover.loopLength * (i / samples);
+    const frame = flyover.frameAt(s);
+    const viewBearing = bearingLocal(frame.eye, frame.lookAt);
+    const p0 = flyover.positionAt(s);
+    const p1 = flyover.positionAt(s + 5);
+    const tangentBearing = Math.atan2(p1[0] - p0[0], p1[1] - p0[1]);
+    const delta = signedDeltaDegrees(viewBearing, tangentBearing);
+    maxRight = Math.max(maxRight, delta);
+    maxLeft = Math.min(maxLeft, delta);
+    minAbs = Math.min(minAbs, Math.abs(delta));
+    assert.ok(Math.abs(delta) <= offset + 0.5, `inward look stays within the configured offset (${delta}°)`);
+  }
+  // Looks right on one lobe, left on the other, and straight ahead in between.
+  assert.ok(maxRight > 3, `looks into a right turn somewhere (${maxRight}°)`);
+  assert.ok(maxLeft < -3, `looks into a left turn somewhere (${maxLeft}°)`);
+  assert.ok(minAbs < 1, `passes through looking straight ahead (${minAbs}°)`);
+});
+
+test("figure-eight bank reverses between the two lobes", () => {
+  const flyover = createFigureEightFlyover(route, BASE);
+  const samples = 240;
+  let maxBank = -Infinity;
+  let minBank = Infinity;
+  for (let i = 0; i < samples; i++) {
+    const bank = flyover.bankAt(flyover.loopLength * (i / samples));
+    maxBank = Math.max(maxBank, bank);
+    minBank = Math.min(minBank, bank);
+    assert.ok(Math.abs(bank) <= BASE.maxBankDegrees + 1e-6);
+  }
+  assert.ok(maxBank > 1, `banks one way (${maxBank}°)`);
+  assert.ok(minBank < -1, `banks the other way (${minBank}°)`);
 });
 
 function bearingLocal(a, b) {

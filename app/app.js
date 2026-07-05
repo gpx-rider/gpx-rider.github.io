@@ -16,7 +16,7 @@ import {
   rangeForBehind,
   signedHeadingDelta,
 } from "./camera.mjs";
-import { createEllipseFlyby } from "./flyby.mjs";
+import { createEllipseFlyby, createFigureEightFlyover } from "./flyby.mjs";
 import { orbitCamera, orbitPath } from "./flyover.mjs";
 import { bearing, clamp, destinationPoint, haversine, lerp, roundCoordinate, toRad } from "./geo.mjs";
 import { deployedMapsApiKey } from "./config.mjs";
@@ -91,6 +91,8 @@ import {
   OVERVIEW_RANGE_FACTOR,
   OVERVIEW_MIN_RANGE_METERS,
   OVERVIEW_MAX_RANGE_METERS,
+  SATELLITE_TILT_DEGREES,
+  SATELLITE_MARGIN_FACTOR,
   PEDALING_START_KPH,
   PEDALING_STOP_KPH,
   RIDER_DOT_ALTITUDE_METERS,
@@ -207,9 +209,10 @@ const state = {
   // the user grabs the overview camera, "follow" once movement starts.
   cameraMode: "follow",
   overviewCamera: null,
-  // How the whole-route overview is presented at rest (user setting):
-  // "static" | "orbit" | "flyby". overviewAnim holds the live
-  // animation state for the non-static modes; its loop drives the map directly.
+  // How the whole-route overview is presented (user setting): "static" |
+  // "orbit" | "flyby" | "flyover" | "satellite" | "satellite-north".
+  // overviewAnim holds the live animation state for the animated modes (orbit /
+  // flyby / flyover); its loop drives the map directly.
   overviewActive: false,
   overviewMenuOpen: false,
   overviewMode: DEFAULT_OVERVIEW_MODE,
@@ -1234,6 +1237,9 @@ function ensureMovementLoop() {
     state.overviewActive = false;
     closeOverviewModeMenu();
     syncOverviewControls();
+    // Drop any animated-overview driver so it stops owning the camera and the
+    // follow flight (via updateMapCamera) can take over.
+    clearOverviewAnimation();
     state.cameraMode = "follow";
   }
   if (state.movementLoopActive) return;
@@ -1726,6 +1732,11 @@ function riderCircleCoordinates(center, radiusMeters, altitude = 0, stepDegrees 
 function updateMapCamera() {
   if (state.mapProvider !== "google3d" || !state.route.length || !state.map) return;
   if (state.userInteracting || state.cameraMode === "manual") return;
+  // An animated overview (orbit / fly-by / fly-over) writes the camera directly
+  // every frame from its own loop; the chase flight must yield or the two fight.
+  // This matters when the overview is kept up while riding — the movement loop
+  // would otherwise call stepCameraFlight here every tick.
+  if (state.overviewAnim) return;
 
   const settled = stepCameraFlight(performance.now());
   // While the rider moves, the movement loop calls this every frame; when
@@ -1918,33 +1929,32 @@ function ensureCameraFlightLoop() {
 // there instantly (a new route can be on the other side of the world — no
 // flight); a reset flies back smoothly.
 function enterOverviewMode({ instant = false } = {}) {
-  // A rider already moving (e.g. a new GPX loaded mid-pedaling) stays in the
-  // follow view — the overview is for routes loaded at rest.
-  if (!state.route.length || !state.map || isMoving()) return;
+  // Overview can be shown whenever a route is loaded — while parked or, as a
+  // deliberate user choice, while riding. The only automatic transitions are
+  // "route loaded → overview on" (loadRoute / restore) and "movement started →
+  // overview off" (ensureMovementLoop); everything else here is user-driven.
+  if (!state.route.length || !state.map) return;
   state.overviewActive = true;
   syncOverviewControls();
-  if (state.overviewMode !== "flyby") state.map.fov = DEFAULT_MAP_FOV_DEGREES;
+  const mode = state.overviewMode;
+  // Only the fly modes deliberately tune FOV; everything else uses the default.
+  if (!isFlyOverviewMode(mode)) state.map.fov = DEFAULT_MAP_FOV_DEGREES;
   const width = els.mapViewport?.clientWidth;
   const height = els.mapViewport?.clientHeight;
   state.overviewCamera = computeRouteOverviewCamera(state.route, {
-    tiltDegrees: OVERVIEW_TILT_DEGREES,
-    headingOffsetDegrees: OVERVIEW_HEADING_OFFSET_DEGREES,
+    ...overviewCameraParams(mode),
     viewportAspect: width && height ? width / height : undefined,
     // Newer Maps versions expose the actual field of view; older ones fall
     // back to the module's default (Google's documented 35° default).
     fovDegrees: Number(state.map.fov) || undefined,
-    marginFactor: OVERVIEW_MARGIN_FACTOR,
-    rangeFactor: OVERVIEW_RANGE_FACTOR,
-    minRangeMeters: OVERVIEW_MIN_RANGE_METERS,
-    maxRangeMeters: OVERVIEW_MAX_RANGE_METERS,
   });
   if (!state.overviewCamera) return;
   state.cameraMode = "overview";
 
-  // Animated modes (orbit / flyby) drive the map themselves.
-  // If one can't be set up (e.g. a flyby on a route too small to fly), fall
-  // through to the static framing below.
-  if (state.overviewMode !== "static" && startOverviewAnimation({ instant })) return;
+  // Animated modes (orbit / fly-by / fly-over) drive the map themselves. If one
+  // can't be set up (e.g. a fly path on a route too small to fly), fall through
+  // to the static framing below.
+  if (isAnimatedOverviewMode(mode) && startOverviewAnimation({ instant })) return;
 
   clearOverviewAnimation();
   if (instant) {
@@ -1952,6 +1962,44 @@ function enterOverviewMode({ instant = false } = {}) {
     return;
   }
   ensureCameraFlightLoop();
+}
+
+// Camera fit parameters per overview mode. The satellite modes look nearly
+// straight down and frame the route as large as it fits (north-up forces a due
+// north heading); every other mode uses the angled whole-route framing —
+// static holds it, orbit spins it, and the fly modes use it as their
+// fallback/intro pose before their own path driver takes over.
+function overviewCameraParams(mode) {
+  if (mode === "satellite" || mode === "satellite-north") {
+    return {
+      tiltDegrees: SATELLITE_TILT_DEGREES,
+      headingDegrees: mode === "satellite-north" ? 0 : undefined,
+      marginFactor: SATELLITE_MARGIN_FACTOR,
+      rangeFactor: 1,
+      minRangeMeters: OVERVIEW_MIN_RANGE_METERS,
+      maxRangeMeters: OVERVIEW_MAX_RANGE_METERS,
+    };
+  }
+  return {
+    tiltDegrees: OVERVIEW_TILT_DEGREES,
+    headingOffsetDegrees: OVERVIEW_HEADING_OFFSET_DEGREES,
+    marginFactor: OVERVIEW_MARGIN_FACTOR,
+    rangeFactor: OVERVIEW_RANGE_FACTOR,
+    minRangeMeters: OVERVIEW_MIN_RANGE_METERS,
+    maxRangeMeters: OVERVIEW_MAX_RANGE_METERS,
+  };
+}
+
+// Fly-by (ellipse) and fly-over (figure-eight) both tune FOV and run their own
+// path-flight driver; they share the ELLIPSE_FLYBY config.
+function isFlyOverviewMode(mode) {
+  return mode === "flyby" || mode === "flyover";
+}
+
+// Modes that own the camera every frame through the overview animation loop,
+// rather than being framed once as a static pose.
+function isAnimatedOverviewMode(mode) {
+  return mode === "orbit" || isFlyOverviewMode(mode);
 }
 
 function returnToRiderCamera() {
@@ -1972,18 +2020,20 @@ function returnToRiderCamera() {
   updateOverviewDebugLine();
 }
 
-// --- Animated overview (orbit / flyby) ------------------------------------------
+// --- Animated overview (orbit / fly-by / fly-over) ------------------------------
 //
 // These modes own the camera directly (the motion is already smooth, so there's
-// no chase). Orbit spins the static overview; flyby drives an ellipse around
-// the route. On entry the view eases from the current pose into the motion so
-// switching modes or resetting never jumps.
+// no chase). Orbit spins the static overview; fly-by drives an ellipse and
+// fly-over a figure-eight around the route. On entry the view eases from the
+// current pose into the motion so switching modes or resetting never jumps.
 
 function startOverviewAnimation({ instant = false } = {}) {
   const mode = state.overviewMode;
   let flyby = null;
-  if (mode === "flyby") {
-    flyby = createEllipseFlyby(state.route, ELLIPSE_FLYBY);
+  if (isFlyOverviewMode(mode)) {
+    flyby = mode === "flyover"
+      ? createFigureEightFlyover(state.route, ELLIPSE_FLYBY)
+      : createEllipseFlyby(state.route, ELLIPSE_FLYBY);
     if (!flyby) return false; // route too small to fly — caller falls back to static
   }
   const now = performance.now();
@@ -2020,9 +2070,13 @@ function ensureOverviewAnimationLoop() {
   if (state.overviewAnimLoopActive) return;
   state.overviewAnimLoopActive = true;
   const step = () => {
+    // Stays alive as long as an animated overview owns the camera — including
+    // while the rider moves, if the user chose to keep the overview up. It
+    // yields only when the camera leaves overview (manual drag or the movement
+    // loop switching to follow after auto-off).
     if (
       !state.overviewAnim || state.cameraMode !== "overview" ||
-      !state.route.length || !state.map || state.userInteracting || state.movementLoopActive
+      !state.route.length || !state.map || state.userInteracting
     ) {
       updateOverviewDebugLine();
       state.overviewAnimLoopActive = false;
@@ -2248,7 +2302,9 @@ function endUserInteraction() {
   } else if (state.cameraMode === "overview") {
     // The user took over the overview; leave the camera where they put it
     // (don't fly back, don't bake overview framing into the follow settings)
-    // until movement starts.
+    // until movement starts. Drop any animated driver so it stops writing the
+    // camera and updateMapCamera can resume once a follow/overview target is set.
+    clearOverviewAnimation();
     state.cameraMode = "manual";
   }
   state.userInteracting = false;
@@ -2363,16 +2419,20 @@ function updateOverviewModeFromControl() {
   saveSettings();
   updateOverviewDebugLine();
   syncOverviewControls();
-  if (state.overviewActive && !isMoving() && state.route.length) {
+  // Reframe immediately only if the overview is already showing; the settings
+  // select changes the style but never activates the overview by itself.
+  if (state.overviewActive && state.route.length) {
     enterOverviewMode();
   }
 }
 
 function toggleRouteOverview() {
-  if (!state.route.length || isMoving()) {
+  if (!state.route.length) {
     syncOverviewControls();
     return;
   }
+  // Toggling works whether parked or riding — showing the overview mid-ride is
+  // an explicit user choice, and it does nothing to the ride itself.
   if (state.overviewActive) returnToRiderCamera();
   else enterOverviewMode();
 }
@@ -2403,13 +2463,18 @@ function selectOverviewModeFromMenu(event) {
   saveSettings();
   closeOverviewModeMenu();
   updateOverviewDebugLine();
-  if (state.route.length && !isMoving()) enterOverviewMode();
+  // Picking a style from the map dropdown activates the overview (parked or
+  // riding — it's a deliberate choice), unlike the settings select.
+  if (state.route.length) enterOverviewMode();
   else syncOverviewControls();
 }
 
 function syncOverviewControls() {
   const hasRoute = state.route.length > 1;
-  const canToggle = hasRoute && !isMoving();
+  // The overview is always the user's to toggle when a route is loaded — even
+  // while riding. It is never force-disabled by movement; movement only turns
+  // it off automatically once (in ensureMovementLoop).
+  const canToggle = hasRoute;
   const active = hasRoute && state.overviewActive;
 
   els.mapOverviewControl.classList.toggle("active", active);
@@ -2429,7 +2494,10 @@ function syncOverviewControls() {
 
 function normalizeOverviewMode(mode) {
   if (mode === "heli" || mode === "airplane") return "flyby";
-  return ["static", "orbit", "flyby"].includes(mode) ? mode : "static";
+  if (mode === "figure8" || mode === "eight") return "flyover";
+  return ["static", "orbit", "flyby", "flyover", "satellite", "satellite-north"].includes(mode)
+    ? mode
+    : "static";
 }
 
 function updateCameraSettingsLabels() {
@@ -2559,8 +2627,10 @@ function updateOverviewDebugLine() {
       altitudeMeters: OVERVIEW_DEBUG_LINE_ALTITUDE_METERS,
       sampleCount: OVERVIEW_DEBUG_LINE_SAMPLE_COUNT,
     });
-  } else if (state.overviewMode === "flyby") {
-    const flyby = state.overviewAnim?.flyby ?? createEllipseFlyby(state.route, ELLIPSE_FLYBY);
+  } else if (isFlyOverviewMode(state.overviewMode)) {
+    const flyby = state.overviewAnim?.flyby ?? (state.overviewMode === "flyover"
+      ? createFigureEightFlyover(state.route, ELLIPSE_FLYBY)
+      : createEllipseFlyby(state.route, ELLIPSE_FLYBY));
     source = state.route;
     path = flyby?.pathAtAltitude(OVERVIEW_DEBUG_LINE_ALTITUDE_METERS, OVERVIEW_DEBUG_LINE_SAMPLE_COUNT);
   }
@@ -2729,7 +2799,9 @@ function resetCameraToDefaults() {
 function resetCameraView() {
   resetCameraToDefaults();
   if (!state.route.length) return;
-  if (state.overviewActive && !isMoving()) {
+  // Restore whichever surface is currently selected — the overview if it's the
+  // active surface (parked or riding), otherwise the rider camera.
+  if (state.overviewActive) {
     enterOverviewMode();
     return;
   }

@@ -33,7 +33,7 @@ module:
 | `app/tuning.mjs` | **All tunable behavior parameters**, one documented constant each (defaults, thresholds, model factors). New knobs go here, not inline |
 | `app/camera.mjs` | Pure follow-camera math (tested) |
 | `app/flyover.mjs` | Pure animated-overview math (tested): orbit turntable camera + orbit debug path |
-| `app/flyby.mjs` | Pure ellipse fly-by math (tested): PCA-aligned route footprint ellipse, minimum turn-radius enforcement, clockwise/counter-clockwise travel, camera eye/look-at frames, and bank angle |
+| `app/flyby.mjs` | Pure loop-flight math (tested): fits a PCA-aligned footprint frame and flies a camera around it — an ellipse (`createEllipseFlyby`, "fly-by") or a figure-eight (`createFigureEightFlyover`, "fly-over"), both sharing one camera eye/look-at + bank driver and the `ELLIPSE_FLYBY` config; minimum turn-radius enforcement and clockwise/counter-clockwise travel |
 | `app/geo.mjs` | Pure geodesy helpers: haversine, bearing, destinationPoint, clamp, lerp |
 | `app/route.mjs` | GPX parsing, route enrichment (cumulative distance + noise-filtered ascent/descent), point interpolation, grade computation (tested) |
 | `app/eta.mjs` | Smart ETA: flat-equivalent pace model estimating remaining ride time (tested) |
@@ -143,10 +143,11 @@ in place).
   keeping the debug overlay active. It exists mainly to compare a requested
   camera against what Google honours after a manual drag (e.g. how far a tilt
   is respected at a given range). While active and the selected overview mode is
-  `"orbit"` or `"flyby"`, app.js also draws that mode's travel path as a red
-  `Polyline3DElement` configured by `OVERVIEW_DEBUG_LINE_*`; for orbit this is
-  the camera eye's ground track, and for fly-by this is the fitted travel
-  ellipse. It stays visible if the user drags the camera into manual mode.
+  `"orbit"`, `"flyby"` or `"flyover"`, app.js also draws that mode's travel path
+  as a red `Polyline3DElement` configured by `OVERVIEW_DEBUG_LINE_*`; for orbit
+  this is the camera eye's ground track, for fly-by the fitted travel ellipse,
+  and for fly-over the fitted figure-eight. It stays visible if the user drags
+  the camera into manual mode.
   `renderCameraDebug` rebuilds the rows and
   `startCameraDebugLoop` re-runs it on its own `CAMERA_DEBUG_REFRESH_MS`
   `setTimeout` chain while the overlay is on — a dedicated poll because when
@@ -338,8 +339,18 @@ in place).
   needs (use the Debug camera overlay to see the tilt it actually applies).
   `state.cameraMode` becomes `"manual"` once the user grabs the overview, while
   `state.overviewActive` stays true so the map reset button can restore that
-  selected overview. `"follow"` takes over from the moment movement starts and
-  clears `overviewActive`. The overview snaps into place instantly on load
+  selected overview. The overview is **never force-disabled by movement**: the
+  only two automatic transitions are "route loaded → overview on" and "movement
+  started (pedal or sim) → overview off" (the auto-off lives in
+  `ensureMovementLoop`, which flips to `"follow"` and clears `overviewActive` /
+  the animated driver once). Any other time — including mid-ride — the user may
+  toggle the overview on or off; showing it while riding is a deliberate choice
+  and does nothing to the ride. A static/satellite overview kept up while riding
+  is driven by the movement loop's own `updateMapCamera`→`stepCameraFlight`
+  chase toward `state.overviewCamera`; an animated one keeps running its own
+  loop (which no longer bails on `movementLoopActive`), and `updateMapCamera`
+  yields whenever `state.overviewAnim` is set so the two never fight. The
+  overview snaps into place instantly on load
   (`applyCameraNow` — a new route may be across the
   world); every later camera move chases the target's eye/look-at pair with
   bounded acceleration (`chaseStep` + `chaseTuning` in `camera.mjs`: the
@@ -349,24 +360,34 @@ in place).
 - **Map overview control.** The map action bar has a split translucent overview
   control: the plane button toggles `state.overviewActive` and switches between
   the selected overview and rider camera; the chevron opens the same
-  `"static"`/`"orbit"`/`"flyby"` choices as the Camera & view settings select.
-  The split control is amber while overview is active. Picking a mode from the
-  dropdown activates overview when the ride is parked; changing the settings
-  select only reframes immediately if overview is already active. The map reset
-  camera button (`#resetCameraViewBtn`) resets follow-camera settings and
-  restores the currently selected surface after a manual drag; it must not
-  activate overview just because the rider is stationary.
+  `"static"`/`"orbit"`/`"flyby"`/`"flyover"`/`"satellite"`/`"satellite-north"`
+  choices as the Camera & view settings select. The split control is amber while
+  overview is active. The toggle button is only disabled when no route is loaded
+  — never during a ride (`canToggle = hasRoute` in `syncOverviewControls`).
+  Picking a mode from the dropdown activates overview whether parked or riding
+  (a deliberate choice); changing the settings select only reframes immediately
+  if overview is already active. The map reset camera button
+  (`#resetCameraViewBtn`) resets follow-camera settings and restores the
+  currently selected surface after a manual drag — the overview if it's the
+  active surface (parked or riding), otherwise the rider camera.
 - **Overview motion modes** (`state.overviewMode`, a persisted user setting in
   Settings › Camera & view, default `DEFAULT_OVERVIEW_MODE` in `tuning.mjs`):
   `"static"` is the framed still (the `ensureCameraFlightLoop` path above);
-  `"orbit"` and `"flyby"` are *animated* and driven through a separate
-  `ensureOverviewAnimationLoop`/`stepOverviewAnimation` loop that writes the map
-  camera **directly** every frame (the motion is already smooth, so there is no
-  chase). `enterOverviewMode` still computes the static `state.overviewCamera`
-  (orbit spins its heading via `orbitCamera`; it's also the fallback), then
-  `startOverviewAnimation` takes over for animated modes — building a
-  `createEllipseFlyby` driver for `"flyby"` (returns `false` and falls back to
-  static if the route is too small to fly). Both animation and the static flight
+  `"satellite"` and `"satellite-north"` are also static stills but looking
+  nearly straight down (`SATELLITE_TILT_DEGREES`) with the route framed as large
+  as it fits (`SATELLITE_MARGIN_FACTOR`) — `"satellite"` keeps the route's long
+  axis horizontal (the default PCA orientation), `"satellite-north"` forces a
+  due-north heading via `computeRouteOverviewCamera`'s `headingDegrees` override;
+  `"orbit"`, `"flyby"` and `"flyover"` are *animated* and driven through a
+  separate `ensureOverviewAnimationLoop`/`stepOverviewAnimation` loop that writes
+  the map camera **directly** every frame (the motion is already smooth, so
+  there is no chase). `enterOverviewMode` picks per-mode fit params
+  (`overviewCameraParams`) and still computes the static `state.overviewCamera`
+  (orbit spins its heading via `orbitCamera`; it's also the fly modes' fallback),
+  then `startOverviewAnimation` takes over for animated modes — building a
+  `createEllipseFlyby` driver for `"flyby"` or a `createFigureEightFlyover`
+  driver for `"flyover"` (both return `false` and fall back to static if the
+  route is too small to fly). Both animation and the static flight
   write `state.map` directly, so only one runs at a time (`enterOverviewMode`
   starts exactly one; `startOverviewAnimation` nulls `state.cameraFlight`). The
   animated loop self-exits the instant the camera leaves overview — grabbing the
@@ -389,8 +410,19 @@ in place).
   `flyHeightMetersAboveTerrainMin`. `maxBankDegrees` scales the bank angle from
   the current turn radius
   (`minTurnRadiusMeters` = max bank), and app.js applies it to `state.map.roll`.
+  Fly-over (`createFigureEightFlyover`) reuses the exact same footprint fit,
+  `ELLIPSE_FLYBY` config, and camera-frame/pacing driver — only the path differs:
+  a Gerono figure-eight (`along = a·cos u`, `cross = b·sin 2u`) that crosses the
+  footprint center twice per lap. Every tunable above applies identically, with
+  one behavioral twist: because the eight *changes turn direction* between its
+  two lobes, `bankAt`/`inwardLookDegrees` follow the **local** turn (via the
+  curve's `signedCurvatureAt` and the `tracksTurnDirection` flag) instead of the
+  ellipse's fixed handedness — so the camera banks and looks into whichever turn
+  it is actually in (right on one lobe, left on the other) and eases smoothly
+  through straight-ahead at each center crossing, where the path is momentarily
+  straight. The ellipse fly-by is unchanged (constant `direction`).
   The red debug line shown while the camera debug overlay is active is shared
-  by orbit and fly-by and tuned by `OVERVIEW_DEBUG_LINE_COLOR`,
+  by orbit, fly-by and fly-over and tuned by `OVERVIEW_DEBUG_LINE_COLOR`,
   `OVERVIEW_DEBUG_LINE_WIDTH`, `OVERVIEW_DEBUG_LINE_ALTITUDE_METERS`, and
   `OVERVIEW_DEBUG_LINE_SAMPLE_COUNT`.
 - **Camera terrain avoidance** lifts the follow camera when its eye would
