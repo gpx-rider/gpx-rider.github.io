@@ -121,7 +121,13 @@ in place).
   `data-panel-title`/`data-panel-subtitle` into the header. `openSettings(tab)`
   opens on a given category (first-run key prompt opens on `"data"`). All the
   underlying inputs kept their IDs, so the settings-restore/sync code is
-  unchanged — only their grouping moved.
+  unchanged — only their grouping moved. On phones (the `max-width: 860px`
+  block in `styles.css`) the dialog stacks: the rail moves to the top as a
+  single horizontally-scrolling tab strip and the category panels fill the
+  rest. `.settings-main` carries `min-height: 0` so it shrinks to the fixed
+  dialog height and `.settings-body` (`overflow-y: auto`, `overscroll-behavior:
+  contain`) is what scrolls — without that the panel content spilled past the
+  dialog and the page behind scrolled instead (issue #13).
 - **Fullscreen ride HUD (design 3a).** Entering fullscreen adds
   `.fullscreen-mode` to `#mapViewport` (a fixed, full-bleed container); the
   HUD overlays live inside it as children so they ride along, and CSS keeps
@@ -141,7 +147,14 @@ in place).
     Because a collapsed (display:none) canvas measures 0×0, re-expanding
     re-renders the profile. The road-ahead plot only has height because the
     two rows of metric tiles set the dock's height — the profile is `flex:1`
-    within that.
+    within that. On phones (the `max-width: 860px` block in `styles.css`) the
+    dock body stacks into a column instead: the fixed-width metric grid becomes
+    a four-column `1fr` grid, the separator and road-ahead note are dropped, the
+    road plot gets a fixed height (it has no intrinsic height once the body is a
+    column), and the collapsed metric strip wraps — otherwise the desktop row
+    layout overflows a phone's width. The corner overlays (minimap, clock,
+    banner, actions) also pull their insets in and the banner loses its desktop
+    `min-width`.
   - **Top-left clock chip** (`#fullscreenClock`): elapsed time (from
     `rideLogSummary().timerSeconds`) + ridden distance, sitting above the
     minimap (which is repositioned in fullscreen).
