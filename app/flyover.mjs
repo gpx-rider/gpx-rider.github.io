@@ -98,7 +98,9 @@ export function createFlyover(route, config) {
 
   const { samples: pts, cumulative, loopLength } = geometry;
   const flyHeight = Math.max(0, Number(config.flyHeightMeters) || 0);
-  const lookAhead = Math.max(1, Number(config.lookAheadMeters) || 1);
+  const viewDistance = Math.max(1, Number(config.viewDistanceMeters) || Number(config.lookAheadMeters) || 1);
+  const mountPitch = toRad(Number(config.mountPitchDegrees) || 0); // camera nose-down from the airframe
+  const tangentSample = Math.max(1, Number(config.tangentSampleMeters) || 5);
 
   // Position [e,n,up] at arc-length `s` (wrapped into the loop).
   const positionAt = (s) => interpolateAlong(pts, cumulative, loopLength, s);
@@ -117,17 +119,53 @@ export function createFlyover(route, config) {
       return wrap(s + speedAt(s) * dt, loopLength);
     },
     // Camera eye + look-at at arc-length `s`. The eye rides the vehicle at
-    // fly-height; the look-at is a ground point ahead along the path, so the
-    // camera looks down and forward (a free-turning cameraman). Pass
-    // `lookAtOverride` (a {lat,lng,altitude}) to aim it somewhere specific —
-    // e.g. the rider — instead of the road ahead.
+    // fly-height. The camera is *rigidly mounted* on the airframe: it looks
+    // straight along the aircraft's velocity (the path tangent), pitched down
+    // by a fixed mount angle — it does not pan around to aim at the route. So
+    // the view heading follows the direction of travel and the view tilt rises
+    // and falls with the climb/descent angle, exactly as a bolted-on camera
+    // would (roll/banking isn't representable in the Map3D camera, so it's the
+    // one airframe axis we can't mirror). Pass `lookAtOverride`
+    // ({lat,lng,altitude}) to instead aim at a fixed point — e.g. the rider.
     frameAt(s, lookAtOverride = null) {
       const here = positionAt(s);
-      const ahead = positionAt(s + lookAhead);
-      const eye = toGeo([here[0], here[1], here[2] + flyHeight]);
-      const lookAt = lookAtOverride
-        ? { lat: lookAtOverride.lat, lng: lookAtOverride.lng, altitude: Number(lookAtOverride.altitude) || ahead[2] }
-        : toGeo(ahead);
+      const eyeUp = here[2] + flyHeight;
+      const eye = toGeo([here[0], here[1], eyeUp]);
+
+      if (lookAtOverride) {
+        return {
+          eye,
+          lookAt: {
+            lat: lookAtOverride.lat,
+            lng: lookAtOverride.lng,
+            altitude: Number(lookAtOverride.altitude) || here[2],
+          },
+          speedMps: speedAt(s),
+        };
+      }
+
+      // Velocity direction (path tangent) as a unit 3-vector.
+      const ahead = positionAt(s + tangentSample);
+      let tx = ahead[0] - here[0];
+      let ty = ahead[1] - here[1];
+      let tz = ahead[2] - here[2];
+      const len = Math.hypot(tx, ty, tz) || 1;
+      tx /= len; ty /= len; tz /= len;
+
+      // Climb angle of the flight path, then drop the view by the fixed mount
+      // pitch: elevation = climb − mountPitch (negative = looking down).
+      const climb = Math.asin(clamp(tz, -1, 1));
+      const elevation = climb - mountPitch;
+      const horiz = Math.hypot(tx, ty) || 1e-9;
+      const hx = tx / horiz;
+      const hy = ty / horiz;
+      const cosE = Math.cos(elevation);
+      const sinE = Math.sin(elevation);
+      const lookAt = toGeo([
+        here[0] + hx * cosE * viewDistance,
+        here[1] + hy * cosE * viewDistance,
+        eyeUp + sinE * viewDistance,
+      ]);
       return { eye, lookAt, speedMps: speedAt(s) };
     },
   };

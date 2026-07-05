@@ -172,39 +172,52 @@ export const FLYOVER_RESAMPLE_SPACING_METERS = 20;
 export const FLYOVER_SMOOTHING_STRENGTH = 0.5;
 export const FLYOVER_SMOOTHING_MAX_ITERATIONS = 200;
 
+// The aircraft's velocity direction (which the mounted camera looks along) is
+// estimated from the path this far ahead. Larger = steadier heading through
+// jittery bends, smaller = more responsive. Just a numerical detail of the
+// tangent estimate, not a look-and-feel knob.
+export const FLYOVER_TANGENT_SAMPLE_METERS = 6;
+
 // Helicopter flyover physics. Speeds in m/s (×3.6 for km/h), accels in m/s².
 // A helicopter can slow right down and turn tightly, so it hugs the route
-// closely and flies low. lookAhead is how far ahead on the path the camera
-// aims (a bigger value looks further down the road, a smaller one more below).
+// closely and flies low. The camera is rigidly mounted on the airframe:
+// mountPitchDegrees is how far below the flight direction it points (0 = dead
+// ahead, 90 = straight down), and viewDistance is how far out the look-at ray
+// reaches (mostly cosmetic — it sets the range the Map3D camera reports).
 export const HELICOPTER_FLYOVER = {
   simplifyToleranceMeters: 12,
   resampleSpacingMeters: FLYOVER_RESAMPLE_SPACING_METERS,
   smoothingStrength: FLYOVER_SMOOTHING_STRENGTH,
   smoothingMaxIterations: FLYOVER_SMOOTHING_MAX_ITERATIONS,
+  tangentSampleMeters: FLYOVER_TANGENT_SAMPLE_METERS,
   minTurnRadiusMeters: 25,
   maxSpeedMps: 55,            // ~120 km/h
   minSpeedMps: 4,
   maxAccelMps2: 4,
   maxLateralAccelMps2: 6,
   flyHeightMeters: 300,
-  lookAheadMeters: 200,
+  mountPitchDegrees: 30,
+  viewDistanceMeters: 400,
 };
 
 // Airplane flyover physics. A plane can't slow much and turns in a wide arc, so
-// it needs a high minimum speed, a large minimum turn radius, and flies higher
-// and looks further ahead. Same engine, different envelope.
+// it needs a high minimum speed, a large minimum turn radius, and flies higher.
+// Same engine, different envelope; the mounted camera points a little flatter
+// (more forward) than the helicopter's.
 export const AIRPLANE_FLYOVER = {
   simplifyToleranceMeters: 45,
   resampleSpacingMeters: FLYOVER_RESAMPLE_SPACING_METERS,
   smoothingStrength: FLYOVER_SMOOTHING_STRENGTH,
   smoothingMaxIterations: FLYOVER_SMOOTHING_MAX_ITERATIONS,
+  tangentSampleMeters: FLYOVER_TANGENT_SAMPLE_METERS,
   minTurnRadiusMeters: 350,
   maxSpeedMps: 140,            // ~340 km/h
   minSpeedMps: 55,            // ~160 km/h — planes don't hover
   maxAccelMps2: 5,
   maxLateralAccelMps2: 9,
   flyHeightMeters: 800,
-  lookAheadMeters: 950,
+  mountPitchDegrees: 22,
+  viewDistanceMeters: 1200,
 };
 
 // The rider's heading is sampled this many meters behind/ahead of the rider,

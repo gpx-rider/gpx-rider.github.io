@@ -120,7 +120,7 @@ A freshly loaded route starts in a whole-route overview, framed from above so yo
 - **Helicopter fly-by** — a helicopter flies a smoothed loop over the route (along the path, then straight back to the start, repeating), obeying real-world physics: it slows through bends and speeds up on the straights, within a configurable max speed, acceleration, and cornering limit.
 - **Airplane fly-by** — the same flyover with airplane physics: higher, faster, and wide, lazy turns.
 
-The flyover camera behaves like a cameraman inside the aircraft, looking down and ahead at the route. All of the flight physics (speeds, accelerations, turn radius, altitude) are configurable in `app/tuning.mjs`.
+The flyover camera is fixed to the aircraft like a bolted-on nose camera: it always looks along the direction of flight, angled down by a set mount angle, so it pitches up and down with climbs and descents instead of panning around on its own. All of the flight physics (speeds, accelerations, turn radius, altitude, mount angle) are configurable in `app/tuning.mjs`.
 
 Once you start pedaling or simulation begins, the camera flies down behind the rider and follows the route using GPX bearing.
 

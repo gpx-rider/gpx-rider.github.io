@@ -145,13 +145,15 @@ const HELI = {
   resampleSpacingMeters: 20,
   smoothingStrength: 0.5,
   smoothingMaxIterations: 200,
+  tangentSampleMeters: 6,
   minTurnRadiusMeters: 25,
   maxSpeedMps: 33,
   minSpeedMps: 4,
   maxAccelMps2: 4,
   maxLateralAccelMps2: 6,
   flyHeightMeters: 130,
-  lookAheadMeters: 200,
+  mountPitchDegrees: 30,
+  viewDistanceMeters: 300,
 };
 
 // A ~4 km route with a couple of bends, at ~46°N.
@@ -199,6 +201,35 @@ test("flyover advances and wraps around the loop over one lap", () => {
   const nearStart = Math.min(s, fly.loopLength - s);
   assert.ok(nearStart < fly.loopLength * 0.1, `ended near start (s=${s}, loop=${fly.loopLength})`);
 });
+
+test("mounted camera looks along the flight direction, not around corners", () => {
+  const fly = createFlyover(route, HELI);
+  const s = 500;
+  const frame = fly.frameAt(s);
+  const eyeLocal = toLocalEN(frame.eye);
+  const lookLocal = toLocalEN(frame.lookAt);
+  // Direction the camera faces (horizontal), from eye to look-at.
+  const viewBearing = Math.atan2(lookLocal.e - eyeLocal.e, lookLocal.n - eyeLocal.n);
+
+  // The aircraft's velocity direction (path tangent) at the same point.
+  const p0 = fly.positionAt(s);
+  const p1 = fly.positionAt(s + 6);
+  const tangentBearing = Math.atan2(p1[0] - p0[0], p1[1] - p0[1]);
+
+  const delta = Math.abs(((viewBearing - tangentBearing + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+  assert.ok(delta < 0.05, `camera faces the flight direction (off by ${delta} rad)`);
+  // And it is pitched down (look-at below the eye) by the mount angle.
+  assert.ok(frame.eye.altitude > frame.lookAt.altitude, "mounted camera looks downward");
+});
+
+// Convert a {lat,lng} back to local east/north meters for angle checks (same
+// equirectangular convention flyover.mjs uses internally, origin = route[0]).
+function toLocalEN(p) {
+  const R = 6371000;
+  const mPerDeg = R * Math.PI / 180;
+  const cosLat = Math.cos(route[0].lat * Math.PI / 180);
+  return { e: (p.lng - route[0].lng) * mPerDeg * cosLat, n: (p.lat - route[0].lat) * mPerDeg };
+}
 
 test("flyover look-at override aims the camera at a given point", () => {
   const fly = createFlyover(route, HELI);

@@ -355,14 +355,20 @@ in place).
   airplane are the same flyover engine with different physics presets
   (`HELICOPTER_FLYOVER` / `AIRPLANE_FLYOVER` in `tuning.mjs`: max/min speed,
   max tangential + lateral acceleration, min turn radius, fly height,
-  look-ahead); the plane's high min-speed and big turn radius give it fast,
-  high, wide-turning passes. The flyover camera is a free-turning "cameraman":
-  the eye rides the vehicle at fly-height while the look-at is a ground point
-  ahead on the path (or an override, e.g. the rider — the hook for a future
-  riding chase-cam), fed through `cameraFromEyeAndCenter`. The Debug camera
-  overlay shows the live mode, flyover speed and lap time. **Not** yet wired: a
-  heli/airplane view *while riding* — the driver already accepts a look-at
-  override for it, but the follow path still uses `computeFollowCamera`.
+  `mountPitchDegrees`, `viewDistanceMeters`); the plane's high min-speed and big
+  turn radius give it fast, high, wide-turning passes. The flyover camera is
+  **rigidly mounted on the airframe**, not a free cameraman: `frameAt` looks
+  straight along the aircraft's velocity (the path tangent, estimated
+  `FLYOVER_TANGENT_SAMPLE_METERS` ahead) pitched down by `mountPitchDegrees`, so
+  the view heading follows the direction of travel and the view tilt rises/falls
+  with the climb angle (roll/banking can't be represented in the Map3D camera,
+  so it's the one airframe axis not mirrored). The eye rides the vehicle at
+  fly-height; the derived look-at ray feeds `cameraFromEyeAndCenter`. A
+  `lookAtOverride` still lets a caller aim at a fixed point (e.g. the rider — the
+  hook for a future riding chase-cam). The Debug camera overlay shows the live
+  mode, flyover speed and lap time. **Not** yet wired: a heli/airplane view
+  *while riding* — the driver accepts the override, but the follow path still
+  uses `computeFollowCamera`.
 - **Camera terrain avoidance** lifts the follow camera when its eye would
   sink below terrain + clearance and eases it back down as terrain allows
   (`currentTerrainLift` in `app.js`; pure math in `camera.mjs`'s
