@@ -634,7 +634,7 @@ body {
   display: flex;
 }
 
-/* top-left: elapsed + ridden distance, sitting above the minimap */
+/* top-left: local time + elapsed + ridden distance, above the minimap */
 .map-viewport.fullscreen-mode .fs-clock {
   position: absolute;
   top: 24px;
@@ -650,9 +650,14 @@ body {
   -webkit-backdrop-filter: blur(16px);
 }
 
-.fs-clock-time {
+.fs-clock-time,
+.fs-clock-elapsed {
   font: 600 17px/1 var(--font-num);
   color: #fff;
+}
+
+.fs-clock-elapsed {
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .fs-clock-sep {
@@ -2226,6 +2231,15 @@ input[type="color"] {
     left: 14px;
     gap: 8px;
     padding: 8px 12px;
+  }
+
+  .fs-clock-time,
+  .fs-clock-elapsed {
+    font-size: 15px;
+  }
+
+  .fs-clock-dist {
+    font-size: 13px;
   }
 
   /* The banner's desktop min-width (420px) overflows a phone; let it span the
