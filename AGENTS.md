@@ -337,9 +337,10 @@ in place).
   — the lever for a lower, terrain-rich view, since Google's 3D map limits how
   far it will tilt toward the horizon at the large range a whole-route fit
   needs (use the Debug camera overlay to see the tilt it actually applies).
-  `state.cameraMode` becomes `"manual"` once the user grabs the overview, while
-  `state.overviewActive` stays true so the map reset button can restore that
-  selected overview. The overview is **never force-disabled by movement**: the
+  Grabbing the map while an overview is showing turns the overview **off**:
+  `endUserInteraction` clears `overviewActive`, drops any animated driver, and
+  sets `state.cameraMode` to `"manual"` (the overview button goes inactive).
+  The overview is **never force-disabled by movement**: the
   only two automatic transitions are "route loaded → overview on" and "movement
   started (pedal or sim) → overview off" (the auto-off lives in
   `ensureMovementLoop`, which flips to `"follow"` and clears `overviewActive` /
@@ -367,9 +368,15 @@ in place).
   Picking a mode from the dropdown activates overview whether parked or riding
   (a deliberate choice); changing the settings select only reframes immediately
   if overview is already active. The map reset camera button
-  (`#resetCameraViewBtn`) resets follow-camera settings and restores the
-  currently selected surface after a manual drag — the overview if it's the
-  active surface (parked or riding), otherwise the rider camera.
+  (`#resetCameraViewBtn`) is fully decoupled from the overview: it only resets
+  the follow-camera offsets/zoom/angle and, when the rider camera is the active
+  surface, flies it back — it never activates or deactivates an overview (an
+  active overview is left running). It is **disabled whenever the camera is
+  already at its defaults** (`cameraAtDefaults` in `app.js` — all offsets at
+  default and `cameraMode !== "manual"`, i.e. pressing it would change nothing)
+  and enables once a drag captures new offsets or leaves the camera in
+  `"manual"`. `syncResetCameraButton` (called from `syncOverviewControls` and
+  the camera-slider handler) keeps that state in sync.
 - **Overview motion modes** (`state.overviewMode`, a persisted user setting in
   Settings › Camera & view, default `DEFAULT_OVERVIEW_MODE` in `tuning.mjs`):
   `"static"` is the framed still (the `ensureCameraFlightLoop` path above);

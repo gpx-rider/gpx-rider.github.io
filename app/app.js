@@ -2497,6 +2497,29 @@ function syncOverviewControls() {
     const checked = normalizeOverviewMode(button.dataset.mapOverviewMode) === state.overviewMode;
     button.setAttribute("aria-checked", String(checked));
   });
+
+  syncResetCameraButton();
+}
+
+// True when the camera is exactly where "Reset camera" would leave it — all
+// follow-camera offsets at their defaults and no manual takeover in effect —
+// so pressing reset would change nothing.
+function cameraAtDefaults() {
+  return state.cameraMode !== "manual" &&
+    state.cameraZoom === DEFAULT_CAMERA_ZOOM &&
+    state.cameraAngleDegrees === DEFAULT_CAMERA_ANGLE_DEGREES &&
+    state.cameraBehindMeters === DEFAULT_CAMERA_BEHIND_METERS &&
+    state.cameraHeadingOffsetDegrees === 0 &&
+    state.cameraOffsetForwardMeters === 0 &&
+    state.cameraOffsetRightMeters === 0 &&
+    state.cameraCenterAltitudeOffsetMeters === 0;
+}
+
+// The reset-camera button is only usable when it would actually do something:
+// disabled while the camera is already at its defaults, enabled once the user
+// has moved it (a drag captures new offsets, or leaves the camera in manual).
+function syncResetCameraButton() {
+  if (els.resetCameraViewBtn) els.resetCameraViewBtn.disabled = cameraAtDefaults();
 }
 
 function normalizeOverviewMode(mode) {
@@ -2788,6 +2811,7 @@ function updateCameraSettingsFromControls() {
   state.cameraAngleDegrees = Number(els.cameraAngleInput.value);
   state.cameraBehindMeters = Number(els.cameraBehindInput.value);
   updateCameraSettingsLabels();
+  syncResetCameraButton();
   saveSettings();
 
   updateRideUi();
