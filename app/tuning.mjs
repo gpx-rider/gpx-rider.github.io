@@ -277,6 +277,35 @@ export const DEFAULT_HUD_ELEMENTS = {
   eta: true,
 };
 
+// The fullscreen ride HUD's bottom data dock can be collapsed to a compact
+// strip (key metrics + the two progress bars) or expanded to the full dock
+// (metric tiles + the road-ahead elevation profile). This is its initial
+// state; the user's choice is persisted with the other display settings.
+export const DEFAULT_HUD_DOCK_COLLAPSED = false;
+
+// Fullscreen climb banner (top-center of the ride HUD). It appears while the
+// rider is on a detected climb, or while approaching the next one within this
+// distance; it is hidden otherwise.
+export const CLIMB_BANNER_APPROACH_METERS = 1000;
+
+// Bars drawn in the climb banner's mini elevation profile of the upcoming
+// climb.
+export const CLIMB_BANNER_MINI_BAR_COUNT = 30;
+
+// Names and accent colors for the climb banner's category chip, chosen by the
+// climb's average grade: the first entry whose `maxAverageGradePercent` the
+// climb does not exceed wins, and the last (Infinity) is the catch-all for
+// anything steeper. Colors track the shared grade palette (gentle → green,
+// brutal → red; see profile.mjs#gradeColor). This is only a plain-language
+// label derived from average grade — no HC/Cat-1-style road categorization is
+// attempted, matching how difficulty.mjs classifies from geometry alone.
+export const CLIMB_CATEGORIES = [
+  { maxAverageGradePercent: 4, name: "GENTLE", color: "#57b877" },
+  { maxAverageGradePercent: 7, name: "MODERATE", color: "#e8b74e" },
+  { maxAverageGradePercent: 10, name: "STEEP", color: "#e8823c" },
+  { maxAverageGradePercent: Infinity, name: "BRUTAL", color: "#d9542f" },
+];
+
 // --- Route difficulty classification --------------------------------------------
 //
 // Classifies a loaded route from distance and total elevation gain alone —

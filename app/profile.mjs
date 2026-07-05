@@ -246,8 +246,17 @@ function drawProfileHover(ctx, { route, hoverMeters, totalDistance, chartLeft, c
   ctx.fillStyle = theme.marker;
   ctx.fill();
 
-  const displayDistance = kmToDisplay(distance / 1000, distanceUnits);
-  const label = `${displayDistance.toFixed(2)} ${distanceUnitLabel(distanceUnits)}  ${grade >= 0 ? "+" : ""}${grade.toFixed(1)}%`;
+  // Route properties at the hovered point: distance from start, distance to
+  // the end, elevation and grade — all in the user's units.
+  const unit = distanceUnitLabel(distanceUnits);
+  const fromStart = kmToDisplay(distance / 1000, distanceUnits).toFixed(2);
+  const toEnd = kmToDisplay((totalDistance - distance) / 1000, distanceUnits).toFixed(2);
+  const elevation = distanceUnits === "imperial"
+    ? `${Math.round(point.ele * FEET_PER_METER)} ft`
+    : `${Math.round(point.ele)} m`;
+  const label =
+    `${fromStart} ${unit} in · ${toEnd} ${unit} to end · ` +
+    `${elevation} · ${grade >= 0 ? "+" : ""}${grade.toFixed(1)}%`;
   ctx.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
   const textWidth = ctx.measureText(label).width;
   const boxWidth = textWidth + 16;
@@ -276,8 +285,9 @@ function niceStep(range, candidates) {
 
 // Stepped grade palette shared with the panel legend and the gallery's mini
 // profiles: green for descents, gray for flat, amber → orange → red as the
-// climb steepens.
-function gradeColor(grade) {
+// climb steepens. Exported so the fullscreen climb banner's mini-profile
+// (app.js) colors its bars from the same palette instead of a fourth copy.
+export function gradeColor(grade) {
   if (grade <= -3) return "#3fae6a";
   if (grade <= -0.6) return "#57b877";
   if (grade < 0.8) return "rgba(125, 138, 134, 0.55)";
