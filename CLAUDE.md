@@ -32,6 +32,7 @@ module:
 | `app/app.js` | Orchestrator: state, DOM, map rendering, camera capture, movement loop, settings & saved-ride persistence |
 | `app/tuning.mjs` | **All tunable behavior parameters**, one documented constant each (defaults, thresholds, model factors). New knobs go here, not inline |
 | `app/camera.mjs` | Pure follow-camera math (tested) |
+| `app/flyover.mjs` | Pure animated-overview math (tested): orbit (turntable) + a physics-driven helicopter/airplane flyover — path simplify/smooth to a turn radius, curvature+acceleration-limited speed profile, and a driver that emits camera eye/look-at frames along the loop |
 | `app/geo.mjs` | Pure geodesy helpers: haversine, bearing, destinationPoint, clamp, lerp |
 | `app/route.mjs` | GPX parsing, route enrichment (cumulative distance + noise-filtered ascent/descent), point interpolation, grade computation (tested) |
 | `app/eta.mjs` | Smart ETA: flat-equivalent pace model estimating remaining ride time (tested) |
@@ -333,6 +334,35 @@ in place).
   acceleration budget grows with remaining distance, so follow tracking is
   gentle while transition flights are fast, braking to arrive), stepped by
   the movement loop while riding and by `ensureCameraFlightLoop` otherwise.
+- **Overview motion modes** (`state.overviewMode`, a persisted user setting in
+  Settings › Camera & view, default `DEFAULT_OVERVIEW_MODE` in `tuning.mjs`):
+  `"static"` is the framed still (the `ensureCameraFlightLoop` path above);
+  `"orbit"`, `"heli"` and `"airplane"` are *animated* and driven by
+  `app/flyover.mjs` through a separate `ensureOverviewAnimationLoop`/
+  `stepOverviewAnimation` loop that writes the map camera **directly** every
+  frame (the motion is already smooth, so there is no chase — chasing a fast
+  flyover target would only lag). `enterOverviewMode` still computes the static
+  `state.overviewCamera` (orbit spins its heading via `orbitCamera`; it's also
+  the fallback), then `startOverviewAnimation` takes over for the animated
+  modes — building a `createFlyover` driver for heli/airplane (returns `false`
+  and falls back to static if the route is too small to fly). Both animation
+  and the static flight write `state.map` directly, so only one runs at a time
+  (`enterOverviewMode` starts exactly one; `startOverviewAnimation` nulls
+  `state.cameraFlight`). The animated loop self-exits the instant the camera
+  leaves overview — grabbing the map (`endUserInteraction` → `"manual"`) or
+  movement starting (`"follow"`) — and eases in from the current pose over
+  `OVERVIEW_ANIM_INTRO_SECONDS` so switching modes never jumps. Helicopter vs
+  airplane are the same flyover engine with different physics presets
+  (`HELICOPTER_FLYOVER` / `AIRPLANE_FLYOVER` in `tuning.mjs`: max/min speed,
+  max tangential + lateral acceleration, min turn radius, fly height,
+  look-ahead); the plane's high min-speed and big turn radius give it fast,
+  high, wide-turning passes. The flyover camera is a free-turning "cameraman":
+  the eye rides the vehicle at fly-height while the look-at is a ground point
+  ahead on the path (or an override, e.g. the rider — the hook for a future
+  riding chase-cam), fed through `cameraFromEyeAndCenter`. The Debug camera
+  overlay shows the live mode, flyover speed and lap time. **Not** yet wired: a
+  heli/airplane view *while riding* — the driver already accepts a look-at
+  override for it, but the follow path still uses `computeFollowCamera`.
 - **Camera terrain avoidance** lifts the follow camera when its eye would
   sink below terrain + clearance and eases it back down as terrain allows
   (`currentTerrainLift` in `app.js`; pure math in `camera.mjs`'s

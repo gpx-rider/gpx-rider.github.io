@@ -144,6 +144,69 @@ export const OVERVIEW_RANGE_FACTOR = 0.75;
 export const OVERVIEW_MIN_RANGE_METERS = 250;
 export const OVERVIEW_MAX_RANGE_METERS = Infinity;
 
+// --- Overview motion (static / orbit / helicopter / airplane) --------------------
+//
+// How the whole-route overview behaves when a route loads at rest. This is a
+// user setting (Settings › Camera & view); the value here is only the default.
+//   "static"   — the framed still shot (the classic overview)
+//   "orbit"    — turntable: the static shot slowly rotates around the route
+//   "heli"     — a helicopter flies a smoothed loop over the route (physics below)
+//   "airplane" — the same flyover engine with airplane physics (faster, higher,
+//                wide lazy turns)
+export const DEFAULT_OVERVIEW_MODE = "orbit";
+
+// Orbit mode: seconds for one full revolution, and spin direction (1 =
+// clockwise seen from above, -1 = counter-clockwise). Longer = statelier.
+export const OVERVIEW_ORBIT_SECONDS_PER_REV = 75;
+export const OVERVIEW_ORBIT_DIRECTION = 1;
+
+// When an animated overview (orbit/heli/airplane) starts from a different
+// camera pose, ease into the motion over this many seconds instead of jumping.
+export const OVERVIEW_ANIM_INTRO_SECONDS = 1.5;
+
+// Flyover path prep, shared by both aircraft. Simplify tolerance drops GPS
+// wiggles smaller than this; resample spacing is the working sample density;
+// smoothing rounds corners (strength per pass, up to the iteration budget) and
+// runs until the tightest corner clears each vehicle's minimum turn radius.
+export const FLYOVER_RESAMPLE_SPACING_METERS = 20;
+export const FLYOVER_SMOOTHING_STRENGTH = 0.5;
+export const FLYOVER_SMOOTHING_MAX_ITERATIONS = 200;
+
+// Helicopter flyover physics. Speeds in m/s (×3.6 for km/h), accels in m/s².
+// A helicopter can slow right down and turn tightly, so it hugs the route
+// closely and flies low. lookAhead is how far ahead on the path the camera
+// aims (a bigger value looks further down the road, a smaller one more below).
+export const HELICOPTER_FLYOVER = {
+  simplifyToleranceMeters: 12,
+  resampleSpacingMeters: FLYOVER_RESAMPLE_SPACING_METERS,
+  smoothingStrength: FLYOVER_SMOOTHING_STRENGTH,
+  smoothingMaxIterations: FLYOVER_SMOOTHING_MAX_ITERATIONS,
+  minTurnRadiusMeters: 25,
+  maxSpeedMps: 55,            // ~120 km/h
+  minSpeedMps: 4,
+  maxAccelMps2: 4,
+  maxLateralAccelMps2: 6,
+  flyHeightMeters: 300,
+  lookAheadMeters: 200,
+};
+
+// Airplane flyover physics. A plane can't slow much and turns in a wide arc, so
+// it needs a high minimum speed, a large minimum turn radius, and flies higher
+// and looks further ahead. Same engine, different envelope.
+export const AIRPLANE_FLYOVER = {
+  simplifyToleranceMeters: 45,
+  resampleSpacingMeters: FLYOVER_RESAMPLE_SPACING_METERS,
+  smoothingStrength: FLYOVER_SMOOTHING_STRENGTH,
+  smoothingMaxIterations: FLYOVER_SMOOTHING_MAX_ITERATIONS,
+  minTurnRadiusMeters: 350,
+  maxSpeedMps: 140,            // ~340 km/h
+  minSpeedMps: 55,            // ~160 km/h — planes don't hover
+  maxAccelMps2: 5,
+  maxLateralAccelMps2: 9,
+  flyHeightMeters: 800,
+  lookAheadMeters: 950,
+};
+
 // The rider's heading is sampled this many meters behind/ahead of the rider,
 // so the camera points the way the rider moves rather than at a distant spot.
 export const HEADING_SAMPLE_METERS = 4;
