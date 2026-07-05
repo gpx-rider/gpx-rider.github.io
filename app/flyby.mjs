@@ -28,6 +28,7 @@ export function createEllipseFlyby(route, config = {}) {
   const viewDistance = Math.max(1, Number(config.viewDistanceMeters) || 2500);
   const cameraFovDegrees = clamp(Number(config.cameraFovDegrees) || 35, 5, 80);
   const mountPitch = toRad(clamp(Number(config.mountPitchDegrees) || 28, 1, 89));
+  const inwardLook = toRad(clamp(Number(config.inwardLookDegrees) || 0, 0, 89));
   const maxBankDegrees = Math.max(0, Number(config.maxBankDegrees) || 0);
   const minTurnRadius = Math.max(0, Number(config.minTurnRadiusMeters) || 0);
   const direction = Number(config.direction) < 0 ? -1 : 1;
@@ -76,6 +77,7 @@ export function createEllipseFlyby(route, config = {}) {
     flyHeightMeters: flyHeight,
     terrainClearanceMeters: flyHeight + ellipse.centerAltitude - ellipse.highestTerrainAltitudeMeters,
     cameraFovDegrees,
+    inwardLookDegrees: toDeg(inwardLook),
     pathAtAltitude(altitudeMeters = 0, sampleCount = 240) {
       return ellipsePath(ellipse, altitudeMeters, sampleCount);
     },
@@ -86,7 +88,7 @@ export function createEllipseFlyby(route, config = {}) {
     },
     frameAt(s) {
       const here = localAt(s);
-      const tangent = tangentAt(s);
+      const tangent = rotateHorizontalRight(tangentAt(s), inwardLook * direction);
       const eyeAltitude = ellipse.centerAltitude + flyHeight;
       const eye = ellipse.toGeo([here[0], here[1], eyeAltitude]);
 
@@ -108,11 +110,21 @@ export function createEllipseFlyby(route, config = {}) {
         terrainClearanceMeters: flyHeight + ellipse.centerAltitude - ellipse.highestTerrainAltitudeMeters,
         highestTerrainAltitudeMeters: ellipse.highestTerrainAltitudeMeters,
         cameraFovDegrees,
+        inwardLookDegrees: toDeg(inwardLook),
         turnRadiusMeters: radiusAt(s),
         bankDegrees: bankAt(s),
       };
     },
   };
+}
+
+function rotateHorizontalRight([east, north], radians) {
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return [
+    east * cos + north * sin,
+    north * cos - east * sin,
+  ];
 }
 
 export function fitFlybyEllipse(route, config = {}) {
@@ -326,6 +338,10 @@ function wrap(value, span) {
 
 function toRad(value) {
   return value * Math.PI / 180;
+}
+
+function toDeg(value) {
+  return value * 180 / Math.PI;
 }
 
 function clamp(value, min, max) {

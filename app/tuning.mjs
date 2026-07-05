@@ -192,6 +192,8 @@ export const OVERVIEW_ANIM_INTRO_SECONDS = 1.5;
 // whichever minimum requires the higher camera.
 // cameraFovDegrees is passed to Map3D's `fov` property while the fly-by runs;
 // 5 is telephoto, 80 is wide-angle, 35 matches the normal Map3D default.
+// inwardLookDegrees rotates the fly-by camera horizontally toward the inside
+// of the ellipse: clockwise flights look right, counter-clockwise flights left.
 // direction is 1 for clockwise seen from above, -1 for counter-clockwise.
 // minTurnRadiusMeters is a radius: 2500 m means the tightest possible circle
 // would be 5 km across. maxBankDegrees is the roll applied at that tightest
@@ -207,6 +209,7 @@ export const ELLIPSE_FLYBY = {
   flyHeightMetersMin: 1400,
   flyHeightMetersAboveTerrainMin: 300,
   cameraFovDegrees: 60,
+  inwardLookDegrees: 10,
   mountPitchDegrees: 15,
   viewDistanceMeters: 3200,
   maxBankDegrees: 60,

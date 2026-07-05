@@ -2565,6 +2565,7 @@ function renderCameraDebug() {
     rows.push(["terrain high", num(frame.highestTerrainAltitudeMeters, 0, " m")]);
     rows.push(["terrain clr", num(frame.terrainClearanceMeters, 0, " m")]);
     rows.push(["fly fov", num(frame.cameraFovDegrees, 1, "°")]);
+    rows.push(["fly inward", num(frame.inwardLookDegrees, 1, "°")]);
     rows.push(["turn radius", num(frame.turnRadiusMeters, 0, " m")]);
     rows.push(["bank", num(frame.bankDegrees, 1, "°")]);
     rows.push(["lap", num(flyby.lapSeconds, 0, " s")]);

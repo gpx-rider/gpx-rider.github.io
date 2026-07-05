@@ -119,7 +119,7 @@ A freshly loaded route starts in a whole-route overview, framed from above so yo
 - **Orbit** — a slow turntable rotation around the route.
 - **Fly-by** — a camera flies a PCA-aligned ellipse around the route, looking along its direction of travel.
 
-The fly-by ellipse can intentionally be smaller than the route footprint; altitude, pitch, field of view, and view distance determine how much of the route stays visible from the air. Direction, lap time, maximum speed, ellipse scale, minimum turning radius, baseline height, minimum terrain clearance, pitch, view distance, field of view, and maximum bank angle are configurable in `app/tuning.mjs`.
+The fly-by ellipse can intentionally be smaller than the route footprint; altitude, pitch, field of view, inward horizontal look offset, and view distance determine how much of the route stays visible from the air. Direction, lap time, maximum speed, ellipse scale, minimum turning radius, baseline height, minimum terrain clearance, pitch, view distance, field of view, inward look offset, and maximum bank angle are configurable in `app/tuning.mjs`.
 
 Once you start pedaling or simulation begins, the camera flies down behind the rider and follows the route using GPX bearing.
 

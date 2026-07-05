@@ -24,6 +24,7 @@ const BASE = {
   flyHeightMetersMin: 1200,
   flyHeightMetersAboveTerrainMin: 250,
   cameraFovDegrees: 50,
+  inwardLookDegrees: 0,
   mountPitchDegrees: 30,
   viewDistanceMeters: 2500,
   maxBankDegrees: 45,
@@ -156,6 +157,26 @@ test("ellipse flyby looks in the direction of travel", () => {
   assert.ok(delta < 0.05, `camera faces travel direction (off by ${delta} rad)`);
 });
 
+test("inward look offset rotates clockwise right and counter-clockwise left", () => {
+  const offset = 12;
+  const sRatio = 0.2;
+  const clockwise = createEllipseFlyby(route, { ...BASE, direction: 1, inwardLookDegrees: offset });
+  const counter = createEllipseFlyby(route, { ...BASE, direction: -1, inwardLookDegrees: offset });
+
+  for (const [flyby, expected] of [[clockwise, offset], [counter, -offset]]) {
+    const s = flyby.loopLength * sRatio;
+    const frame = flyby.frameAt(s);
+    const viewBearing = bearingLocal(frame.eye, frame.lookAt);
+    const p0 = flyby.positionAt(s);
+    const p1 = flyby.positionAt(s + 10);
+    const tangentBearing = Math.atan2(p1[0] - p0[0], p1[1] - p0[1]);
+    const deltaDegrees = signedDeltaDegrees(viewBearing, tangentBearing);
+
+    assert.ok(Math.abs(deltaDegrees - expected) < 0.5, `expected ${expected}°, got ${deltaDegrees}°`);
+    assert.equal(frame.inwardLookDegrees, offset);
+  }
+});
+
 test("direction reverses travel around the ellipse", () => {
   const clockwise = createEllipseFlyby(route, { ...BASE, direction: 1 });
   const counter = createEllipseFlyby(route, { ...BASE, direction: -1 });
@@ -179,6 +200,10 @@ function bearingLocal(a, b) {
   const al = toLocalEN(a);
   const bl = toLocalEN(b);
   return Math.atan2(bl.e - al.e, bl.n - al.n);
+}
+
+function signedDeltaDegrees(a, b) {
+  return (((a - b) * 180 / Math.PI + 540) % 360) - 180;
 }
 
 function toLocalEN(point) {

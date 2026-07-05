@@ -365,8 +365,11 @@ in place).
   above, `-1` counter-clockwise). Its camera looks along the direction of travel
   and pitches down by `mountPitchDegrees`; `secondsPerLap`, `maxSpeedMps`,
   `flyHeightMetersMin`, `flyHeightMetersAboveTerrainMin`, `cameraFovDegrees`,
-  `viewDistanceMeters`, `ellipseScale`, `minSemiMajorMeters`,
+  `inwardLookDegrees`, `viewDistanceMeters`, `ellipseScale`, `minSemiMajorMeters`,
   `minSemiMinorMeters`, `sampleCount`, and `startAngleDegrees` are all tunable.
+  `inwardLookDegrees` rotates the horizontal look direction toward the ellipse
+  interior (clockwise = right, counter-clockwise = left), while the route travel
+  direction still drives the baseline heading.
   The actual fly height is the higher of the baseline height and the height
   needed to clear the highest route elevation sample under the fitted ellipse by
   `flyHeightMetersAboveTerrainMin`. `maxBankDegrees` scales the bank angle from
