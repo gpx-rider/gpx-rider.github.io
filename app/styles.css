@@ -1385,6 +1385,11 @@ dialog::backdrop {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Let this flex child shrink below its content height so the scroll area
+     below (.settings-body) is what overflows — without it, on the mobile
+     column layout the panel content spills past the fixed-height dialog and
+     the page behind scrolls instead (issue #13). */
+  min-height: 0;
 }
 
 .settings-head {
@@ -1412,6 +1417,9 @@ dialog::backdrop {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Keep an over-scroll at the top/bottom of the panel from chaining out to
+     the page behind the dialog. */
+  overscroll-behavior: contain;
   padding: 22px 26px;
 }
 
@@ -1961,12 +1969,144 @@ input[type="color"] {
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   }
 
+  /* A wrapped grid of seven tabs would eat half a short phone dialog, leaving
+     a cramped scroll window; keep them on one horizontally-scrolling row so
+     the panel below gets the height instead. */
   .settings-tabs {
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-top: 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .settings-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-tab {
+    flex: none;
+    white-space: nowrap;
   }
 
   .settings-rail-foot {
     display: none;
+  }
+}
+
+/* ---- fullscreen HUD on phones ---------------------------------------------
+   The fullscreen dock is laid out for a wide screen: its body is a horizontal
+   row (fixed-width metric grid + separator + road-ahead profile) and the
+   collapsed strip lays every metric tile inline. Neither fits a phone, so on
+   narrow viewports the corner overlays pull in from the edges and the dock
+   stacks into a compact, always-fits column. */
+@media (max-width: 860px) {
+  .map-viewport.fullscreen-mode #minimap {
+    left: 14px;
+    top: 62px;
+  }
+
+  .map-viewport.fullscreen-mode .map-actions {
+    top: 14px;
+    right: 14px;
+  }
+
+  .map-viewport.fullscreen-mode .fs-clock {
+    top: 14px;
+    left: 14px;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  /* The banner's desktop min-width (420px) overflows a phone; let it span the
+     viewport width instead and drop the centring transform. */
+  .map-viewport.fullscreen-mode .climb-banner {
+    left: 14px;
+    right: 14px;
+    min-width: 0;
+    padding: 12px 14px 13px;
+    transform: none;
+  }
+
+  .map-viewport.fullscreen-mode .fs-dock {
+    left: 10px;
+    right: 10px;
+    bottom: 12px;
+    padding: 14px 14px 16px;
+    border-radius: 16px;
+  }
+
+  /* Stack the body: metrics on top, road-ahead below. Keep clear of the
+     collapse toggle in the top-right corner. */
+  .fs-dock-body {
+    flex-direction: column;
+    gap: 14px;
+    padding-right: 30px;
+  }
+
+  .fs-dock-sep {
+    display: none;
+  }
+
+  /* Tiles flow into a four-column grid (two rows when all eight are on) that
+     fills the width; the JS-set per-tile width no longer applies. */
+  .fs-dock-metrics {
+    grid-template-rows: none;
+    grid-auto-flow: row;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-columns: auto;
+    gap: 8px;
+  }
+
+  .fs-tile {
+    padding: 9px 10px;
+  }
+
+  .fs-tile-label {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .fs-tile-value {
+    margin-top: 5px;
+    font-size: 17px;
+  }
+
+  /* Once the body is a column the road plot has no intrinsic height, so pin
+     one; compact the header and drop its explanatory note. */
+  .fs-road-plot {
+    flex: none;
+    height: 76px;
+  }
+
+  .fs-road-head {
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-bottom: 8px;
+  }
+
+  .fs-road-note {
+    display: none;
+  }
+
+  .fs-dock-progress {
+    gap: 16px;
+    margin-top: 10px;
+  }
+
+  /* Collapsed on a phone: stretch the stacked sections full width and wrap the
+     inline metric strip so eight fields don't run off the edge. */
+  .fs-dock.collapsed .fs-dock-body {
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .fs-dock.collapsed .fs-dock-metrics {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 10px 16px;
   }
 }
