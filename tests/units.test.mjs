@@ -5,6 +5,7 @@ import {
   formatDistance,
   formatDuration,
   formatEnergy,
+  formatLocalTime,
   formatSpeed,
 } from "../app/units.mjs";
 
@@ -35,4 +36,14 @@ test("durations format as m:ss and h:mm:ss", () => {
   assert.equal(formatDuration(65), "1:05");
   assert.equal(formatDuration(3600), "1:00:00");
   assert.equal(formatDuration(3725), "1:02:05");
+});
+
+test("local time includes seconds in 24-hour and 12-hour formats", () => {
+  const morning = new Date(2026, 0, 2, 0, 5, 9);
+  const afternoon = new Date(2026, 0, 2, 13, 7, 4);
+
+  assert.equal(formatLocalTime(morning), "00:05:09");
+  assert.equal(formatLocalTime(morning, "12"), "12:05:09 AM");
+  assert.equal(formatLocalTime(afternoon, "24"), "13:07:04");
+  assert.equal(formatLocalTime(afternoon, "12"), "1:07:04 PM");
 });
