@@ -350,35 +350,64 @@ export const DIFFICULTY_THRESHOLDS_EQUIVALENT_KM = [
 
 // --- Climb detection -------------------------------------------------------------
 
-// Detected climbs shown on the route overview when a GPX loads, and used
-// during the ride to report the current/next climb (see app/climbs.mjs). A
-// candidate climb only ends once elevation has dropped
-// CLIMB_DESCENT_TOLERANCE_METERS below its peak *and* the route has moved on
-// past the peak by at least CLIMB_MERGE_GAP_METERS — so a short flat stretch
-// or a few meters of downhill (a switchback dip, a road dropping briefly
-// before kicking back up) doesn't end the climb and start a new one. Both
-// are deliberately separate from CLIMB_NOISE_THRESHOLD_METERS (route.mjs's
-// ascent/descent total noise filter) so tuning one doesn't move the other.
+// Climb detection relies on a "Leaky Bucket" (fatigue integrator) algorithm 
+// to emulate human effort. Rather than purely looking at point-to-point geometry,
+// it calculates a running "fatigue" score. 
+//
+// - Sustained grades above a resting threshold fill the bucket.
+// - Shallow flats and descents drain the bucket.
+// - A segment is officially recognized as an active climb once the bucket hits 
+//   a specific fatigue threshold. 
+// - The climb closes once the route descends enough to completely empty the bucket.
+// 
+// This model prevents a long climb from being fractured into multiple pieces by 
+// brief dips or false flats, while correctly ignoring small, insignificant rollers.
 
-// How far past a climb's peak the route can travel while still elevated
-// (but not climbing) before the climb is considered over. ~100 m covers a
-// short flat stretch at the top of a ramp; raise it to merge climbs across
-// longer flat/rolling gaps, lower it to split on shorter ones.
-export const CLIMB_MERGE_GAP_METERS = 100;
+/**
+ * The "bucket size" required to officially declare a segment an active climb.
+ * Lowering this makes the algorithm more sensitive to shorter, punchy hills.
+ */
+export const CLIMB_FATIGUE_THRESHOLD = 300;
 
-// How far elevation can drop below a climb's peak — a few meters of
-// downhill — before that drop, combined with CLIMB_MERGE_GAP_METERS of
-// distance, is treated as the climb actually ending.
-export const CLIMB_DESCENT_TOLERANCE_METERS = 5;
+/**
+ * The absolute maximum fatigue the bucket can hold. This acts as a "lid," ensuring 
+ * that massive alpine climbs don't accumulate infinite fatigue. Without this lid, 
+ * a long mountain descent would not be enough to drain the bucket and close the climb.
+ */
+export const CLIMB_MAX_FATIGUE = 900;
 
-// A candidate climb is only reported if it gains at least this much
-// elevation...
-export const CLIMB_MIN_GAIN_METERS = 30;
+/**
+ * The gradient threshold (in percent) where a rider starts accumulating fatigue.
+ * Gradients above this add to the bucket; gradients below this trigger recovery.
+ */
+export const CLIMB_RESTING_GRADIENT_PERCENT = 0.5;
 
-// ...AND averages at least this grade, in percent. Both must hold, so a
-// long gentle drag and a short punchy ramp are each filtered out on their
-// own terms rather than by a single combined score.
-export const CLIMB_MIN_AVERAGE_GRADE_PERCENT = 3;
+/**
+ * The leak rate when resting or descending. A multiplier of 0.2 means the bucket 
+ * drains at 20% of the speed it fills. This forgiving drain rate allows climbs to 
+ * "hold their breath" through false-flats and brief downhill dips.
+ */
+export const CLIMB_RECOVERY_MULTIPLIER = 0.2;
+
+/**
+ * The number of data points used in the moving average pre-filter. Raw GPS 
+ * elevation data is inherently noisy. A 5-point window effectively flattens 
+ * micro-jitter without destroying the macro-geometry of the terrain.
+ */
+export const CLIMB_SMOOTHING_WINDOW_SIZE = 5;
+
+/**
+ * Sanity Check: Minimum accumulated gain (in meters) from the true base to the true peak.
+ * Using accumulated gain ensures that rocky, rolling trails that net little elevation 
+ * but require significant upward pedaling are still recognized.
+ */
+export const CLIMB_MIN_GAIN_METERS = 20;
+
+/**
+ * Sanity Check: Minimum average net grade (in percent) from the true base to the true peak.
+ * Prevents extremely long, nearly flat false-drags from being classified as categorizable climbs.
+ */
+export const CLIMB_MIN_AVERAGE_GRADE_PERCENT = 1.5;
 
 // --- Ride recording -----------------------------------------------------------------
 
