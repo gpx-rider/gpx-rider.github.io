@@ -9,8 +9,6 @@
 
 The live demo runs entirely in your browser. It ships with a domain-restricted Google Maps key; self-hosted copies can use your own key, stored locally in your browser.
 
-![GPX Rider route over the Golden Gate Bridge](gallery/0100_goldengate/screenshot.jpeg)
-
 ## Screenshots
 
 <table>
