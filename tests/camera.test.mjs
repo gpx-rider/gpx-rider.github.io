@@ -227,6 +227,23 @@ test("overview faces the side of the route furthest from the axis", () => {
   assertHeadingNear(bulgeRight.heading, 180, 1);
 });
 
+test("overview headingOffset flips the view to the other side", () => {
+  const bulge = [
+    { lat: 50, lng: 14, ele: 0 },
+    { lat: 50.05, lng: 14.05, ele: 0 },
+    { lat: 50, lng: 14.1, ele: 0 },
+  ];
+  const auto = computeRouteOverviewCamera(bulge);
+  const flipped = computeRouteOverviewCamera(bulge, { headingOffsetDegrees: 180 });
+  // 180° offset is exactly the opposite viewing side.
+  assertHeadingNear(flipped.heading, auto.heading + 180, 1);
+  // A 90° swing lands 90° off the auto heading, and the fit still returns a
+  // usable range (every point is reframed, not dropped).
+  const swung = computeRouteOverviewCamera(bulge, { headingOffsetDegrees: 90 });
+  assertHeadingNear(swung.heading, auto.heading + 90, 1);
+  assert.ok(swung.range > 0);
+});
+
 test("wider routes need longer overview ranges", () => {
   const short = computeRouteOverviewCamera([
     { lat: 50, lng: 14, ele: 0 },
@@ -237,6 +254,33 @@ test("wider routes need longer overview ranges", () => {
     { lat: 50, lng: 14.3, ele: 0 },
   ]);
   assert.ok(long.range > short.range * 5);
+});
+
+test("overview rangeFactor zooms the fitted range in and out", () => {
+  const route = [
+    { lat: 50, lng: 14, ele: 0 },
+    { lat: 50, lng: 14.2, ele: 0 }, // ~14 km, well clear of the min-range floor
+  ];
+  const fit = computeRouteOverviewCamera(route);
+  const closer = computeRouteOverviewCamera(route, { rangeFactor: 0.5 });
+  const farther = computeRouteOverviewCamera(route, { rangeFactor: 2 });
+  assert.ok(Math.abs(closer.range - fit.range * 0.5) < 1, "0.5 halves the range");
+  assert.ok(Math.abs(farther.range - fit.range * 2) < 1, "2 doubles the range");
+  // Tilt/heading/center are unaffected — only the distance changes.
+  assert.equal(closer.tilt, fit.tilt);
+  assertHeadingNear(closer.heading, fit.heading, 0.001);
+});
+
+test("overview maxRangeMeters caps how far the camera pulls out", () => {
+  const route = [
+    { lat: 50, lng: 14, ele: 0 },
+    { lat: 50, lng: 14.3, ele: 0 },
+  ];
+  const capped = computeRouteOverviewCamera(route, { maxRangeMeters: 3000 });
+  assert.equal(capped.range, 3000);
+  // A min above the max still wins, so the range never inverts.
+  const floored = computeRouteOverviewCamera(route, { minRangeMeters: 5000, maxRangeMeters: 3000 });
+  assert.equal(floored.range, 5000);
 });
 
 test("overview handles loops and degenerate routes", () => {

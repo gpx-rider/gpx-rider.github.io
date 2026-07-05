@@ -111,7 +111,38 @@ export const DEFAULT_CAMERA_ANGLE_DEGREES = 75;
 export const DEFAULT_CAMERA_BEHIND_METERS = 800;
 
 // Route overview shown when a route loads: whole route framed from this tilt.
-export const OVERVIEW_TILT_DEGREES = 45;
+// Tilt is degrees from straight-down — 0 is top-down, ~89 is nearly at the
+// horizon (a low, terrain-revealing angle). NOTE: Google's 3D map limits how
+// far it will tilt toward the horizon when the camera is far out, so at the
+// large range needed to frame a long route a high tilt may be pulled back
+// toward top-down. Use the range knobs below to bring the camera closer if a
+// steeper tilt isn't taking effect (watch the Debug camera overlay).
+export const OVERVIEW_TILT_DEGREES = 70;
+
+// Which side the overview looks from, as a rotation (degrees) on top of the
+// side the algorithm auto-picks (which puts the route's bulk away from the
+// viewer, start-left/end-right). 0 = the auto choice; 180 = the exact opposite
+// side, still with the route's long axis horizontal — this is how you flip a
+// route to see it "from the other side". Other values swing the view to any
+// azimuth (the route then reads diagonally, but it's still fully framed).
+export const OVERVIEW_HEADING_OFFSET_DEGREES = 0;
+
+// Slack around the route when fitting it to the viewport. 1.0 hugs the route
+// to the screen edges; higher leaves more empty margin (camera further out).
+export const OVERVIEW_MARGIN_FACTOR = 0.9;
+
+// Multiplier on the fitted overview range. 1 frames the whole route; below 1
+// pulls the camera in closer (route edges crop off, but terrain relief reads
+// much better at a low tilt); above 1 pushes it further out. This is the main
+// knob for trading "see the whole route" against "see the 3D terrain".
+export const OVERVIEW_RANGE_FACTOR = 0.75;
+
+// Hard bounds (meters) on the overview range, applied after the factor. The
+// max cap is the other way to force a closer, more terrain-rich view on long
+// routes (at the cost of not framing the whole thing); leave it at Infinity to
+// always frame the entire route. Min keeps tiny routes from zooming in absurdly.
+export const OVERVIEW_MIN_RANGE_METERS = 250;
+export const OVERVIEW_MAX_RANGE_METERS = Infinity;
 
 // The rider's heading is sampled this many meters behind/ahead of the rider,
 // so the camera points the way the rider moves rather than at a distant spot.
@@ -262,6 +293,14 @@ export const DEFAULT_SHOW_MINIMAP = true;
 // Place labels (roads, towns, POIs) on the main 3D map. Off = clean
 // satellite imagery, on = Google's hybrid mode with labels.
 export const DEFAULT_MAP_LABELS_ENABLED = false;
+
+// Developer overlay: a small translucent box on the map showing the live
+// camera values the 3D map actually applies (tilt/range/heading/center),
+// plus ride progress. Off by default — it's a diagnostics aid, e.g. for
+// reading what tilt Google honours after a manual drag versus what we ask
+// for. The overlay refreshes on this interval while it's visible.
+export const DEFAULT_CAMERA_DEBUG_ENABLED = false;
+export const CAMERA_DEBUG_REFRESH_MS = 100;
 
 // Which tiles the fullscreen ride HUD shows. Keys must match the
 // data-hud="…" attributes in index.html (HUD tiles) and the

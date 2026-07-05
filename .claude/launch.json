@@ -4,7 +4,7 @@
     {
       "name": "GPX Rider",
       "runtimeExecutable": "/opt/homebrew/bin/python3",
-      "runtimeArgs": ["-m", "http.server", "5174", "--bind", "127.0.0.1"],
+      "runtimeArgs": ["scripts/dev_server.py", "5174", "127.0.0.1"],
       "port": 5174
     }
   ]

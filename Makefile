@@ -12,7 +12,7 @@ all: gallery-data gallery test
 
 run:
 	@printf 'GPX Rider is available at %s\n' '$(URL)'
-	@python3 -m http.server $(PORT) --bind $(HOST)
+	@python3 scripts/dev_server.py $(PORT) $(HOST)
 
 test:
 	@node --test tests/*.test.mjs
