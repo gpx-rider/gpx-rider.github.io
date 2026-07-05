@@ -16,6 +16,7 @@ import {
   rangeForBehind,
   signedHeadingDelta,
 } from "./camera.mjs";
+import { orbitCamera, createFlyover } from "./flyover.mjs";
 import { bearing, clamp, destinationPoint, haversine, lerp, roundCoordinate, toRad } from "./geo.mjs";
 import { deployedMapsApiKey } from "./config.mjs";
 import {
@@ -75,6 +76,12 @@ import {
   MAX_TICK_SECONDS,
   OVERVIEW_TILT_DEGREES,
   OVERVIEW_HEADING_OFFSET_DEGREES,
+  DEFAULT_OVERVIEW_MODE,
+  OVERVIEW_ORBIT_SECONDS_PER_REV,
+  OVERVIEW_ORBIT_DIRECTION,
+  OVERVIEW_ANIM_INTRO_SECONDS,
+  HELICOPTER_FLYOVER,
+  AIRPLANE_FLYOVER,
   OVERVIEW_MARGIN_FACTOR,
   OVERVIEW_RANGE_FACTOR,
   OVERVIEW_MIN_RANGE_METERS,
@@ -195,6 +202,12 @@ const state = {
   // the user grabs the overview camera, "follow" once movement starts.
   cameraMode: "follow",
   overviewCamera: null,
+  // How the whole-route overview is presented at rest (user setting):
+  // "static" | "orbit" | "heli" | "airplane". overviewAnim holds the live
+  // animation state for the non-static modes; its loop drives the map directly.
+  overviewMode: DEFAULT_OVERVIEW_MODE,
+  overviewAnim: null,
+  overviewAnimLoopActive: false,
   cameraFlight: null,
   cameraFlightLoopActive: false,
   cameraZoom: DEFAULT_CAMERA_ZOOM,
@@ -280,6 +293,7 @@ const els = {
   gradeIntervalOutput: document.querySelector("#gradeIntervalOutput"),
   distanceUnitSelect: document.querySelector("#distanceUnitSelect"),
   energyUnitSelect: document.querySelector("#energyUnitSelect"),
+  overviewModeSelect: document.querySelector("#overviewModeSelect"),
   cameraZoomInput: document.querySelector("#cameraZoomInput"),
   cameraZoomOutput: document.querySelector("#cameraZoomOutput"),
   cameraAngleInput: document.querySelector("#cameraAngleInput"),
@@ -597,6 +611,7 @@ function bindEvents() {
   els.mapLabelsInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.cameraDebugInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.hudToggles.forEach((input) => input.addEventListener("change", updateDisplaySettingsFromControls));
+  els.overviewModeSelect.addEventListener("change", updateOverviewModeFromControl);
   els.cameraZoomInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraBehindInput.addEventListener("input", updateCameraSettingsFromControls);
@@ -1829,7 +1844,12 @@ function ensureCameraFlightLoop() {
   const step = () => {
     if (
       !state.route.length || !state.map || state.userInteracting ||
-      state.movementLoopActive || state.cameraMode === "manual"
+      state.movementLoopActive || state.cameraMode === "manual" ||
+      // An animated overview (orbit/heli/airplane) owns the camera directly;
+      // the chase flight must yield or the two loops fight — the flight would
+      // re-init from the old pose and fly to the new route instead of the
+      // animation snapping to it.
+      state.overviewAnim
     ) {
       state.cameraFlightLoopActive = false;
       return;
@@ -1871,11 +1891,133 @@ function enterOverviewMode({ instant = false } = {}) {
   });
   if (!state.overviewCamera) return;
   state.cameraMode = "overview";
+
+  // Animated modes (orbit / helicopter / airplane) drive the map themselves.
+  // If one can't be set up (e.g. a flyover on a route too small to fly), fall
+  // through to the static framing below.
+  if (state.overviewMode !== "static" && startOverviewAnimation({ instant })) return;
+
+  clearOverviewAnimation();
   if (instant) {
     applyCameraNow(state.overviewCamera);
     return;
   }
   ensureCameraFlightLoop();
+}
+
+// --- Animated overview (orbit / helicopter / airplane) --------------------------
+//
+// These modes own the camera directly (the motion is already smooth, so there's
+// no chase). Orbit spins the static overview; the flyover flies a physics path
+// from flyover.mjs. On entry the view eases from the current pose into the
+// motion so switching modes or resetting never jumps.
+
+function startOverviewAnimation({ instant = false } = {}) {
+  const mode = state.overviewMode;
+  let fly = null;
+  if (mode === "heli" || mode === "airplane") {
+    fly = createFlyover(state.route, mode === "heli" ? HELICOPTER_FLYOVER : AIRPLANE_FLYOVER);
+    if (!fly) return false; // route too small to fly — caller falls back to static
+  }
+  const now = performance.now();
+  state.overviewAnim = {
+    mode,
+    fly,
+    s: 0,
+    startMs: now,
+    lastMs: now,
+    // Ease in from where the camera currently is, unless we're snapping (a
+    // fresh load can be on the far side of the world — no sensible lerp).
+    introFrom: instant ? null : currentMapCameraPose(),
+    introMs: now,
+  };
+  // The animation is the sole camera driver now; drop any parked chase state.
+  state.cameraFlight = null;
+  // On an instant (fresh-load) entry, jump straight to the first frame now
+  // instead of waiting for the first animation tick — so the map snaps to the
+  // route exactly like the static overview, with no flight from wherever the
+  // camera was.
+  if (instant) stepOverviewAnimation(now);
+  ensureOverviewAnimationLoop();
+  return true;
+}
+
+function clearOverviewAnimation() {
+  state.overviewAnim = null;
+}
+
+function ensureOverviewAnimationLoop() {
+  if (state.overviewAnimLoopActive) return;
+  state.overviewAnimLoopActive = true;
+  const step = () => {
+    if (
+      !state.overviewAnim || state.cameraMode !== "overview" ||
+      !state.route.length || !state.map || state.userInteracting || state.movementLoopActive
+    ) {
+      state.overviewAnimLoopActive = false;
+      return;
+    }
+    stepOverviewAnimation(performance.now());
+    // Keep the ground dot's apparent size steady while the camera moves.
+    if (state.riderDot) updateRiderDot(interpolateRoutePoint(state.route, state.progressMeters));
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+function stepOverviewAnimation(now) {
+  const anim = state.overviewAnim;
+  if (!anim) return;
+  const dt = clamp((now - anim.lastMs) / 1000, 0, 0.5);
+  anim.lastMs = now;
+
+  let pose = null;
+  if (anim.mode === "orbit") {
+    const cam = orbitCamera(state.overviewCamera, (now - anim.startMs) / 1000, {
+      secondsPerRevolution: OVERVIEW_ORBIT_SECONDS_PER_REV,
+      direction: OVERVIEW_ORBIT_DIRECTION,
+    });
+    const eye = cam && cameraEyePosition(cam);
+    if (eye) pose = { eye, center: cam.center, heading: cam.heading };
+  } else if (anim.fly) {
+    anim.s = anim.fly.advance(anim.s, dt);
+    const frame = anim.fly.frameAt(anim.s);
+    pose = { eye: frame.eye, center: frame.lookAt, heading: null };
+  }
+  if (!pose) return;
+
+  // Ease from the entry pose into the animated pose over the intro window.
+  if (anim.introFrom && OVERVIEW_ANIM_INTRO_SECONDS > 0) {
+    const t = (now - anim.introMs) / 1000 / OVERVIEW_ANIM_INTRO_SECONDS;
+    if (t >= 1) {
+      anim.introFrom = null;
+    } else {
+      const k = smoothstep(clamp(t, 0, 1));
+      pose = {
+        eye: lerpGeoPoint(anim.introFrom.eye, pose.eye, k),
+        center: lerpGeoPoint(anim.introFrom.center, pose.center, k),
+        heading: pose.heading,
+      };
+    }
+  }
+
+  const camera = cameraFromEyeAndCenter(pose.eye, pose.center, pose.heading ?? Number(state.map.heading) ?? 0);
+  state.map.center = { ...pose.center };
+  state.map.heading = camera.heading;
+  state.map.range = camera.range;
+  state.map.tilt = camera.tilt;
+}
+
+function lerpGeoPoint(a, b, t) {
+  return {
+    lat: a.lat + (b.lat - a.lat) * t,
+    lng: a.lng + (b.lng - a.lng) * t,
+    altitude: (Number(a.altitude) || 0) + ((Number(b.altitude) || 0) - (Number(a.altitude) || 0)) * t,
+  };
+}
+
+function smoothstep(t) {
+  return t * t * (3 - 2 * t);
 }
 
 // Jump the map straight to `camera` with no flight, and park the chase state
@@ -2119,6 +2261,20 @@ function syncCameraControls() {
   els.cameraZoomInput.value = String(Math.round(state.cameraZoom * 10) / 10);
   els.cameraAngleInput.value = String(Math.round(state.cameraAngleDegrees));
   els.cameraBehindInput.value = String(Math.round(state.cameraBehindMeters / 20) * 20);
+  els.overviewModeSelect.value = state.overviewMode;
+}
+
+// The overview mode is a display choice, not a follow-camera parameter, so it
+// re-frames the route immediately when at rest (so the user sees the mode take
+// effect) but never disturbs an in-progress ride.
+function updateOverviewModeFromControl() {
+  const mode = els.overviewModeSelect.value;
+  state.overviewMode = ["static", "orbit", "heli", "airplane"].includes(mode) ? mode : "static";
+  saveSettings();
+  if (!isMoving() && state.route.length) {
+    state.cameraMode = "overview";
+    enterOverviewMode();
+  }
 }
 
 function updateCameraSettingsLabels() {
@@ -2256,8 +2412,9 @@ function renderCameraDebug() {
   const num = (value, digits, suffix = "") =>
     (Number.isFinite(value) ? value.toFixed(digits) : "—") + (Number.isFinite(value) ? suffix : "");
 
+  const flyover = state.overviewAnim?.fly;
   const rows = [
-    ["mode", state.cameraMode],
+    ["mode", state.cameraMode === "overview" ? `overview·${state.overviewMode}` : state.cameraMode],
     ["tilt", num(tilt, 1, "°")],
     ["range", num(range, 0, " m")],
     ["heading", num(heading, 1, "°")],
@@ -2267,6 +2424,11 @@ function renderCameraDebug() {
     ["ctr lng", num(lng, 5)],
     ["progress", `${(state.progressMeters / 1000).toFixed(2)} / ${(totalDistance / 1000).toFixed(2)} km`],
   ];
+  if (flyover) {
+    const speed = flyover.speedAt(state.overviewAnim.s);
+    rows.push(["fly speed", `${num(speed, 1)} m/s · ${num(speed * 3.6, 0)} km/h`]);
+    rows.push(["lap", num(flyover.lapSeconds, 0, " s")]);
+  }
 
   body.innerHTML = rows
     .map(([label, value]) => `<dt>${label}</dt><dd>${value}</dd>`)
@@ -2513,6 +2675,10 @@ function restoreSettings() {
   const offsetForward = Number(settings?.cameraOffsetForwardMeters);
   const offsetRight = Number(settings?.cameraOffsetRightMeters);
 
+  if (["static", "orbit", "heli", "airplane"].includes(settings?.overviewMode)) {
+    state.overviewMode = settings.overviewMode;
+  }
+
   if (Number.isFinite(zoom)) {
     state.cameraZoom = clamp(zoom, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
   }
@@ -2657,6 +2823,7 @@ function restoreSettings() {
 function saveSettings() {
   writeJson(SETTINGS_STORAGE_KEY, {
     cameraZoom: state.cameraZoom,
+    overviewMode: state.overviewMode,
     cameraAngleDegrees: state.cameraAngleDegrees,
     cameraBehindMeters: state.cameraBehindMeters,
     cameraHeadingOffsetDegrees: state.cameraHeadingOffsetDegrees,
