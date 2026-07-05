@@ -240,7 +240,7 @@ test("wider routes need longer overview ranges", () => {
 });
 
 test("overview handles loops and degenerate routes", () => {
-  // Loop: start and end coincide; the axis falls back to the farthest point.
+  // Loop: start and end coincide; the axis comes from the route's spread.
   const loop = computeRouteOverviewCamera([
     { lat: 50, lng: 14, ele: 0 },
     { lat: 50.02, lng: 14.02, ele: 0 },
@@ -258,6 +258,36 @@ test("overview handles loops and degenerate routes", () => {
   ]), null);
   assert.equal(computeRouteOverviewCamera([{ lat: 50, lng: 14, ele: 0 }]), null);
   assert.equal(computeRouteOverviewCamera([]), null);
+});
+
+test("overview frames a loop along its long axis, not the start→end line", () => {
+  // An east-west elongated loop (four times wider than it is tall) whose
+  // start/end sit at the NORTH tip. The old start→farthest-point axis would
+  // run north→south — the loop's short axis — and frame it side-on, letting
+  // the wide east-west extent overflow the viewport. PCA picks the true long
+  // (east-west) axis, so the camera looks across it (heading ≈ north/south)
+  // and the whole loop reads left-to-right.
+  const cx = 14;
+  const cy = 50;
+  const semiEast = 0.08; // ~5.7 km wide
+  const semiNorth = 0.02; // ~2.2 km tall
+  const loop = [];
+  for (let i = 0; i <= 24; i++) {
+    // Start the traversal at the north tip so start === end sits far from the
+    // east-west long axis, which is exactly what tripped up the old axis.
+    const angle = Math.PI / 2 + (i / 24) * 2 * Math.PI;
+    loop.push({ lat: cy + semiNorth * Math.sin(angle), lng: cx + semiEast * Math.cos(angle), ele: 0 });
+  }
+
+  const camera = computeRouteOverviewCamera(loop);
+  // Long axis is east-west, so the view must look across it: north or south.
+  const acrossLongAxis = Math.min(
+    Math.abs(((camera.heading - 0 + 540) % 360) - 180),
+    Math.abs(((camera.heading - 180 + 540) % 360) - 180),
+  );
+  assert.ok(acrossLongAxis < 5, `loop heading ${camera.heading} should look across the long axis`);
+  assert.ok(Math.abs(camera.center.lat - cy) < 0.001);
+  assert.ok(Math.abs(camera.center.lng - cx) < 0.001);
 });
 
 // --- Physical camera chase ------------------------------------------------------

@@ -291,8 +291,12 @@ in place).
   switch it to a `Model3DElement` too, not more polygon tweaking.
 - **Camera modes & physical motion**: `state.cameraMode` is `"overview"`
   after a route loads (whole route framed via `computeRouteOverviewCamera`
-  in `camera.mjs`: start→end reads left-to-right, the route's far side
-  faces away, 45° tilt), `"manual"` once the user grabs the overview, and
+  in `camera.mjs`: the framing axis is the route's *principal axis of spread*
+  — a PCA over all points, not the start→end line, so loops/lollipops/
+  out-and-backs still frame along their real long dimension instead of an
+  arbitrary near-zero start→end axis — with that long axis horizontal, the
+  route's far side facing away, 45° tilt, and start-left/end-right for open
+  routes), `"manual"` once the user grabs the overview, and
   `"follow"` from the moment movement starts. The overview snaps into place
   instantly on load (`applyCameraNow` — a new route may be across the
   world); every later camera move chases the target's eye/look-at pair with

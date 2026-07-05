@@ -94,11 +94,17 @@ export function applyCameraLift({ tiltDegrees, rangeMeters, liftMeters, minTiltD
   };
 }
 
-// Frame the whole route from a 45-degree side view: the start→end line
-// becomes the screen-horizontal axis and the camera looks at the route from
-// whichever side leaves the point furthest from that axis away from the
-// viewer. A straight (or symmetric) route defaults to looking from the
-// south side of the axis direction — start on the left, end on the right.
+// Frame the whole route from a 45-degree side view. The framing axis is the
+// route's *principal axis of horizontal spread* (PCA over every point), not
+// the straight start→end line: that keeps loops, lollipops, out-and-backs and
+// any route whose endpoints sit close together framed along their real long
+// dimension instead of collapsing onto a near-zero, arbitrary start→end axis
+// (the old fallback — aim at the point furthest from the start — could face
+// the camera almost anywhere for a loop). The long axis becomes the
+// screen-horizontal, and the camera looks at the route from whichever side
+// leaves the point furthest from that axis away from the viewer. A straight
+// (or symmetric) route defaults to looking from the south side of the axis
+// direction — start on the left, end on the right.
 export function computeRouteOverviewCamera(route, {
   tiltDegrees = 45,
   viewportAspect = 16 / 9,
@@ -115,16 +121,45 @@ export function computeRouteOverviewCamera(route, {
   const start = route[0];
   const end = route[route.length - 1];
 
-  // Loop routes have no usable start→end axis; aim it at the point furthest
-  // from the start instead.
-  let axisEnd = end;
-  if (haversine(start, end) < 10) {
-    for (const point of route) {
-      if (haversine(start, point) > haversine(start, axisEnd)) axisEnd = point;
-    }
-    if (haversine(start, axisEnd) < 10) return null;
+  // Principal axis of the route's ground footprint. Working in local
+  // equirectangular units around `start` (longitude scaled by cos(lat) so east
+  // and north share a scale — the axis angle is scale-invariant), the
+  // covariance of the points about their centroid gives the direction of
+  // greatest spread. Unlike start→end, this is stable wherever the endpoints
+  // fall on the route, which is what lets loops frame along their real extent.
+  const cosLat = Math.cos(toRad(start.lat)) || 1e-6;
+  const local = route.map((point) => [(point.lng - start.lng) * cosLat, point.lat - start.lat]);
+  let meanEast = 0;
+  let meanNorth = 0;
+  for (const [e, n] of local) { meanEast += e; meanNorth += n; }
+  meanEast /= local.length;
+  meanNorth /= local.length;
+  let covEE = 0;
+  let covNN = 0;
+  let covEN = 0;
+  for (const [e, n] of local) {
+    const de = e - meanEast;
+    const dn = n - meanNorth;
+    covEE += de * de;
+    covNN += dn * dn;
+    covEN += de * dn;
   }
-  const axisBearing = bearing(start, axisEnd);
+  const principalAngle = 0.5 * Math.atan2(2 * covEN, covEE - covNN);
+  let majorEast = Math.cos(principalAngle);
+  let majorNorth = Math.sin(principalAngle);
+
+  // Orient the axis so the route generally progresses start→end along it,
+  // which reads start-on-the-left, end-on-the-right for open routes. When the
+  // endpoints coincide (a loop or out-and-back has no progression direction)
+  // fall back to pointing the axis eastward, so a symmetric route still
+  // defaults to a north-up view. (The axis *direction* only decides this
+  // reading; the far-side-away side choice below is independent of it.)
+  const progEast = (end.lng - start.lng) * cosLat;
+  const progNorth = end.lat - start.lat;
+  const progAlongAxis = progEast * majorEast + progNorth * majorNorth;
+  const flip = Math.abs(progAlongAxis) > 1e-9 ? progAlongAxis < 0 : majorEast < 0;
+  if (flip) { majorEast = -majorEast; majorNorth = -majorNorth; }
+  const axisBearing = normalizeHeading(Math.atan2(majorEast, majorNorth) * 180 / Math.PI);
 
   let minAlong = 0;
   let maxAlong = 0;
@@ -145,6 +180,10 @@ export function computeRouteOverviewCamera(route, {
     minEle = Math.min(minEle, ele);
     maxEle = Math.max(maxEle, ele);
   }
+
+  // No usable footprint — every point sits on essentially the same spot, so
+  // there is nothing to frame.
+  if ((maxAlong - minAlong) < 10 && (maxCross - minCross) < 10) return null;
 
   // Positive cross is to the right of the axis. Looking toward the side that
   // reaches further puts that side away from the viewer. The deadband keeps
