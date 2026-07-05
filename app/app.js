@@ -1970,10 +1970,12 @@ function enterOverviewMode({ instant = false } = {}) {
 // static holds it, orbit spins it, and the fly modes use it as their
 // fallback/intro pose before their own path driver takes over.
 function overviewCameraParams(mode) {
-  if (mode === "satellite" || mode === "satellite-north") {
+  if (mode === "satellite") {
     return {
+      // Straight-down, north up. (An axis-oriented variant was tried and looked
+      // unnatural — the map appeared randomly rotated — so satellite is north-up.)
       tiltDegrees: SATELLITE_TILT_DEGREES,
-      headingDegrees: mode === "satellite-north" ? 0 : undefined,
+      headingDegrees: 0,
       marginFactor: SATELLITE_MARGIN_FACTOR,
       rangeFactor: 1,
       minRangeMeters: OVERVIEW_MIN_RANGE_METERS,
@@ -2037,16 +2039,20 @@ function startOverviewAnimation({ instant = false } = {}) {
     if (!flyby) return false; // route too small to fly — caller falls back to static
   }
   const now = performance.now();
+  // Ease in from where the camera currently is, unless we're snapping (a fresh
+  // load can be on the far side of the world — no sensible lerp).
+  const introFrom = instant ? null : currentMapCameraPose();
+  // Enter a fly pattern at the point nearest the current camera, so the flight
+  // takes the short way in instead of always flying to the pattern's start.
+  const startS = flyby && introFrom?.eye ? flyby.nearestSTo(introFrom.eye) : 0;
   state.overviewAnim = {
     mode,
     flyby,
-    s: 0,
+    s: startS,
     lastFrame: null,
     startMs: now,
     lastMs: now,
-    // Ease in from where the camera currently is, unless we're snapping (a
-    // fresh load can be on the far side of the world — no sensible lerp).
-    introFrom: instant ? null : currentMapCameraPose(),
+    introFrom,
     introMs: now,
   };
   // The animation is the sole camera driver now; drop any parked chase state.
@@ -2300,11 +2306,12 @@ function endUserInteraction() {
   if (state.cameraMode === "follow") {
     captureManualCameraSettings();
   } else if (state.cameraMode === "overview") {
-    // The user took over the overview; leave the camera where they put it
-    // (don't fly back, don't bake overview framing into the follow settings)
-    // until movement starts. Drop any animated driver so it stops writing the
-    // camera and updateMapCamera can resume once a follow/overview target is set.
+    // Grabbing the overview turns it OFF entirely: the overview button
+    // deactivates and the camera is left where the user put it, in manual mode
+    // (no fly-back, and the follow settings are not overwritten). Re-enabling
+    // the overview is then an explicit action via the overview control.
     clearOverviewAnimation();
+    state.overviewActive = false;
     state.cameraMode = "manual";
   }
   state.userInteracting = false;
@@ -2495,7 +2502,8 @@ function syncOverviewControls() {
 function normalizeOverviewMode(mode) {
   if (mode === "heli" || mode === "airplane") return "flyby";
   if (mode === "figure8" || mode === "eight") return "flyover";
-  return ["static", "orbit", "flyby", "flyover", "satellite", "satellite-north"].includes(mode)
+  if (mode === "satellite-north") return "satellite"; // satellite is now north-up only
+  return ["static", "orbit", "flyby", "flyover", "satellite"].includes(mode)
     ? mode
     : "static";
 }
@@ -2628,9 +2636,16 @@ function updateOverviewDebugLine() {
       sampleCount: OVERVIEW_DEBUG_LINE_SAMPLE_COUNT,
     });
   } else if (isFlyOverviewMode(state.overviewMode)) {
-    const flyby = state.overviewAnim?.flyby ?? (state.overviewMode === "flyover"
-      ? createFigureEightFlyover(state.route, ELLIPSE_FLYBY)
-      : createEllipseFlyby(state.route, ELLIPSE_FLYBY));
+    // Only reuse the live driver when it's for the *current* mode; during a mode
+    // switch state.overviewAnim still holds the previous mode's driver (its
+    // replacement is built moments later), so build a fresh one for the newly
+    // selected mode or the debug line would draw one pattern behind.
+    const anim = state.overviewAnim;
+    const flyby = anim && anim.mode === state.overviewMode && anim.flyby
+      ? anim.flyby
+      : (state.overviewMode === "flyover"
+        ? createFigureEightFlyover(state.route, ELLIPSE_FLYBY)
+        : createEllipseFlyby(state.route, ELLIPSE_FLYBY));
     source = state.route;
     path = flyby?.pathAtAltitude(OVERVIEW_DEBUG_LINE_ALTITUDE_METERS, OVERVIEW_DEBUG_LINE_SAMPLE_COUNT);
   }
@@ -2741,6 +2756,7 @@ function renderCameraDebug() {
     rows.push(["terrain clr", num(frame.terrainClearanceMeters, 0, " m")]);
     rows.push(["fly fov", num(frame.cameraFovDegrees, 1, "°")]);
     rows.push(["fly inward", num(frame.inwardLookDegrees, 1, "°")]);
+    rows.push(["fly inward now", num(frame.currentInwardLookDegrees, 1, "°")]);
     rows.push(["turn radius", num(frame.turnRadiusMeters, 0, " m")]);
     rows.push(["bank", num(frame.bankDegrees, 1, "°")]);
     rows.push(["lap", num(flyby.lapSeconds, 0, " s")]);
@@ -2793,18 +2809,14 @@ function resetCameraToDefaults() {
   updateRideUi();
 }
 
-// The map-action-bar shortcut for resetCameraToDefaults restores the currently
-// selected camera surface after a manual drag; it no longer turns the rider
-// camera into a route overview by itself.
+// The map-action-bar shortcut for resetCameraToDefaults. It is fully decoupled
+// from the overview: it only resets the manual follow-camera adjustments and,
+// if the rider camera is the active surface, flies it back into place. An
+// active overview is left untouched (the reset never activates or deactivates
+// it) — the overview control is the only thing that toggles the overview.
 function resetCameraView() {
   resetCameraToDefaults();
-  if (!state.route.length) return;
-  // Restore whichever surface is currently selected — the overview if it's the
-  // active surface (parked or riding), otherwise the rider camera.
-  if (state.overviewActive) {
-    enterOverviewMode();
-    return;
-  }
+  if (!state.route.length || state.overviewActive) return;
   returnToRiderCamera();
 }
 

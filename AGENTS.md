@@ -468,6 +468,20 @@ needs. Never widen the referrer restriction beyond the exact deployed
 origin, and don't add a second, unrestricted key anywhere in the client
 bundle.
 
+**Local dev key.** For local development the map needs a key too, but it must
+never be committed. `scripts/dev_server.py` injects a *local* key into the
+`app/config.mjs` it serves (the on-disk file stays the empty default), using
+the same base64 substitution as the deploy script. The key is read from the
+`MAPS_API_KEY` environment variable, or from a `.maps-api-key` file at the repo
+root — both are gitignored (`.maps-api-key` is in `.gitignore`) and must stay
+out of git. With neither present the served config stays empty and the app
+falls back to the Settings "paste your key" prompt, exactly as in a fork.
+**If you're set up on a machine where `.maps-api-key` is missing (a fresh
+clone — the file is intentionally not in git), ask the user for their Google
+Maps API key and write it to `.maps-api-key` at the repo root** (a single line,
+no quotes); then `make run` / the preview server will pick it up. Never paste a
+key into a tracked file or commit it.
+
 ## Documentation duties
 
 - **Keep `README.md` updated.** Any user-visible feature, limitation, or

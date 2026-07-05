@@ -106,6 +106,62 @@ function buildLoopFlight(curve, config = {}) {
     return turnSignAt(s) * maxBankDegrees * turnMagnitudeAt(s);
   }
 
+  function frameAt(s) {
+    const here = localAt(s);
+    const inwardDegrees = toDeg(inwardRotationAt(s));
+    const tangent = rotateHorizontalRight(tangentAt(s), inwardRotationAt(s));
+    const eyeAltitude = curve.centerAltitude + flyHeight;
+    const eye = curve.toGeo([here[0], here[1], eyeAltitude]);
+
+    const cosE = Math.cos(-mountPitch);
+    const sinE = Math.sin(-mountPitch);
+    const lookAt = curve.toGeo([
+      here[0] + tangent[0] * cosE * viewDistance,
+      here[1] + tangent[1] * cosE * viewDistance,
+      eyeAltitude + sinE * viewDistance,
+    ]);
+    return {
+      eye,
+      lookAt,
+      speedMps,
+      maxSpeedMps,
+      targetLapSeconds,
+      lapSeconds,
+      flyHeightMeters: flyHeight,
+      terrainClearanceMeters,
+      highestTerrainAltitudeMeters: curve.highestTerrainAltitudeMeters,
+      cameraFovDegrees,
+      inwardLookDegrees: toDeg(inwardLook),
+      // The inward look actually applied at this point (signed: + right, -
+      // left). Constant for the ellipse; varies over the figure-eight lap.
+      currentInwardLookDegrees: inwardDegrees,
+      turnRadiusMeters: radiusAt(s),
+      bankDegrees: bankAt(s),
+    };
+  }
+
+  // Arc-length of the point on the flight path whose camera eye is closest to
+  // `target` (a { lat, lng } geo point). Lets the flight enter the pattern at
+  // the nearest point instead of always flying to its start.
+  function nearestSTo(target) {
+    const lat = Number(target?.lat);
+    const lng = Number(target?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return 0;
+    const count = 180;
+    let bestS = 0;
+    let bestDistance = Infinity;
+    for (let i = 0; i < count; i++) {
+      const s = (i / count) * curve.loopLength;
+      const eye = frameAt(s).eye;
+      const d = (eye.lat - lat) ** 2 + (eye.lng - lng) ** 2;
+      if (d < bestDistance) {
+        bestDistance = d;
+        bestS = s;
+      }
+    }
+    return bestS;
+  }
+
   return {
     curve,
     loopLength: curve.loopLength,
@@ -129,35 +185,8 @@ function buildLoopFlight(curve, config = {}) {
       const dt = clamp(Number(dtSeconds) || 0, 0, 0.5);
       return wrap((Number(s) || 0) + speedMps * dt, curve.loopLength);
     },
-    frameAt(s) {
-      const here = localAt(s);
-      const tangent = rotateHorizontalRight(tangentAt(s), inwardRotationAt(s));
-      const eyeAltitude = curve.centerAltitude + flyHeight;
-      const eye = curve.toGeo([here[0], here[1], eyeAltitude]);
-
-      const cosE = Math.cos(-mountPitch);
-      const sinE = Math.sin(-mountPitch);
-      const lookAt = curve.toGeo([
-        here[0] + tangent[0] * cosE * viewDistance,
-        here[1] + tangent[1] * cosE * viewDistance,
-        eyeAltitude + sinE * viewDistance,
-      ]);
-      return {
-        eye,
-        lookAt,
-        speedMps,
-        maxSpeedMps,
-        targetLapSeconds,
-        lapSeconds,
-        flyHeightMeters: flyHeight,
-        terrainClearanceMeters,
-        highestTerrainAltitudeMeters: curve.highestTerrainAltitudeMeters,
-        cameraFovDegrees,
-        inwardLookDegrees: toDeg(inwardLook),
-        turnRadiusMeters: radiusAt(s),
-        bankDegrees: bankAt(s),
-      };
-    },
+    nearestSTo,
+    frameAt,
   };
 }
 

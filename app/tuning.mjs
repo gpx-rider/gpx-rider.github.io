@@ -152,8 +152,7 @@ export const OVERVIEW_MAX_RANGE_METERS = Infinity;
 //   "orbit"            — turntable: the static shot slowly rotates around the route
 //   "flyby"            — a camera flies a PCA-aligned ellipse around the route
 //   "flyover"          — a camera flies a figure-eight over the route (shares ELLIPSE_FLYBY)
-//   "satellite"        — straight-down view, route oriented long-axis-horizontal, as big as fits
-//   "satellite-north"  — straight-down view, north up, route as big as fits
+//   "satellite"        — straight-down, north-up view with the route framed as big as fits
 export const DEFAULT_OVERVIEW_MODE = "orbit";
 
 // Orbit mode: seconds for one full revolution, and spin direction (1 =
@@ -182,13 +181,11 @@ export const DEFAULT_MAP_FOV_DEGREES = 35;
 // camera pose, ease into the motion over this many seconds instead of jumping.
 export const OVERVIEW_ANIM_INTRO_SECONDS = 1.5;
 
-// Satellite overview: a straight-down (near-vertical) still framing the whole
-// route as large as it fits. SATELLITE_TILT_DEGREES is how far from vertical
-// the camera leans — 1 is the closest to true top-down Map3D allows (0 breaks
-// the framing math). SATELLITE_MARGIN_FACTOR is the fit margin: 1 fills the
-// viewport edge-to-edge, higher leaves more breathing room. Both the oriented
-// ("satellite", long axis horizontal) and north-up ("satellite-north")
-// variants use these; only the heading differs.
+// Satellite overview: a straight-down (near-vertical), north-up still framing
+// the whole route as large as it fits. SATELLITE_TILT_DEGREES is how far from
+// vertical the camera leans — 1 is the closest to true top-down Map3D allows (0
+// breaks the framing math). SATELLITE_MARGIN_FACTOR is the fit margin: 1 fills
+// the viewport edge-to-edge, higher leaves more breathing room.
 export const SATELLITE_TILT_DEGREES = 1;
 export const SATELLITE_MARGIN_FACTOR = 1.12;
 
@@ -517,7 +514,7 @@ export const CLIMB_RESTING_GRADIENT_PERCENT = 0.5;
  * drains at 20% of the speed it fills. This forgiving drain rate allows climbs to 
  * "hold their breath" through false-flats and brief downhill dips.
  */
-export const CLIMB_RECOVERY_MULTIPLIER = 0.2;
+export const CLIMB_RECOVERY_MULTIPLIER = 0.4;
 
 /**
  * The number of data points used in the moving average pre-filter. Raw GPS 
