@@ -107,6 +107,13 @@ export function applyCameraLift({ tiltDegrees, rangeMeters, liftMeters, minTiltD
 // direction — start on the left, end on the right.
 export function computeRouteOverviewCamera(route, {
   tiltDegrees = 45,
+  // Rotates the whole overview around the route. 0 uses the auto-picked side
+  // (far side away, start-left/end-right); 180 views from the exact opposite
+  // side with the long axis still horizontal; any other value swings the
+  // azimuth freely (the route reads diagonally, but the range fit below still
+  // frames every point). Added on top of the auto side choice, so 180 always
+  // means "the other side" regardless of which side the algorithm picked.
+  headingOffsetDegrees = 0,
   viewportAspect = 16 / 9,
   // Map3DElement renders with a 35° field of view by default (its `fov`
   // property). The docs don't say which axis that measures, so the fit
@@ -114,7 +121,15 @@ export function computeRouteOverviewCamera(route, {
   // stays whole under either reading, at worst slightly smaller.
   fovDegrees = 35,
   marginFactor = 1.3,
+  // Multiplier applied to the fitted range. 1 frames the whole route exactly;
+  // below 1 pulls the camera closer (route edges crop, but terrain relief
+  // reads much better at a low tilt); above 1 pushes it further out.
+  rangeFactor = 1,
   minRangeMeters = 250,
+  // Upper bound on the range. The whole-route fit can be many km out on a long
+  // route, which flattens terrain and makes a low tilt pointless; capping the
+  // range keeps the view closer at the cost of not framing the whole route.
+  maxRangeMeters = Infinity,
 } = {}) {
   if (!Array.isArray(route) || route.length < 2) return null;
 
@@ -192,7 +207,7 @@ export function computeRouteOverviewCamera(route, {
   // view over a few meters of bulge.
   const sideDeadband = Math.max(20, (maxAlong - minAlong) * 0.02);
   const sideSign = maxCross > -minCross + sideDeadband ? 1 : -1;
-  const heading = normalizeHeading(axisBearing + 90 * sideSign);
+  const heading = normalizeHeading(axisBearing + 90 * sideSign + (Number(headingOffsetDegrees) || 0));
 
   const centerOnAxis = destinationPoint(start, axisBearing, (minAlong + maxAlong) / 2);
   const center = destinationPoint(centerOnAxis, normalizeHeading(axisBearing + 90), (minCross + maxCross) / 2);
@@ -257,11 +272,17 @@ export function computeRouteOverviewCamera(route, {
     else low = middle;
   }
 
+  // The fitted range frames the whole route; the factor then zooms in/out and
+  // the bounds cap the result. minRangeMeters wins over maxRangeMeters if they
+  // cross (a bad config shouldn't invert the range).
+  const fittedRange = Math.max(minRangeMeters, high);
+  const scaledRange = fittedRange * Math.max(0.01, Number(rangeFactor) || 1);
+  const upperBound = Math.max(minRangeMeters, Number(maxRangeMeters) || Infinity);
   return {
     center: { lat: center.lat, lng: center.lng, altitude: centerAltitude },
     heading,
     tilt,
-    range: Math.max(minRangeMeters, high),
+    range: clamp(scaledRange, minRangeMeters, upperBound),
   };
 }
 

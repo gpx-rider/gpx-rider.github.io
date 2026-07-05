@@ -9,7 +9,7 @@ the user explicitly asks for one.
 
 ```sh
 make           # default: gallery-data + gallery + test (the deploy Action runs the same generation)
-make run       # serve the repo at http://127.0.0.1:5173/app/ (python3 http.server)
+make run       # serve the repo at http://127.0.0.1:5173/app/ (scripts/dev_server.py — a no-cache static server so edits never load stale)
 make test      # node --test tests/*.test.mjs (no dependencies needed)
 make gallery   # regenerate the README gallery section from gallery/*/desc.md
 make gallery-data  # regenerate app/gallery.json (parses each GPX for distance/ascent/descent, difficulty classification, and ready-to-draw mini-profile bars) for the in-app ride gallery
@@ -127,7 +127,23 @@ in place).
   rest. `.settings-main` carries `min-height: 0` so it shrinks to the fixed
   dialog height and `.settings-body` (`overflow-y: auto`, `overscroll-behavior:
   contain`) is what scrolls — without that the panel content spilled past the
-  dialog and the page behind scrolled instead (issue #13).
+  dialog and the page behind scrolled instead (issue #13). The `"debug"`
+  category holds developer-facing toggles (currently the camera-debug overlay,
+  below); new diagnostics go there rather than cluttering the user-facing tabs.
+- **Camera debug overlay.** A `"debug"` settings toggle
+  (`#cameraDebugInput` → `state.cameraDebugEnabled`, persisted, default off via
+  `DEFAULT_CAMERA_DEBUG_ENABLED`) shows a translucent readout (`#cameraDebug`,
+  a plain map overlay — visible windowed *and* fullscreen, unlike the
+  `.fs-*` HUD overlays) of the values the 3D map **actually applies**:
+  `state.map.{tilt,range,heading,center}` plus the derived eye altitude and
+  ride progress. It exists mainly to compare a requested camera against what
+  Google honours after a manual drag (e.g. how far a tilt is respected at a
+  given range). `renderCameraDebug` rebuilds the rows and
+  `startCameraDebugLoop` re-runs it on its own `CAMERA_DEBUG_REFRESH_MS`
+  `setTimeout` chain while the overlay is on — a dedicated poll because when
+  the user is dragging the camera at rest nothing else steps it. Wired through
+  the same `updateDisplaySettingsFromControls`/`syncDisplayControls`/
+  `applyDisplaySettings` trio as the other display toggles.
 - **Fullscreen ride HUD (design 3a).** Entering fullscreen adds
   `.fullscreen-mode` to `#mapViewport` (a fixed, full-bleed container); the
   HUD overlays live inside it as children so they ride along, and CSS keeps
@@ -295,8 +311,21 @@ in place).
   — a PCA over all points, not the start→end line, so loops/lollipops/
   out-and-backs still frame along their real long dimension instead of an
   arbitrary near-zero start→end axis — with that long axis horizontal, the
-  route's far side facing away, 45° tilt, and start-left/end-right for open
-  routes), `"manual"` once the user grabs the overview, and
+  route's far side facing away, and start-left/end-right for open routes). The
+  overview's tilt, side and distance are tunable in `tuning.mjs`
+  (`OVERVIEW_TILT_DEGREES`, `OVERVIEW_HEADING_OFFSET_DEGREES`,
+  `OVERVIEW_MARGIN_FACTOR`, `OVERVIEW_RANGE_FACTOR`,
+  `OVERVIEW_MIN/MAX_RANGE_METERS`, all passed through from `enterOverviewMode`).
+  `headingOffsetDegrees` rotates the whole view on top of the auto-picked side
+  (180 = view from the exact opposite side, long axis still horizontal; other
+  values swing the azimuth freely — the fit reruns against the final heading so
+  the route stays framed at any offset). The fit always frames the whole route;
+  `rangeFactor` (<1) and
+  `maxRangeMeters` pull the camera in closer at the cost of cropping the route
+  — the lever for a lower, terrain-rich view, since Google's 3D map limits how
+  far it will tilt toward the horizon at the large range a whole-route fit
+  needs (use the Debug camera overlay to see the tilt it actually applies).
+  `state.cameraMode` becomes `"manual"` once the user grabs the overview, and
   `"follow"` from the moment movement starts. The overview snaps into place
   instantly on load (`applyCameraNow` — a new route may be across the
   world); every later camera move chases the target's eye/look-at pair with

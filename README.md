@@ -117,7 +117,9 @@ A freshly loaded route starts in a whole-route overview, framed from above so yo
 
 The fullscreen HUD is designed for riding, not just watching. It keeps the map full bleed while showing configurable metric tiles, the road-ahead elevation profile, distance progress, climbing progress, elapsed time, minimap, and climb banner. You can collapse the data dock when you want maximum map.
 
-Settings are grouped into practical categories: camera and view, rendering, HUD and data fields, units, trainer and sensors, screenshots, and data storage. Preferences are remembered locally.
+Settings are grouped into practical categories: camera and view, rendering, HUD and data fields, units, trainer and sensors, screenshots, data storage, and debug. Preferences are remembered locally.
+
+The debug category has a **camera debug overlay** — a small translucent box on the map showing the live camera values the 3D map actually applies (tilt, range, heading, look-at center, eye altitude) alongside ride progress. It is handy for dialing in camera settings: read the values, drag the view by hand, and read them again.
 
 ## Hosting Your Own Copy
 

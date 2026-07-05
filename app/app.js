@@ -58,6 +58,8 @@ import {
   DEFAULT_GRADE_INTERVAL_SECONDS,
   DEFAULT_HUD_DOCK_COLLAPSED,
   DEFAULT_HUD_ELEMENTS,
+  DEFAULT_CAMERA_DEBUG_ENABLED,
+  CAMERA_DEBUG_REFRESH_MS,
   DEFAULT_MAP_LABELS_ENABLED,
   DEFAULT_SCREENSHOT_ASPECT,
   DEFAULT_SCREENSHOT_WIDTH,
@@ -72,6 +74,11 @@ import {
   INTERACTION_SETTLE_MS,
   MAX_TICK_SECONDS,
   OVERVIEW_TILT_DEGREES,
+  OVERVIEW_HEADING_OFFSET_DEGREES,
+  OVERVIEW_MARGIN_FACTOR,
+  OVERVIEW_RANGE_FACTOR,
+  OVERVIEW_MIN_RANGE_METERS,
+  OVERVIEW_MAX_RANGE_METERS,
   PEDALING_START_KPH,
   PEDALING_STOP_KPH,
   RIDER_DOT_ALTITUDE_METERS,
@@ -218,6 +225,8 @@ const state = {
   energyUnits: "kcal",
   showMinimap: DEFAULT_SHOW_MINIMAP,
   mapLabelsEnabled: DEFAULT_MAP_LABELS_ENABLED,
+  cameraDebugEnabled: DEFAULT_CAMERA_DEBUG_ENABLED,
+  cameraDebugTimer: null,
   hudElements: { ...DEFAULT_HUD_ELEMENTS },
   hudDockCollapsed: DEFAULT_HUD_DOCK_COLLAPSED,
   // startDistance of the climb whose mini-profile is currently drawn in the
@@ -363,6 +372,9 @@ const els = {
   cbAscFill: document.querySelector("#cbAscFill"),
   minimapInput: document.querySelector("#minimapInput"),
   mapLabelsInput: document.querySelector("#mapLabelsInput"),
+  cameraDebugInput: document.querySelector("#cameraDebugInput"),
+  cameraDebug: document.querySelector("#cameraDebug"),
+  cameraDebugBody: document.querySelector("#cameraDebugBody"),
   recDistanceStat: document.querySelector("#recDistanceStat"),
   recTimeStat: document.querySelector("#recTimeStat"),
   recPointsStat: document.querySelector("#recPointsStat"),
@@ -583,6 +595,7 @@ function bindEvents() {
   els.energyUnitSelect.addEventListener("change", updateUnitsFromControls);
   els.minimapInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.mapLabelsInput.addEventListener("change", updateDisplaySettingsFromControls);
+  els.cameraDebugInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.hudToggles.forEach((input) => input.addEventListener("change", updateDisplaySettingsFromControls));
   els.cameraZoomInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
@@ -1846,10 +1859,15 @@ function enterOverviewMode({ instant = false } = {}) {
   const height = els.mapViewport?.clientHeight;
   state.overviewCamera = computeRouteOverviewCamera(state.route, {
     tiltDegrees: OVERVIEW_TILT_DEGREES,
+    headingOffsetDegrees: OVERVIEW_HEADING_OFFSET_DEGREES,
     viewportAspect: width && height ? width / height : undefined,
     // Newer Maps versions expose the actual field of view; older ones fall
     // back to the module's default (Google's documented 35° default).
     fovDegrees: Number(state.map.fov) || undefined,
+    marginFactor: OVERVIEW_MARGIN_FACTOR,
+    rangeFactor: OVERVIEW_RANGE_FACTOR,
+    minRangeMeters: OVERVIEW_MIN_RANGE_METERS,
+    maxRangeMeters: OVERVIEW_MAX_RANGE_METERS,
   });
   if (!state.overviewCamera) return;
   state.cameraMode = "overview";
@@ -2153,6 +2171,7 @@ function updateSpeedOutput() {
 function updateDisplaySettingsFromControls() {
   state.showMinimap = els.minimapInput.checked;
   state.mapLabelsEnabled = els.mapLabelsInput.checked;
+  state.cameraDebugEnabled = els.cameraDebugInput.checked;
   els.hudToggles.forEach((input) => {
     state.hudElements[input.dataset.hudToggle] = input.checked;
   });
@@ -2163,6 +2182,7 @@ function updateDisplaySettingsFromControls() {
 function syncDisplayControls() {
   els.minimapInput.checked = state.showMinimap;
   els.mapLabelsInput.checked = state.mapLabelsEnabled;
+  els.cameraDebugInput.checked = state.cameraDebugEnabled;
   els.hudToggles.forEach((input) => {
     input.checked = state.hudElements[input.dataset.hudToggle] !== false;
   });
@@ -2175,6 +2195,82 @@ function applyDisplaySettings() {
   });
   layoutMetricTiles();
   applyMapMode();
+  applyCameraDebug();
+}
+
+// --- Camera debug overlay -------------------------------------------------------
+//
+// A developer readout of the values the 3D map actually applies. It polls the
+// live map camera (state.map.{tilt,range,heading,center}) on its own light
+// interval while visible, so it keeps updating during a manual drag when
+// nothing else is stepping the camera. Off by default; a diagnostics aid for
+// reasoning about e.g. how far Google honours a requested tilt at a given range.
+
+function applyCameraDebug() {
+  if (!els.cameraDebug) return;
+  els.cameraDebug.hidden = !state.cameraDebugEnabled;
+  if (state.cameraDebugEnabled) startCameraDebugLoop();
+}
+
+function startCameraDebugLoop() {
+  if (state.cameraDebugTimer) return;
+  const step = () => {
+    if (!state.cameraDebugEnabled) {
+      state.cameraDebugTimer = null;
+      return;
+    }
+    renderCameraDebug();
+    state.cameraDebugTimer = setTimeout(step, CAMERA_DEBUG_REFRESH_MS);
+  };
+  step();
+}
+
+// True while the user has an active (non-collapsed) text selection inside the
+// debug box — so the refresh loop can leave the DOM alone and not wipe a
+// selection mid-copy.
+function hasSelectionInCameraDebug() {
+  const selection = window.getSelection?.();
+  if (!selection || selection.isCollapsed || !els.cameraDebug) return false;
+  return els.cameraDebug.contains(selection.anchorNode) || els.cameraDebug.contains(selection.focusNode);
+}
+
+function renderCameraDebug() {
+  const body = els.cameraDebugBody;
+  if (!body) return;
+
+  // Rebuilding the rows would clear an in-progress selection; freeze the
+  // readout while the user is selecting text to copy.
+  if (hasSelectionInCameraDebug()) return;
+
+  const map = state.map;
+  const tilt = Number(map?.tilt);
+  const range = Number(map?.range);
+  const heading = Number(map?.heading);
+  const center = map?.center;
+  const lat = Number(center?.lat);
+  const lng = Number(center?.lng);
+  const centerAlt = Number(center?.altitude);
+  const eye = map ? cameraEyePosition({ center, range, tilt, heading }) : null;
+  const totalDistance = routeTotalDistance(state.route);
+
+  const num = (value, digits, suffix = "") =>
+    (Number.isFinite(value) ? value.toFixed(digits) : "—") + (Number.isFinite(value) ? suffix : "");
+
+  const rows = [
+    ["mode", state.cameraMode],
+    ["tilt", num(tilt, 1, "°")],
+    ["range", num(range, 0, " m")],
+    ["heading", num(heading, 1, "°")],
+    ["eye alt", num(eye?.altitude, 0, " m")],
+    ["ctr alt", num(centerAlt, 0, " m")],
+    ["ctr lat", num(lat, 5)],
+    ["ctr lng", num(lng, 5)],
+    ["progress", `${(state.progressMeters / 1000).toFixed(2)} / ${(totalDistance / 1000).toFixed(2)} km`],
+  ];
+
+  body.innerHTML = rows
+    .map(([label, value]) => `<dt>${label}</dt><dd>${value}</dd>`)
+    .join("");
 }
 
 // The dock's metric tiles flow into two rows; widen them when the user shows
@@ -2522,6 +2618,10 @@ function restoreSettings() {
     state.mapLabelsEnabled = settings.mapLabelsEnabled;
   }
 
+  if (typeof settings?.cameraDebugEnabled === "boolean") {
+    state.cameraDebugEnabled = settings.cameraDebugEnabled;
+  }
+
   if (settings?.hudElements && typeof settings.hudElements === "object") {
     // Only known keys, only booleans — unknown junk in storage is ignored.
     for (const key of Object.keys(state.hudElements)) {
@@ -2579,6 +2679,7 @@ function saveSettings() {
     energyUnits: state.energyUnits,
     showMinimap: state.showMinimap,
     mapLabelsEnabled: state.mapLabelsEnabled,
+    cameraDebugEnabled: state.cameraDebugEnabled,
     hudElements: { ...state.hudElements },
     hudDockCollapsed: state.hudDockCollapsed,
   });

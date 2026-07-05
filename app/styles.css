@@ -336,6 +336,64 @@ body {
   visibility: hidden;
 }
 
+/* Developer camera-debug overlay: a translucent readout under the action
+   buttons, top-right. Shown in windowed and fullscreen; kept out of
+   screenshots like the buttons. */
+.camera-debug {
+  position: absolute;
+  top: 70px;
+  right: 16px;
+  min-width: 168px;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(13, 16, 21, 0.62);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: rgba(255, 255, 255, 0.85);
+  /* Selectable: the box captures the pointer (so a drag over it selects text
+     to copy, rather than panning the map underneath) and allows text
+     selection. It's small and out of the way, so it doesn't get in the way of
+     map interaction elsewhere. */
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  z-index: 5;
+}
+
+.map-viewport.capturing .camera-debug {
+  visibility: hidden;
+}
+
+.camera-debug-title {
+  font: 700 9px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  margin-bottom: 7px;
+}
+
+.camera-debug-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font: 500 11px/1.35 var(--font-mono);
+}
+
+.camera-debug-body dt {
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.camera-debug-body dd {
+  margin: 0;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+}
+
 .map-action-btn {
   display: flex;
   align-items: center;
