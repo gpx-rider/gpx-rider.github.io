@@ -39,7 +39,8 @@ If that sounds useful, contributions are very welcome — see
   name appears in the top bar, a stat tile shows the
   distance/terrain/difficulty classification (e.g. `Moderate` — `M · Hilly`),
   and the elevation card lists the sustained climbs found along the way,
-  each with its distance, length, elevation gain, and average grade. Classification uses only distance and elevation gain — no power,
+  each with its distance, length, elevation gain, and average grade — click
+  one to jump the rider to its start. Classification uses only distance and elevation gain — no power,
   speed, or weather data — and every threshold, including how much flat or
   downhill a climb tolerates before it's considered over, is a documented
   constant in `app/tuning.mjs`. While riding, the same panel tracks you live:
@@ -96,12 +97,22 @@ If that sounds useful, contributions are very welcome — see
   distance, a descent gives some back), so grinding up a pass doesn't
   project a crawl onto the descent after it. In simulation mode the ETA is
   simply remaining distance at the slider speed.
-- 🖥️ **Fullscreen ride HUD** — a distraction-free overlay for pairing with a
-  smart TV or tablet on the handlebars. Pick exactly which tiles it shows
+- 🖥️ **Fullscreen ride HUD** — a distraction-free, full-bleed map for pairing
+  with a smart TV or tablet on the handlebars. A bottom **data dock** carries
+  your chosen metric tiles alongside the grade-coloured *road-ahead* elevation
+  profile (hover it for distance/elevation/grade at any point, click to jump
+  there) and distance + climbing progress bars; a top-left chip shows elapsed
+  time and distance above the minimap. Collapse the dock to a compact strip
+  (⌄ button, top-right of the dock) when you want maximum map. A top-centre
+  **climb banner** counts down to the next climb and switches to live
+  to-the-top stats once you're on it, labelled with which climb of how many
+  it is. Pick exactly which tiles the dock shows
   (power, speed, heart rate, grade, ridden, remaining, ascent left, ETA) in
-  ⚙ Settings → HUD & data fields — where you can also hide the minimap.
-  **Place labels** (roads, towns) on the 3D map toggle in ⚙ Settings →
-  Rendering.
+  ⚙ Settings → HUD & data fields — where you can also hide the minimap; the
+  tiles resize to fit however many you enable. A ⚙ button sits in the
+  top-right map controls while fullscreen (the top bar is hidden then), so
+  Settings stays one click away. **Place labels** (roads, towns) on the 3D
+  map toggle in ⚙ Settings → Rendering.
 - 🚀 **Ready to ride on first open** — with nothing loaded yet, the first
   gallery route is loaded automatically so the app never starts on an
   empty map.

@@ -111,7 +111,9 @@ in place).
   three places by design — `profile.mjs#gradeColor`, the gallery generator's
   `generate_gallery_json.py#mini_bar_color` (which bakes the mini-profile bar
   colors into `gallery.json`), and the `.profile-legend` swatches — keep them
-  in sync.
+  in sync. `gradeColor` is exported and reused (not re-copied) by the
+  fullscreen climb banner's mini-profile in `app.js`; the climb-category chip
+  colors in `CLIMB_CATEGORIES` (`tuning.mjs`) track the same palette.
 - **Settings dialog.** A single `<dialog#settingsDialog>` with a left
   category rail (`[data-settings-tab]`) and a right panel per category
   (`[data-settings-panel]`); `selectSettingsTab` in `app.js` toggles the
@@ -120,13 +122,58 @@ in place).
   opens on a given category (first-run key prompt opens on `"data"`). All the
   underlying inputs kept their IDs, so the settings-restore/sync code is
   unchanged — only their grouping moved.
-- **HUD & display settings.** Fullscreen HUD tiles are matched to settings
-  toggles by `data-hud="…"` / `data-hud-toggle="…"` keys, which must
-  also exist in `DEFAULT_HUD_ELEMENTS` (`tuning.mjs`) — add all three when
-  adding a tile (the toggle markup is a `.field-toggle` with a `.switch`).
-  The minimap toggle uses `visibility` (class `minimap-hidden`), not
-  `display:none`, so the Google map never needs a resize kick when re-shown.
-  Map labels toggle the `Map3DElement.mode` between `SATELLITE` and `HYBRID`.
+- **Fullscreen ride HUD (design 3a).** Entering fullscreen adds
+  `.fullscreen-mode` to `#mapViewport` (a fixed, full-bleed container); the
+  HUD overlays live inside it as children so they ride along, and CSS keeps
+  them out of the normal windowed map pane (their base rule is
+  `display:none`, only painted under `.map-viewport.fullscreen-mode`). Three
+  overlays, all fed on the slow-UI cadence from `updateRideUi`:
+  - **Bottom data dock** (`#fullscreenOverlayBottom` / `.fs-dock`): the metric
+    tiles plus the *road-ahead* elevation profile and the distance/climbing
+    progress bars. `enterMapFullscreen` **moves the shared `#profile` canvas**
+    into `#fsProfileMount` (the same grade-coloured canvas the control panel
+    uses — it already draws the grade bars, axes, ride marker, and the
+    hover-tooltip/click-to-seek), and `exitMapFullscreen` moves it back above
+    the climbs section. The dock collapses to a compact strip via
+    `#dockToggleBtn` (`toggleHudDock` → `.collapsed` class, persisted as
+    `hudDockCollapsed`); collapsed hides the road-ahead profile and stacks the
+    two progress bars, expanded shows the profile with the bars side-by-side.
+    Because a collapsed (display:none) canvas measures 0×0, re-expanding
+    re-renders the profile. The road-ahead plot only has height because the
+    two rows of metric tiles set the dock's height — the profile is `flex:1`
+    within that.
+  - **Top-left clock chip** (`#fullscreenClock`): elapsed time (from
+    `rideLogSummary().timerSeconds`) + ridden distance, sitting above the
+    minimap (which is repositioned in fullscreen).
+  - **Top-right controls**: the existing `.map-actions` cluster, plus a
+    fullscreen-only Settings shortcut (`#fullscreenSettingsBtn`, class
+    `.map-action-btn-fs-only`, shown only under `.fullscreen-mode`) — the top
+    bar's Settings button is off-screen in fullscreen, so this reopens the
+    same dialog via `openSettings()` (a modal `<dialog>` renders in the top
+    layer, above the fullscreen element).
+  - **Top-centre climb banner** (`#climbBanner`, `updateFullscreenClimbBanner`):
+    reuses `state.climbs`. Shows the *ahead* variant (category chip from
+    `CLIMB_CATEGORIES`, countdown, a mini grade-profile built with
+    `profile.mjs`'s exported `gradeColor`, length/gain/avg/max) when the next
+    climb is within `CLIMB_BANNER_APPROACH_METERS`, and the *on-climb* variant
+    (to-top / to-go / current / peak / grade-left, plus two unlabelled
+    progress bars — blue = distance, amber = ascent, matching the dock bars)
+    while on it. Both variants carry a "climb N of M" ordinal (the climb's
+    `findIndex` position + `state.climbs.length`), mirroring the setup page's
+    live climb status. Max grade and the mini-profile bars are cached on the climb
+    object (climbs are re-detected each route load, so the cache can't
+    go stale).
+
+  HUD tiles are matched to settings toggles by `data-hud="…"` /
+  `data-hud-toggle="…"` keys, which must also exist in `DEFAULT_HUD_ELEMENTS`
+  (`tuning.mjs`) — add all three when adding a tile (the toggle markup is a
+  `.field-toggle` with a `.switch`; the tile is a `.fs-tile` inside
+  `#fullscreenHud` with the matching `data-hud`). `layoutMetricTiles` sizes
+  the tiles from the visible count (they flow into two rows and narrow when
+  all eight are on). The minimap toggle uses `visibility` (class
+  `minimap-hidden`), not `display:none`, so the Google map never needs a
+  resize kick when re-shown. Map labels toggle the `Map3DElement.mode`
+  between `SATELLITE` and `HYBRID`.
 - **Route overview (name + classification + climbs)**: `updateRouteOverview`
   in `app.js` runs once per route load (GPX import or restoring a saved
   ride), not on every ride-progress tick — it only depends on the route's

@@ -374,57 +374,500 @@ body {
   display: block;
 }
 
-/* ---- fullscreen ride HUD (design 3a not final — kept minimal) ------------- */
+/* Simulation button: play triangle by default, stop square while running. */
+.icon-sim-stop {
+  display: none;
+}
 
-.fullscreen-overlay-bottom {
+#startBtn.sim-running .icon-sim-play {
+  display: none;
+}
+
+#startBtn.sim-running .icon-sim-stop {
+  display: inline;
+}
+
+/* ---- fullscreen ride HUD (design 3a) --------------------------------------
+   The clock chip, climb banner and data dock are children of .map-viewport so
+   they follow it into fullscreen. They stay hidden in the normal map pane and
+   only paint once .map-viewport is in .fullscreen-mode. A shared glass surface
+   (--fs-glass*) ties them together. */
+
+:root {
+  --fs-glass-bg: rgba(13, 16, 21, 0.3);
+  --fs-glass-border: rgba(255, 255, 255, 0.14);
+  --fs-label: rgba(255, 255, 255, 0.5);
+}
+
+.fs-clock,
+.climb-banner,
+.fs-dock {
+  display: none;
+}
+
+/* In fullscreen the whole map breathes to the edges — nudge the corner
+   overlays a little further in than the windowed map's 16px. */
+.map-viewport.fullscreen-mode #minimap {
+  left: 24px;
+  top: 78px;
+}
+
+.map-viewport.fullscreen-mode .map-actions {
+  top: 24px;
+  right: 24px;
+}
+
+/* The Settings shortcut in the map-action cluster only makes sense in
+   fullscreen, where the top bar (and its Settings button) is hidden. */
+.map-action-btn-fs-only {
+  display: none;
+}
+
+.map-viewport.fullscreen-mode .map-action-btn-fs-only {
+  display: flex;
+}
+
+/* top-left: elapsed + ridden distance, sitting above the minimap */
+.map-viewport.fullscreen-mode .fs-clock {
   position: absolute;
-  left: 16px;
-  right: 16px;
-  /* Leave the map's bottom strip clear: the Google logo and legal notices
-     render there inside a closed shadow root — they cannot be moved and
-     must stay visible (Google Maps ToS). The HUD is kept compact so this
-     strip costs as little height as possible. */
-  bottom: 36px;
+  top: 24px;
+  left: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  background: var(--fs-glass-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.fs-clock-time {
+  font: 600 17px/1 var(--font-num);
+  color: #fff;
+}
+
+.fs-clock-sep {
+  width: 1px;
+  height: 15px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.fs-clock-dist {
+  font: 600 15px/1 var(--font-num);
+  color: var(--blue-soft);
+}
+
+/* top-center: climb banner */
+.map-viewport.fullscreen-mode .climb-banner {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: block;
+  min-width: 420px;
+  padding: 14px 20px 15px;
+  border-radius: 16px;
+  background: var(--fs-glass-bg);
+  border: 1px solid var(--fs-glass-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.climb-banner-ahead {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.cb-lead {
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.fullscreen-overlay-bottom[hidden] {
+/* "climb N of M" ordinal, matching the setup page's live climb status. */
+.cb-order {
+  font: 600 9px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.climb-banner-on .cb-order {
+  display: block;
+  margin-bottom: 11px;
+}
+
+.cb-category {
+  align-self: flex-start;
+  padding: 6px 9px;
+  border-radius: 6px;
+  font: 700 10px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.cb-in {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.cb-in-label {
+  font: 600 8px/1 var(--font-ui);
+  letter-spacing: 0.13em;
+  color: var(--fs-label);
+}
+
+.cb-in-value {
+  font: 600 26px/1 var(--font-num);
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+
+.cb-in-unit {
+  font: 500 11px/1 var(--font-ui);
+  color: var(--fs-label);
+}
+
+.cb-mini {
+  flex: none;
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cb-mini-bars {
+  height: 40px;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5px;
+}
+
+.cb-mini-bars i {
+  flex: 1;
+  border-radius: 1px 1px 0 0;
+}
+
+.cb-mini-alts {
+  display: flex;
+  justify-content: space-between;
+  font: 500 9px/1 var(--font-mono);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.cb-divider {
+  align-self: stretch;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.cb-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.cb-stat span {
+  display: block;
+  font: 600 8px/1 var(--font-ui);
+  letter-spacing: 0.13em;
+  color: var(--fs-label);
+}
+
+.cb-stat strong {
+  display: block;
+  margin-top: 6px;
+  font: 600 16px/1 var(--font-num);
+  color: #fff;
+}
+
+.cb-stat-accent {
+  color: var(--accent) !important;
+}
+
+.climb-banner-on {
+  display: block;
+}
+
+.cb-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 13px;
+}
+
+.cb-progress-track {
+  position: relative;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.cb-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+/* bottom data dock */
+.map-viewport.fullscreen-mode .fs-dock {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  /* Leave the map's bottom strip clear: the Google logo and legal notices
+     render there inside a closed shadow root — they cannot be moved and must
+     stay visible (Google Maps ToS). */
+  bottom: 36px;
+  display: block;
+  padding: 22px 26px;
+  border-radius: 20px;
+  background: rgba(11, 14, 19, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(34px) saturate(1.2);
+  -webkit-backdrop-filter: blur(34px) saturate(1.2);
+}
+
+.fs-dock-toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+
+.fs-dock-toggle:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.fs-dock-toggle svg {
+  transition: transform 0.2s ease;
+}
+
+/* Expanded: chevron points down (collapse); collapsed: points up (expand). */
+.fs-dock.collapsed .fs-dock-toggle svg {
+  transform: rotate(180deg);
+}
+
+.fs-dock-body {
+  display: flex;
+  align-items: stretch;
+  gap: 28px;
+  padding-right: 34px;
+}
+
+/* Two rows of tiles; the column count and tile width are set from JS to fit
+   however many data fields the user enabled in Settings (fewer = wider, up to
+   eight = narrower). See layoutMetricTiles() in app.js. */
+.fs-dock-metrics {
+  flex: none;
+  display: grid;
+  grid-template-rows: repeat(2, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: var(--metric-tile-w, 150px);
+  gap: 13px;
+  align-content: center;
+}
+
+.fs-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 15px 17px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.fs-tile-label {
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--fs-label);
+}
+
+.fs-tile-value {
+  margin-top: 10px;
+  font: 600 26px/1 var(--font-num);
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.fs-dock-sep {
+  flex: none;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.fs-dock-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fs-road-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.fs-road-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fs-road-eyebrow {
+  font: 600 12px/1 var(--font-ui);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.fs-road-note {
+  font: 500 11px/1 var(--font-mono);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.fs-road-stats {
+  display: flex;
+  gap: 22px;
+}
+
+.fs-road-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.fs-road-stat span {
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fs-label);
+}
+
+.fs-road-stat strong {
+  font: 600 15px/1 var(--font-num);
+  color: #fff;
+}
+
+.fs-road-stat-accent {
+  color: var(--accent) !important;
+}
+
+.fs-road-plot {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.fs-dock-progress {
+  display: flex;
+  gap: 26px;
+  margin-top: 13px;
+}
+
+.fs-bar {
+  flex: 1;
+}
+
+.fs-bar-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.fs-bar-head span:first-child {
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.fs-bar-value {
+  font: 600 12px/1 var(--font-num);
+  color: #fff;
+}
+
+.fs-bar-value-accent {
+  color: var(--accent);
+}
+
+.fs-bar-track {
+  height: 8px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.fs-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.2s ease;
+}
+
+.fs-bar-fill-blue {
+  background: var(--blue);
+}
+
+.fs-bar-fill-amber {
+  background: var(--accent);
+}
+
+/* Collapsed dock: drop the road-ahead profile, shrink the tiles into a single
+   inline strip, and stack the two progress bars in the freed space. */
+.fs-dock.collapsed .fs-dock-body {
+  align-items: center;
+  gap: 24px;
+}
+
+.fs-dock.collapsed .fs-dock-metrics {
+  display: flex;
+  gap: 22px;
+}
+
+.fs-dock.collapsed .fs-tile {
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 0;
+}
+
+.fs-dock.collapsed .fs-tile-value {
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.fs-dock.collapsed .fs-road-head,
+.fs-dock.collapsed .fs-road-plot {
   display: none;
 }
 
-.fullscreen-hud {
-  display: grid;
-  /* auto-fit so tiles hidden in the settings collapse instead of leaving
-     gaps, and the row reflows as elements are toggled on and off */
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 10px;
+.fs-dock.collapsed .fs-dock-progress {
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 0;
 }
 
-.fullscreen-hud div {
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #fff;
-  background: rgba(13, 16, 21, 0.55);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
-.fullscreen-hud span {
-  display: block;
-  color: rgba(255, 255, 255, 0.55);
-  font: 600 9px/1.2 var(--font-ui);
-  text-transform: uppercase;
-  letter-spacing: 0.11em;
-}
-
-.fullscreen-hud strong {
-  display: block;
-  margin-top: 4px;
-  font: 600 19px/1 var(--font-num);
-  letter-spacing: -0.02em;
+.fs-dock.collapsed .fs-bar-track {
+  height: 5px;
 }
 
 #profile {
@@ -434,7 +877,9 @@ body {
 }
 
 #profile.profile-translucent {
-  height: 108px;
+  position: absolute;
+  inset: 0;
+  height: 100%;
   border-radius: 10px;
 }
 
@@ -611,6 +1056,17 @@ body {
 .climbs-list li.active {
   border-color: rgba(246, 165, 44, 0.45);
   background: rgba(246, 165, 44, 0.08);
+}
+
+.climbs-list li.climb-seekable {
+  cursor: pointer;
+}
+
+.climbs-list li.climb-seekable:hover,
+.climbs-list li.climb-seekable:focus-visible {
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.04);
+  outline: none;
 }
 
 .climbs-list .climb-index {

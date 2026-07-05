@@ -34,7 +34,7 @@ import {
 import { createRideEstimator, estimateRemainingSeconds, recordEstimatorTick } from "./eta.mjs";
 import { classifyRoute } from "./difficulty.mjs";
 import { detectClimbs } from "./climbs.mjs";
-import { distanceAtProfileX, drawEmptyProfile, drawProfile } from "./profile.mjs";
+import { distanceAtProfileX, drawEmptyProfile, drawProfile, gradeColor } from "./profile.mjs";
 import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatSpeed } from "./units.mjs";
 import { initStorage, readJson, removeStored, writeJson } from "./storage.mjs";
 import {
@@ -44,6 +44,9 @@ import {
   CAMERA_TILT_MIN,
   CAMERA_ZOOM_MAX,
   CAMERA_ZOOM_MIN,
+  CLIMB_BANNER_APPROACH_METERS,
+  CLIMB_BANNER_MINI_BAR_COUNT,
+  CLIMB_CATEGORIES,
   DEFAULT_BEACON_COLOR,
   DEFAULT_BEACON_DIAMETER_METERS,
   DEFAULT_BEACON_ENABLED,
@@ -53,6 +56,7 @@ import {
   DEFAULT_CAMERA_BEHIND_METERS,
   DEFAULT_CAMERA_ZOOM,
   DEFAULT_GRADE_INTERVAL_SECONDS,
+  DEFAULT_HUD_DOCK_COLLAPSED,
   DEFAULT_HUD_ELEMENTS,
   DEFAULT_MAP_LABELS_ENABLED,
   DEFAULT_SCREENSHOT_ASPECT,
@@ -215,12 +219,17 @@ const state = {
   showMinimap: DEFAULT_SHOW_MINIMAP,
   mapLabelsEnabled: DEFAULT_MAP_LABELS_ENABLED,
   hudElements: { ...DEFAULT_HUD_ELEMENTS },
+  hudDockCollapsed: DEFAULT_HUD_DOCK_COLLAPSED,
+  // startDistance of the climb whose mini-profile is currently drawn in the
+  // banner, so it is only rebuilt when the upcoming climb changes.
+  bannerClimbKey: null,
   // Per-session pace tracker feeding the smart ETA; reset on new GPX load.
   rideEstimator: createRideEstimator(),
 };
 
 const els = {
   settingsBtn: document.querySelector("#settingsBtn"),
+  fullscreenSettingsBtn: document.querySelector("#fullscreenSettingsBtn"),
   settingsDialog: document.querySelector("#settingsDialog"),
   settingsCloseBtn: document.querySelector("#settingsCloseBtn"),
   settingsDoneBtn: document.querySelector("#settingsDoneBtn"),
@@ -317,6 +326,41 @@ const els = {
   hudEtaStat: document.querySelector("#hudEtaStat"),
   hudTiles: document.querySelectorAll("#fullscreenHud [data-hud]"),
   hudToggles: document.querySelectorAll("#settingsDialog [data-hud-toggle]"),
+  fullscreenHud: document.querySelector("#fullscreenHud"),
+  // Fullscreen HUD: data dock, top-left clock chip, and top-center climb banner
+  dockToggleBtn: document.querySelector("#dockToggleBtn"),
+  fsProfileMount: document.querySelector("#fsProfileMount"),
+  roadAscentLeft: document.querySelector("#roadAscentLeft"),
+  roadAltitude: document.querySelector("#roadAltitude"),
+  fsDistLabel: document.querySelector("#fsDistLabel"),
+  fsDistFill: document.querySelector("#fsDistFill"),
+  fsClimbLabel: document.querySelector("#fsClimbLabel"),
+  fsClimbFill: document.querySelector("#fsClimbFill"),
+  fullscreenClock: document.querySelector("#fullscreenClock"),
+  fsClockElapsed: document.querySelector("#fsClockElapsed"),
+  fsClockDistance: document.querySelector("#fsClockDistance"),
+  climbBanner: document.querySelector("#climbBanner"),
+  climbBannerAhead: document.querySelector("#climbBannerAhead"),
+  climbBannerOn: document.querySelector("#climbBannerOn"),
+  cbCategory: document.querySelector("#cbCategory"),
+  cbAheadOrder: document.querySelector("#cbAheadOrder"),
+  cbOnOrder: document.querySelector("#cbOnOrder"),
+  cbInDist: document.querySelector("#cbInDist"),
+  cbInUnit: document.querySelector("#cbInUnit"),
+  cbMini: document.querySelector("#cbMini"),
+  cbBaseAlt: document.querySelector("#cbBaseAlt"),
+  cbPeakAltMini: document.querySelector("#cbPeakAltMini"),
+  cbLen: document.querySelector("#cbLen"),
+  cbGain: document.querySelector("#cbGain"),
+  cbAvg: document.querySelector("#cbAvg"),
+  cbMax: document.querySelector("#cbMax"),
+  cbToTop: document.querySelector("#cbToTop"),
+  cbToGo: document.querySelector("#cbToGo"),
+  cbCurAlt: document.querySelector("#cbCurAlt"),
+  cbPeakAlt: document.querySelector("#cbPeakAlt"),
+  cbGradeLeft: document.querySelector("#cbGradeLeft"),
+  cbDistFill: document.querySelector("#cbDistFill"),
+  cbAscFill: document.querySelector("#cbAscFill"),
   minimapInput: document.querySelector("#minimapInput"),
   mapLabelsInput: document.querySelector("#mapLabelsInput"),
   recDistanceStat: document.querySelector("#recDistanceStat"),
@@ -512,6 +556,7 @@ function loadGoogleMaps(apiKey) {
 
 function bindEvents() {
   els.settingsBtn.addEventListener("click", () => openSettings());
+  els.fullscreenSettingsBtn.addEventListener("click", () => openSettings());
   els.settingsCloseBtn.addEventListener("click", () => els.settingsDialog.close());
   els.settingsDoneBtn.addEventListener("click", () => els.settingsDialog.close());
   els.settingsTabs.forEach((tab) => {
@@ -566,6 +611,7 @@ function bindEvents() {
   els.profile.addEventListener("mouseleave", handleProfileLeave);
   els.profile.addEventListener("click", handleProfileClick);
   els.fullscreenBtn.addEventListener("click", toggleMapFullscreen);
+  els.dockToggleBtn.addEventListener("click", toggleHudDock);
   els.resetCameraViewBtn.addEventListener("click", resetCameraView);
   els.screenshotBtn.addEventListener("click", takeMapScreenshot);
   els.screenshotButtonInput.addEventListener("change", updateScreenshotSettingsFromControls);
@@ -685,6 +731,18 @@ function updateRouteOverview() {
       grade.className = "climb-grade";
       grade.textContent = `${climb.averageGradePercent.toFixed(1)}%`;
       item.append(line, grade);
+      // Click (or keyboard-activate) a climb to jump the rider to its foot.
+      item.classList.add("climb-seekable");
+      item.tabIndex = 0;
+      item.setAttribute("role", "button");
+      item.title = "Jump to the start of this climb";
+      item.addEventListener("click", () => seekToMeters(climb.startDistanceMeters));
+      item.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          seekToMeters(climb.startDistanceMeters);
+        }
+      });
       return item;
     }),
   );
@@ -733,6 +791,142 @@ function updateClimbStatus(point) {
     `${formatDistance(next.lengthMeters, state.distanceUnits, 1)} · ` +
     `${formatAltitude(next.gainMeters, state.distanceUnits)} · ` +
     `${next.averageGradePercent.toFixed(1)}% avg`;
+}
+
+// --- Fullscreen HUD clock & climb banner --------------------------------------
+
+// Top-left chip: elapsed ride time (from the recording bucket) and ridden
+// distance, in the user's units (riddenText is already formatted).
+function updateFullscreenClock(riddenText) {
+  if (!state.mapFullscreen) return;
+  els.fsClockElapsed.textContent = formatDuration(rideLogSummary().timerSeconds);
+  els.fsClockDistance.textContent = riddenText;
+}
+
+// Plain-language climb category from average grade alone (see CLIMB_CATEGORIES).
+function climbCategory(averageGradePercent) {
+  return (
+    CLIMB_CATEGORIES.find((category) => averageGradePercent <= category.maxAverageGradePercent) ??
+    CLIMB_CATEGORIES.at(-1)
+  );
+}
+
+// Steepest grade anywhere on the climb, sampled and cached on the climb object
+// (climbs are re-detected on every route load, so the cache can't go stale).
+function climbMaxGrade(climb) {
+  if (climb.maxGradePercent != null) return climb.maxGradePercent;
+  let max = climb.averageGradePercent;
+  for (let i = 0; i <= CLIMB_BANNER_MINI_BAR_COUNT; i += 1) {
+    const distance = climb.startDistanceMeters + (i / CLIMB_BANNER_MINI_BAR_COUNT) * climb.lengthMeters;
+    max = Math.max(max, gradeAt(state.route, distance));
+  }
+  climb.maxGradePercent = max;
+  return max;
+}
+
+// Grade-coloured mini elevation profile of a climb, as bar elements. Reuses
+// profile.mjs#gradeColor so the colours match the main profile and gallery.
+function buildClimbMiniBars(climb) {
+  const span = Math.max(1, climb.endElevationMeters - climb.startElevationMeters);
+  const bars = [];
+  for (let i = 0; i < CLIMB_BANNER_MINI_BAR_COUNT; i += 1) {
+    const midDistance =
+      climb.startDistanceMeters + ((i + 0.5) / CLIMB_BANNER_MINI_BAR_COUNT) * climb.lengthMeters;
+    const ele = interpolateRoutePoint(state.route, midDistance).ele;
+    const heightFraction = clamp((ele - climb.startElevationMeters) / span, 0, 1);
+    const bar = document.createElement("i");
+    // Floor the height so even the foot of the climb reads as a bar, not a gap.
+    bar.style.height = `${12 + heightFraction * 88}%`;
+    bar.style.background = gradeColor(gradeAt(state.route, midDistance));
+    bars.push(bar);
+  }
+  return bars;
+}
+
+// Top-center banner: shown on a detected climb, or while approaching the next
+// one within CLIMB_BANNER_APPROACH_METERS; hidden otherwise and off fullscreen.
+function updateFullscreenClimbBanner(point) {
+  if (!state.mapFullscreen || !state.climbs.length) {
+    els.climbBanner.hidden = true;
+    return;
+  }
+
+  const progress = state.progressMeters;
+  const total = state.climbs.length;
+  const currentIndex = state.climbs.findIndex(
+    (climb) => progress >= climb.startDistanceMeters && progress <= climb.endDistanceMeters,
+  );
+  if (currentIndex !== -1) {
+    showOnClimbBanner(state.climbs[currentIndex], point, `Climb ${currentIndex + 1} of ${total}`);
+    return;
+  }
+
+  const nextIndex = state.climbs.findIndex((climb) => climb.startDistanceMeters > progress);
+  const next = nextIndex === -1 ? null : state.climbs[nextIndex];
+  if (next && next.startDistanceMeters - progress <= CLIMB_BANNER_APPROACH_METERS) {
+    showAheadClimbBanner(next, next.startDistanceMeters - progress, `Climb ${nextIndex + 1} of ${total}`);
+    return;
+  }
+
+  els.climbBanner.hidden = true;
+}
+
+function showAheadClimbBanner(climb, distanceToClimb, orderLabel) {
+  els.climbBanner.hidden = false;
+  els.climbBannerAhead.hidden = false;
+  els.climbBannerOn.hidden = true;
+  els.cbAheadOrder.textContent = orderLabel;
+
+  const category = climbCategory(climb.averageGradePercent);
+  els.cbCategory.textContent = `${category.name} CLIMB`;
+  els.cbCategory.style.background = category.color;
+  els.cbInDist.style.color = category.color;
+  els.cbMax.style.color = category.color;
+
+  const [inValue, inUnit] = formatDistance(distanceToClimb, state.distanceUnits, 1).split(" ");
+  els.cbInDist.textContent = inValue;
+  els.cbInUnit.textContent = inUnit;
+
+  // The mini profile only changes when the upcoming climb does — rebuild its
+  // 30 bars then, not every tick.
+  if (state.bannerClimbKey !== climb.startDistanceMeters) {
+    state.bannerClimbKey = climb.startDistanceMeters;
+    els.cbMini.replaceChildren(...buildClimbMiniBars(climb));
+  }
+  els.cbBaseAlt.textContent = formatAltitude(climb.startElevationMeters, state.distanceUnits);
+  els.cbPeakAltMini.textContent = formatAltitude(climb.endElevationMeters, state.distanceUnits);
+
+  els.cbLen.textContent = formatDistance(climb.lengthMeters, state.distanceUnits, 1);
+  els.cbGain.textContent = formatAltitude(climb.gainMeters, state.distanceUnits);
+  els.cbAvg.textContent = `${climb.averageGradePercent.toFixed(1)}%`;
+  els.cbMax.textContent = `${climbMaxGrade(climb).toFixed(1)}%`;
+}
+
+function showOnClimbBanner(climb, point, orderLabel) {
+  els.climbBanner.hidden = false;
+  els.climbBannerAhead.hidden = true;
+  els.climbBannerOn.hidden = false;
+  els.cbOnOrder.textContent = orderLabel;
+  state.bannerClimbKey = null;
+
+  const distanceToTop = Math.max(0, climb.endDistanceMeters - state.progressMeters);
+  const ascentToGo = Math.max(0, climb.endElevationMeters - point.ele);
+  const gradeLeft = distanceToTop > 0 ? (ascentToGo / distanceToTop) * 100 : 0;
+
+  els.cbToTop.textContent = formatDistance(distanceToTop, state.distanceUnits, 1);
+  els.cbToGo.textContent = formatAltitude(ascentToGo, state.distanceUnits);
+  els.cbCurAlt.textContent = formatAltitude(point.ele, state.distanceUnits);
+  els.cbPeakAlt.textContent = formatAltitude(climb.endElevationMeters, state.distanceUnits);
+  els.cbGradeLeft.textContent = `${gradeLeft.toFixed(1)}%`;
+
+  // Two unlabelled bars: blue = distance through the climb, amber = ascent.
+  const distanceFraction = climb.lengthMeters > 0
+    ? (state.progressMeters - climb.startDistanceMeters) / climb.lengthMeters
+    : 0;
+  const ascentSpan = Math.max(1, climb.endElevationMeters - climb.startElevationMeters);
+  const ascentFraction = (point.ele - climb.startElevationMeters) / ascentSpan;
+  els.cbDistFill.style.width = `${clamp(distanceFraction, 0, 1) * 100}%`;
+  els.cbAscFill.style.width = `${clamp(ascentFraction, 0, 1) * 100}%`;
 }
 
 function renderRoute() {
@@ -944,6 +1138,8 @@ function toggleSimulation() {
 
 function updateStartButton() {
   els.startBtnLabel.textContent = state.simulating ? "Stop" : "Start";
+  // Swaps the play triangle for a stop square (see styles.css).
+  els.startBtn.classList.toggle("sim-running", state.simulating);
 }
 
 function updatePedalingFromSpeed() {
@@ -1148,6 +1344,19 @@ function updateRideUi(options = {}) {
   els.hudAscentLeftStat.textContent = ascentLeftText;
   els.hudEtaStat.textContent = etaText;
 
+  // Fullscreen dock extras: the road-ahead readouts and the two progress bars
+  // that sit beside the profile, plus the clock chip and climb banner.
+  els.roadAscentLeft.textContent = ascentLeftText;
+  els.roadAltitude.textContent = formatAltitude(point.ele, state.distanceUnits);
+  els.fsDistLabel.textContent =
+    `${riddenText} / ${formatDistance(totalDistance, state.distanceUnits, 1)}`;
+  els.fsDistFill.style.width = `${clamp(progress, 0, 1) * 100}%`;
+  els.fsClimbLabel.textContent =
+    `${formatAltitude(ascentSoFar, state.distanceUnits)} / ${formatAltitude(totalAscent, state.distanceUnits)}`;
+  els.fsClimbFill.style.width = `${(totalAscent ? clamp(ascentSoFar / totalAscent, 0, 1) : 0) * 100}%`;
+  updateFullscreenClock(riddenText);
+  updateFullscreenClimbBanner(point);
+
   updateRecordingUi();
   queueTrainerGradeSample(grade, {
     force: options.force,
@@ -1222,7 +1431,13 @@ function handleProfileLeave() {
 function handleProfileClick(event) {
   const distance = distanceAtProfileX(els.profile, event.clientX, state.route);
   if (distance === null) return;
-  state.progressMeters = distance;
+  seekToMeters(distance);
+}
+
+// Jump the rider to a distance along the route (profile click, climb click).
+function seekToMeters(meters) {
+  if (!state.route.length) return;
+  state.progressMeters = clamp(meters, 0, routeTotalDistance(state.route));
   state.lastTick = performance.now();
   updateRideUi({ force: true });
   saveRide();
@@ -1958,7 +2173,18 @@ function applyDisplaySettings() {
   els.hudTiles.forEach((tile) => {
     tile.hidden = state.hudElements[tile.dataset.hud] === false;
   });
+  layoutMetricTiles();
   applyMapMode();
+}
+
+// The dock's metric tiles flow into two rows; widen them when the user shows
+// only a few fields and narrow them when all eight are on, so the row stays
+// the same shape either way. (The collapsed strip lays out with flexbox and
+// needs no width.) Grid column count follows automatically from the two-row
+// auto-flow, so only the tile width is set here.
+function layoutMetricTiles() {
+  const visible = [...els.hudTiles].filter((tile) => !tile.hidden).length;
+  els.fullscreenHud.style.setProperty("--metric-tile-w", visible >= 7 ? "126px" : "150px");
 }
 
 function applyMapMode() {
@@ -2125,12 +2351,13 @@ function enterMapFullscreen() {
   els.mapViewport.classList.add("fullscreen-mode");
   els.fullscreenBtn.title = "Exit fullscreen";
   els.fullscreenOverlayBottom.hidden = false;
+  els.fullscreenClock.hidden = false;
 
-  // Move the elevation profile into the fullscreen HUD stack so it renders as
-  // a translucent overlay below the stat tiles instead of staying hidden
-  // behind the now-fixed-position map viewport.
-  els.fullscreenOverlayBottom.append(els.profile);
+  // Move the elevation profile into the dock's "road ahead" slot — the same
+  // grade-coloured canvas the control panel uses, now filling that panel.
+  els.fsProfileMount.append(els.profile);
   els.profile.classList.add("profile-translucent");
+  applyHudDock();
 
   // The Fullscreen API also hides the browser chrome, but it can fail (no
   // user gesture in the event tick, unsupported platform); the CSS class
@@ -2145,6 +2372,8 @@ function exitMapFullscreen() {
   els.mapViewport.classList.remove("fullscreen-mode");
   els.fullscreenBtn.title = "Enter fullscreen";
   els.fullscreenOverlayBottom.hidden = true;
+  els.fullscreenClock.hidden = true;
+  els.climbBanner.hidden = true;
 
   // The profile canvas lives in the panel's elevation card, right above the
   // climbs section it was pulled out from when fullscreen started.
@@ -2154,6 +2383,23 @@ function exitMapFullscreen() {
   if (document.fullscreenElement === els.mapViewport) document.exitFullscreen?.().catch(() => {});
 
   updateRideUi({ force: true });
+}
+
+// Collapse toggle on the data dock: compact strip (metrics + progress bars)
+// vs the full dock (metric tiles + the road-ahead profile). Persisted with
+// the other display settings.
+function toggleHudDock() {
+  state.hudDockCollapsed = !state.hudDockCollapsed;
+  applyHudDock();
+  saveSettings();
+  // The profile canvas is display:none while collapsed, so re-render it once
+  // it becomes visible again (a hidden canvas measures 0×0 and draws nothing).
+  if (!state.hudDockCollapsed) renderProfile();
+}
+
+function applyHudDock() {
+  els.fullscreenOverlayBottom.classList.toggle("collapsed", state.hudDockCollapsed);
+  els.dockToggleBtn.setAttribute("aria-expanded", String(!state.hudDockCollapsed));
 }
 
 function handleFullscreenChange() {
@@ -2285,6 +2531,10 @@ function restoreSettings() {
     }
   }
 
+  if (typeof settings?.hudDockCollapsed === "boolean") {
+    state.hudDockCollapsed = settings.hudDockCollapsed;
+  }
+
   els.centerRiderInput.checked = state.centerRider;
   syncCenterRiderButton();
   els.gradeIntervalInput.value = String(state.gradeUpdateIntervalSeconds);
@@ -2330,6 +2580,7 @@ function saveSettings() {
     showMinimap: state.showMinimap,
     mapLabelsEnabled: state.mapLabelsEnabled,
     hudElements: { ...state.hudElements },
+    hudDockCollapsed: state.hudDockCollapsed,
   });
 }
 

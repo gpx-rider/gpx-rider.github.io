@@ -32,7 +32,7 @@
           </button>
         </div>
         <button id="settingsBtn" type="button" class="btn btn-ghost">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"></path></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           Settings
         </button>
       </header>
@@ -56,41 +56,111 @@
               <button id="centerRiderBtn" type="button" class="map-action-btn" title="Keep rider centered" aria-label="Keep rider centered" aria-pressed="true">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><line x1="12" y1="1.5" x2="12" y2="4.5"></line><line x1="12" y1="19.5" x2="12" y2="22.5"></line><line x1="1.5" y1="12" x2="4.5" y2="12"></line><line x1="19.5" y1="12" x2="22.5" y2="12"></line><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"></circle></svg>
               </button>
+              <!-- Fullscreen hides the top bar (and its Settings button), so
+                   surface Settings here — only while fullscreen. -->
+              <button id="fullscreenSettingsBtn" type="button" class="map-action-btn map-action-btn-fs-only" title="Settings" aria-label="Open settings">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              </button>
             </div>
 
-            <div id="fullscreenOverlayBottom" class="fullscreen-overlay-bottom" hidden>
-              <div id="fullscreenHud" class="fullscreen-hud" aria-live="polite">
-                <div data-hud="power">
-                  <span>Power</span>
-                  <strong id="hudPowerStat">--</strong>
+            <!-- Fullscreen ride HUD (design 3a). These overlays are children of
+                 the map viewport so they ride along when it goes fullscreen; CSS
+                 keeps them out of the normal (non-fullscreen) map pane. -->
+
+            <!-- top-left: elapsed + distance, sitting above the minimap -->
+            <div id="fullscreenClock" class="fs-clock" hidden aria-live="polite">
+              <span id="fsClockElapsed" class="fs-clock-time">0:00</span>
+              <span class="fs-clock-sep"></span>
+              <span id="fsClockDistance" class="fs-clock-dist">--</span>
+            </div>
+
+            <!-- top-center: climb banner (on a climb, or approaching one) -->
+            <div id="climbBanner" class="climb-banner" hidden aria-live="polite">
+              <div id="climbBannerAhead" class="climb-banner-ahead" hidden>
+                <div class="cb-lead">
+                  <span id="cbAheadOrder" class="cb-order">--</span>
+                  <span id="cbCategory" class="cb-category">CLIMB</span>
+                  <div class="cb-in">
+                    <span class="cb-in-label">IN</span>
+                    <span id="cbInDist" class="cb-in-value">--</span>
+                    <span id="cbInUnit" class="cb-in-unit">km</span>
+                  </div>
                 </div>
-                <div data-hud="speed">
-                  <span>Speed</span>
-                  <strong id="hudSpeedStat">--</strong>
+                <div class="cb-mini">
+                  <div id="cbMini" class="cb-mini-bars"></div>
+                  <div class="cb-mini-alts">
+                    <span id="cbBaseAlt">--</span>
+                    <span id="cbPeakAltMini">--</span>
+                  </div>
                 </div>
-                <div data-hud="heartRate">
-                  <span>HR</span>
-                  <strong id="hudHeartRateStat">--</strong>
+                <div class="cb-divider"></div>
+                <div class="cb-stats">
+                  <div class="cb-stat"><span>LENGTH</span><strong id="cbLen">--</strong></div>
+                  <div class="cb-stat"><span>GAIN</span><strong id="cbGain">--</strong></div>
+                  <div class="cb-stat"><span>AVG</span><strong id="cbAvg">--</strong></div>
+                  <div class="cb-stat"><span>MAX</span><strong id="cbMax" class="cb-stat-accent">--</strong></div>
                 </div>
-                <div data-hud="grade">
-                  <span>Grade</span>
-                  <strong id="hudGradeStat">--</strong>
+              </div>
+              <div id="climbBannerOn" class="climb-banner-on" hidden>
+                <span id="cbOnOrder" class="cb-order">--</span>
+                <div class="cb-stats">
+                  <div class="cb-stat"><span>TO TOP</span><strong id="cbToTop">--</strong></div>
+                  <div class="cb-stat"><span>TO GO</span><strong id="cbToGo" class="cb-stat-accent">--</strong></div>
+                  <div class="cb-stat"><span>CURRENT</span><strong id="cbCurAlt">--</strong></div>
+                  <div class="cb-stat"><span>PEAK</span><strong id="cbPeakAlt">--</strong></div>
+                  <div class="cb-stat"><span>GRADE LEFT</span><strong id="cbGradeLeft">--</strong></div>
                 </div>
-                <div data-hud="ridden">
-                  <span>Ridden</span>
-                  <strong id="hudRiddenStat">--</strong>
+                <!-- Two unlabelled bars, matching the dock's colours: blue =
+                     distance through the climb, amber = ascent through it. The
+                     numbers above (TO TOP / TO GO) are the readable values. -->
+                <div class="cb-progress">
+                  <div class="cb-progress-track"><div id="cbDistFill" class="cb-progress-fill fs-bar-fill-blue"></div></div>
+                  <div class="cb-progress-track"><div id="cbAscFill" class="cb-progress-fill fs-bar-fill-amber"></div></div>
                 </div>
-                <div data-hud="remaining">
-                  <span>Remaining</span>
-                  <strong id="hudRemainingStat">--</strong>
+              </div>
+            </div>
+
+            <!-- bottom data dock: metric tiles + the road-ahead profile -->
+            <div id="fullscreenOverlayBottom" class="fs-dock" hidden>
+              <button id="dockToggleBtn" type="button" class="fs-dock-toggle" title="Collapse / expand" aria-label="Collapse or expand the data dock" aria-expanded="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+              <div class="fs-dock-body">
+                <div id="fullscreenHud" class="fs-dock-metrics" aria-live="polite">
+                  <div class="fs-tile" data-hud="power"><span class="fs-tile-label">Power</span><strong id="hudPowerStat" class="fs-tile-value">--</strong></div>
+                  <div class="fs-tile" data-hud="speed"><span class="fs-tile-label">Speed</span><strong id="hudSpeedStat" class="fs-tile-value">--</strong></div>
+                  <div class="fs-tile" data-hud="heartRate"><span class="fs-tile-label">Heart rate</span><strong id="hudHeartRateStat" class="fs-tile-value">--</strong></div>
+                  <div class="fs-tile" data-hud="grade"><span class="fs-tile-label">Grade</span><strong id="hudGradeStat" class="fs-tile-value">--</strong></div>
+                  <div class="fs-tile" data-hud="ridden"><span class="fs-tile-label">Ridden</span><strong id="hudRiddenStat" class="fs-tile-value">--</strong></div>
+                  <div class="fs-tile" data-hud="remaining"><span class="fs-tile-label">Remaining</span><strong id="hudRemainingStat" class="fs-tile-value">--</strong></div>
+                  <div class="fs-tile" data-hud="ascentLeft"><span class="fs-tile-label">Ascent left</span><strong id="hudAscentLeftStat" class="fs-tile-value">--</strong></div>
+                  <div class="fs-tile" data-hud="eta"><span class="fs-tile-label">ETA</span><strong id="hudEtaStat" class="fs-tile-value">--</strong></div>
                 </div>
-                <div data-hud="ascentLeft">
-                  <span>Ascent left</span>
-                  <strong id="hudAscentLeftStat">--</strong>
-                </div>
-                <div data-hud="eta">
-                  <span>ETA</span>
-                  <strong id="hudEtaStat">--</strong>
+
+                <div class="fs-dock-sep"></div>
+
+                <div class="fs-dock-right">
+                  <div class="fs-road-head">
+                    <div class="fs-road-title">
+                      <span class="fs-road-eyebrow">The road ahead</span>
+                      <span class="fs-road-note">grade-coloured · steep climbs red, descents green</span>
+                    </div>
+                    <div class="fs-road-stats">
+                      <div class="fs-road-stat"><span>ASCENT LEFT</span><strong id="roadAscentLeft" class="fs-road-stat-accent">--</strong></div>
+                      <div class="fs-road-stat"><span>ALTITUDE</span><strong id="roadAltitude">--</strong></div>
+                    </div>
+                  </div>
+                  <div id="fsProfileMount" class="fs-road-plot"></div>
+                  <div class="fs-dock-progress">
+                    <div class="fs-bar">
+                      <div class="fs-bar-head"><span>DISTANCE</span><span id="fsDistLabel" class="fs-bar-value">--</span></div>
+                      <div class="fs-bar-track"><div id="fsDistFill" class="fs-bar-fill fs-bar-fill-blue"></div></div>
+                    </div>
+                    <div class="fs-bar">
+                      <div class="fs-bar-head"><span>CLIMBING</span><span id="fsClimbLabel" class="fs-bar-value fs-bar-value-accent">--</span></div>
+                      <div class="fs-bar-track"><div id="fsClimbFill" class="fs-bar-fill fs-bar-fill-amber"></div></div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -247,7 +317,8 @@
                 <p class="panel-card-hint">Auto-ride the route with no trainer</p>
               </div>
               <button id="startBtn" type="button" class="btn btn-accent" disabled>
-                <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2 1.5v9l8-4.5z"></path></svg>
+                <svg class="icon-sim-play" width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2 1.5v9l8-4.5z"></path></svg>
+                <svg class="icon-sim-stop" width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><rect x="2" y="2" width="8" height="8" rx="1"></rect></svg>
                 <span id="startBtnLabel">Start</span>
               </button>
             </div>
@@ -317,7 +388,7 @@
             <div id="settingsPanelTitle" class="settings-panel-title">Camera &amp; view</div>
             <div id="settingsPanelSubtitle" class="settings-panel-subtitle">How the follow camera frames the rider.</div>
           </div>
-          <button id="settingsCloseBtn" type="button" class="icon-btn" aria-label="Close settings">
+          <button id="settingsCloseBtn" type="button" class="icon-btn" title="Close settings" aria-label="Close settings">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg>
           </button>
         </header>
@@ -581,7 +652,7 @@
 
         <footer class="settings-foot">
           <span class="settings-foot-note">Settings apply immediately</span>
-          <button id="settingsDoneBtn" type="button" class="btn btn-accent">Done</button>
+          <button id="settingsDoneBtn" type="button" class="btn btn-ghost">Close</button>
         </footer>
       </div>
     </dialog>
@@ -594,7 +665,7 @@
         </div>
         <div class="gallery-head-actions">
           <span id="galleryAttribution" class="gallery-attribution"></span>
-          <button id="galleryCloseBtn" type="button" class="icon-btn" aria-label="Close gallery">
+          <button id="galleryCloseBtn" type="button" class="icon-btn" title="Close gallery" aria-label="Close gallery">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg>
           </button>
         </div>
