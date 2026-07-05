@@ -44,3 +44,17 @@ export function formatDuration(totalSeconds) {
   const pad = (value) => String(value).padStart(2, "0");
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
+
+export function formatLocalTime(date, timeFormat = "24") {
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  if (timeFormat === "12") {
+    const period = hours < 12 ? "AM" : "PM";
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes}:${seconds} ${period}`;
+  }
+
+  return `${String(hours).padStart(2, "0")}:${minutes}:${seconds}`;
+}

@@ -37,7 +37,7 @@ import { createRideEstimator, estimateRemainingSeconds, recordEstimatorTick } fr
 import { classifyRoute } from "./difficulty.mjs";
 import { detectClimbs } from "./climbs.mjs";
 import { distanceAtProfileX, drawEmptyProfile, drawProfile, gradeColor } from "./profile.mjs";
-import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatSpeed } from "./units.mjs";
+import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatLocalTime, formatSpeed } from "./units.mjs";
 import { initStorage, readJson, removeStored, writeJson } from "./storage.mjs";
 import {
   CAMERA_CENTER_ALTITUDE_LIMIT_METERS,
@@ -71,6 +71,8 @@ import {
   DEFAULT_SHOW_SCREENSHOT_BUTTON,
   DEFAULT_TERRAIN_AVOID_ENABLED,
   DEFAULT_TERRAIN_CLEARANCE_METERS,
+  DEFAULT_TIME_FORMAT,
+  FULLSCREEN_CLOCK_REFRESH_MS,
   GRADE_INTERVAL_MAX_SECONDS,
   GRADE_INTERVAL_MIN_SECONDS,
   HEADING_SAMPLE_METERS,
@@ -246,6 +248,8 @@ const state = {
   mapFullscreen: false,
   distanceUnits: "metric",
   energyUnits: "kcal",
+  timeFormat: DEFAULT_TIME_FORMAT,
+  fullscreenClockTimer: null,
   showMinimap: DEFAULT_SHOW_MINIMAP,
   mapLabelsEnabled: DEFAULT_MAP_LABELS_ENABLED,
   cameraDebugEnabled: DEFAULT_CAMERA_DEBUG_ENABLED,
@@ -307,6 +311,7 @@ const els = {
   gradeIntervalOutput: document.querySelector("#gradeIntervalOutput"),
   distanceUnitSelect: document.querySelector("#distanceUnitSelect"),
   energyUnitSelect: document.querySelector("#energyUnitSelect"),
+  timeFormatSelect: document.querySelector("#timeFormatSelect"),
   overviewModeSelect: document.querySelector("#overviewModeSelect"),
   cameraZoomInput: document.querySelector("#cameraZoomInput"),
   cameraZoomOutput: document.querySelector("#cameraZoomOutput"),
@@ -379,6 +384,7 @@ const els = {
   fsClimbLabel: document.querySelector("#fsClimbLabel"),
   fsClimbFill: document.querySelector("#fsClimbFill"),
   fullscreenClock: document.querySelector("#fullscreenClock"),
+  fsClockLocal: document.querySelector("#fsClockLocal"),
   fsClockElapsed: document.querySelector("#fsClockElapsed"),
   fsClockDistance: document.querySelector("#fsClockDistance"),
   climbBanner: document.querySelector("#climbBanner"),
@@ -627,6 +633,7 @@ function bindEvents() {
   els.gradeIntervalInput.addEventListener("input", updateGradeIntervalFromControl);
   els.distanceUnitSelect.addEventListener("change", updateUnitsFromControls);
   els.energyUnitSelect.addEventListener("change", updateUnitsFromControls);
+  els.timeFormatSelect.addEventListener("change", updateUnitsFromControls);
   els.minimapInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.mapLabelsInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.cameraDebugInput.addEventListener("change", updateDisplaySettingsFromControls);
@@ -853,12 +860,28 @@ function updateClimbStatus(point) {
 
 // --- Fullscreen HUD clock & climb banner --------------------------------------
 
-// Top-left chip: elapsed ride time (from the recording bucket) and ridden
-// distance, in the user's units (riddenText is already formatted).
+// Top-left chip ride stats. The local wall clock has its own timer below so
+// seconds keep advancing while the rider is stationary.
 function updateFullscreenClock(riddenText) {
   if (!state.mapFullscreen) return;
   els.fsClockElapsed.textContent = formatDuration(rideLogSummary().timerSeconds);
   els.fsClockDistance.textContent = riddenText;
+}
+
+function updateFullscreenLocalTime() {
+  if (!state.mapFullscreen) return;
+  els.fsClockLocal.textContent = formatLocalTime(new Date(), state.timeFormat);
+}
+
+function startFullscreenClock() {
+  clearTimeout(state.fullscreenClockTimer);
+  updateFullscreenLocalTime();
+  state.fullscreenClockTimer = setTimeout(startFullscreenClock, FULLSCREEN_CLOCK_REFRESH_MS);
+}
+
+function stopFullscreenClock() {
+  clearTimeout(state.fullscreenClockTimer);
+  state.fullscreenClockTimer = null;
 }
 
 // Plain-language climb category from average grade alone (see CLIMB_CATEGORIES).
@@ -2563,8 +2586,10 @@ function updateGradeIntervalFromControl() {
 function updateUnitsFromControls() {
   state.distanceUnits = els.distanceUnitSelect.value === "imperial" ? "imperial" : "metric";
   state.energyUnits = els.energyUnitSelect.value === "kj" ? "kj" : "kcal";
+  state.timeFormat = els.timeFormatSelect.value === "12" ? "12" : DEFAULT_TIME_FORMAT;
   saveSettings();
 
+  updateFullscreenLocalTime();
   updateSpeedOutput();
   updateTelemetryUi();
   updateRecordingUi();
@@ -2967,6 +2992,7 @@ function enterMapFullscreen() {
   els.fullscreenBtn.title = "Exit fullscreen";
   els.fullscreenOverlayBottom.hidden = false;
   els.fullscreenClock.hidden = false;
+  startFullscreenClock();
 
   // Move the elevation profile into the dock's "road ahead" slot — the same
   // grade-coloured canvas the control panel uses, now filling that panel.
@@ -2988,6 +3014,7 @@ function exitMapFullscreen() {
   els.fullscreenBtn.title = "Enter fullscreen";
   els.fullscreenOverlayBottom.hidden = true;
   els.fullscreenClock.hidden = true;
+  stopFullscreenClock();
   els.climbBanner.hidden = true;
 
   // The profile canvas lives in the panel's elevation card, right above the
@@ -3084,6 +3111,7 @@ function restoreSettings() {
 
   if (settings?.distanceUnits === "imperial") state.distanceUnits = "imperial";
   if (settings?.energyUnits === "kj") state.energyUnits = "kj";
+  if (settings?.timeFormat === "12") state.timeFormat = "12";
 
   if (typeof settings?.beaconEnabled === "boolean") {
     state.beaconEnabled = settings.beaconEnabled;
@@ -3166,6 +3194,7 @@ function restoreSettings() {
   els.gradeIntervalOutput.value = `${state.gradeUpdateIntervalSeconds} s`;
   els.distanceUnitSelect.value = state.distanceUnits;
   els.energyUnitSelect.value = state.energyUnits;
+  els.timeFormatSelect.value = state.timeFormat;
   updateSpeedOutput();
   syncCameraControls();
   updateCameraSettingsLabels();
@@ -3203,6 +3232,7 @@ function saveSettings() {
     gradeUpdateIntervalSeconds: state.gradeUpdateIntervalSeconds,
     distanceUnits: state.distanceUnits,
     energyUnits: state.energyUnits,
+    timeFormat: state.timeFormat,
     showMinimap: state.showMinimap,
     mapLabelsEnabled: state.mapLabelsEnabled,
     cameraDebugEnabled: state.cameraDebugEnabled,
