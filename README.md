@@ -55,7 +55,7 @@ Contributions are very welcome. See [Contributing](#contributing) below.
 ## Highlights
 
 - **GPX import** — drag in any route with track points and elevation, or start from the built-in route gallery.
-- **Photorealistic 3D terrain** — Google Photorealistic 3D Maps render the route with a follow camera, minimap, rider beacon, terrain-aware camera lift, and a whole-route overview (static, orbit, or a physics-based helicopter/airplane fly-by) before the ride starts.
+- **Photorealistic 3D terrain** — Google Photorealistic 3D Maps render the route with a follow camera, minimap, rider beacon, terrain-aware camera lift, and a whole-route overview (static, orbit, or ellipse fly-by) before the ride starts.
 - **Bluetooth FTMS trainer control** — connect Wahoo KICKR and other FTMS-compatible trainers over Web Bluetooth. Start pedaling and the map advances from your real trainer speed; stop pedaling and the ride stops.
 - **Heart-rate sensors** — pair a standard Bluetooth heart-rate strap and see live BPM in the stats and ride HUD.
 - **Route difficulty and climbs** — GPX Rider classifies the route, detects sustained climbs, lists each climb with distance/elevation/grade, and tracks live progress to the top while riding.
@@ -113,14 +113,13 @@ The classification uses distance and elevation gain only; it does not depend on 
 
 ## Camera And HUD
 
-A freshly loaded route starts in a whole-route overview, framed from above so you can understand the shape of the ride before moving. The overview has four styles (Settings › Camera & view → Route overview):
+A freshly loaded route starts in a whole-route overview, framed from above so you can understand the shape of the ride before moving. The overview has three styles (Settings › Camera & view → Route overview):
 
 - **Static** — the classic framed still shot.
 - **Orbit** — a slow turntable rotation around the route.
-- **Helicopter fly-by** — a helicopter flies a smoothed loop over the route (along the path, then straight back to the start, repeating), obeying real-world physics: it slows through bends and speeds up on the straights, within a configurable max speed, acceleration, and cornering limit.
-- **Airplane fly-by** — the same flyover with airplane physics: higher, faster, and wide, lazy turns.
+- **Fly-by** — a camera flies a PCA-aligned ellipse around the route, looking along its direction of travel.
 
-The flyover camera is fixed to the aircraft like a bolted-on nose camera: it always looks along the direction of flight, angled down by a set mount angle, so it pitches up and down with climbs and descents instead of panning around on its own. All of the flight physics (speeds, accelerations, turn radius, altitude, mount angle) are configurable in `app/tuning.mjs`.
+The fly-by ellipse can intentionally be smaller than the route footprint; altitude, pitch, and view distance determine how much of the route stays visible from the air. Direction, speed, ellipse scale, minimum turning radius, altitude, pitch, view distance, and maximum bank angle are configurable in `app/tuning.mjs`.
 
 Once you start pedaling or simulation begins, the camera flies down behind the rider and follows the route using GPX bearing.
 
