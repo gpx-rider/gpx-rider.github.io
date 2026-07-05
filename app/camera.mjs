@@ -49,10 +49,9 @@ export function applyCameraOffset(position, routeHeading, forwardMeters, rightMe
   return destinationPoint(position, normalizeHeading(routeHeading + offsetAngle), distance);
 }
 
-// The camera eye position. Map3DElement only exposes the look-at center plus
-// range/tilt/heading, so the eye is reconstructed from those: it sits `range`
-// away from the center, pulled back along the opposite heading and lifted by
-// the tilt.
+// The camera eye position. Map3DElement exposes the look-at center plus camera
+// range/tilt/heading/roll; roll does not move the eye, so the eye is
+// reconstructed from center/range/tilt/heading.
 export function cameraEyePosition({ center, range, tilt, heading }) {
   const safeRange = Number(range);
   const lat = Number(center?.lat);

@@ -144,80 +144,45 @@ export const OVERVIEW_RANGE_FACTOR = 0.75;
 export const OVERVIEW_MIN_RANGE_METERS = 250;
 export const OVERVIEW_MAX_RANGE_METERS = Infinity;
 
-// --- Overview motion (static / orbit / helicopter / airplane) --------------------
+// --- Overview motion (static / orbit / ellipse flyby) -----------------------------
 //
 // How the whole-route overview behaves when a route loads at rest. This is a
 // user setting (Settings › Camera & view); the value here is only the default.
 //   "static"   — the framed still shot (the classic overview)
 //   "orbit"    — turntable: the static shot slowly rotates around the route
-//   "heli"     — a helicopter flies a smoothed loop over the route (physics below)
-//   "airplane" — the same flyover engine with airplane physics (faster, higher,
-//                wide lazy turns)
+//   "flyby"    — a camera flies a PCA-aligned ellipse around the route
 export const DEFAULT_OVERVIEW_MODE = "orbit";
 
 // Orbit mode: seconds for one full revolution, and spin direction (1 =
 // clockwise seen from above, -1 = counter-clockwise). Longer = statelier.
-export const OVERVIEW_ORBIT_SECONDS_PER_REV = 75;
+export const OVERVIEW_ORBIT_SECONDS_PER_REV = 40;
 export const OVERVIEW_ORBIT_DIRECTION = 1;
 
-// When an animated overview (orbit/heli/airplane) starts from a different
+// When an animated overview (orbit/flyby) starts from a different
 // camera pose, ease into the motion over this many seconds instead of jumping.
 export const OVERVIEW_ANIM_INTRO_SECONDS = 1.5;
 
-// Flyover path prep, shared by both aircraft. Simplify tolerance drops GPS
-// wiggles smaller than this; resample spacing is the working sample density;
-// smoothing rounds corners (strength per pass, up to the iteration budget) and
-// runs until the tightest corner clears each vehicle's minimum turn radius.
-export const FLYOVER_RESAMPLE_SPACING_METERS = 20;
-export const FLYOVER_SMOOTHING_STRENGTH = 0.5;
-export const FLYOVER_SMOOTHING_MAX_ITERATIONS = 200;
-
-// The aircraft's velocity direction (which the mounted camera looks along) is
-// estimated from the path this far ahead. Larger = steadier heading through
-// jittery bends, smaller = more responsive. Just a numerical detail of the
-// tangent estimate, not a look-and-feel knob.
-export const FLYOVER_TANGENT_SAMPLE_METERS = 6;
-
-// Helicopter flyover physics. Speeds in m/s (×3.6 for km/h), accels in m/s².
-// A helicopter can slow right down and turn tightly, so it hugs the route
-// closely and flies low. The camera is rigidly mounted on the airframe:
-// mountPitchDegrees is how far below the flight direction it points (0 = dead
-// ahead, 90 = straight down), and viewDistance is how far out the look-at ray
-// reaches (mostly cosmetic — it sets the range the Map3D camera reports).
-export const HELICOPTER_FLYOVER = {
-  simplifyToleranceMeters: 12,
-  resampleSpacingMeters: FLYOVER_RESAMPLE_SPACING_METERS,
-  smoothingStrength: FLYOVER_SMOOTHING_STRENGTH,
-  smoothingMaxIterations: FLYOVER_SMOOTHING_MAX_ITERATIONS,
-  tangentSampleMeters: FLYOVER_TANGENT_SAMPLE_METERS,
-  minTurnRadiusMeters: 25,
-  maxSpeedMps: 55,            // ~120 km/h
-  minSpeedMps: 4,
-  maxAccelMps2: 4,
-  maxLateralAccelMps2: 6,
-  flyHeightMeters: 300,
-  mountPitchDegrees: 30,
-  viewDistanceMeters: 400,
-};
-
-// Airplane flyover physics. A plane can't slow much and turns in a wide arc, so
-// it needs a high minimum speed, a large minimum turn radius, and flies higher.
-// Same engine, different envelope; the mounted camera points a little flatter
-// (more forward) than the helicopter's.
-export const AIRPLANE_FLYOVER = {
-  simplifyToleranceMeters: 45,
-  resampleSpacingMeters: FLYOVER_RESAMPLE_SPACING_METERS,
-  smoothingStrength: FLYOVER_SMOOTHING_STRENGTH,
-  smoothingMaxIterations: FLYOVER_SMOOTHING_MAX_ITERATIONS,
-  tangentSampleMeters: FLYOVER_TANGENT_SAMPLE_METERS,
-  minTurnRadiusMeters: 350,
-  maxSpeedMps: 140,            // ~340 km/h
-  minSpeedMps: 55,            // ~160 km/h — planes don't hover
-  maxAccelMps2: 5,
-  maxLateralAccelMps2: 9,
-  flyHeightMeters: 800,
-  mountPitchDegrees: 22,
-  viewDistanceMeters: 1200,
+// Ellipse flyby: a camera flies along an ellipse aligned to the route's
+// principal axis and looks along its direction of travel. ellipseScale below
+// 1 lets the flight path cut inside the route footprint; higher altitude,
+// viewDistance, and a flatter mountPitch keep more of the route in view.
+// direction is 1 for clockwise seen from above, -1 for counter-clockwise.
+// minTurnRadiusMeters is a radius: 2500 m means the tightest possible circle
+// would be 5 km across. maxBankDegrees is the roll applied at that tightest
+// turn; broader turns roll proportionally less.
+export const ELLIPSE_FLYBY = {
+  ellipseScale: 0.78,
+  minSemiMajorMeters: 1200,
+  minSemiMinorMeters: 700,
+  minTurnRadiusMeters: 500,
+  direction: 1,
+  speedMps: 800,
+  flyHeightMeters: 1400,
+  mountPitchDegrees: 28,
+  viewDistanceMeters: 3200,
+  maxBankDegrees: 90,
+  sampleCount: 360,
+  startAngleDegrees: 0,
 };
 
 // The rider's heading is sampled this many meters behind/ahead of the rider,

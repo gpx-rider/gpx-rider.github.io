@@ -16,7 +16,8 @@ import {
   rangeForBehind,
   signedHeadingDelta,
 } from "./camera.mjs";
-import { orbitCamera, createFlyover } from "./flyover.mjs";
+import { createEllipseFlyby } from "./flyby.mjs";
+import { orbitCamera } from "./flyover.mjs";
 import { bearing, clamp, destinationPoint, haversine, lerp, roundCoordinate, toRad } from "./geo.mjs";
 import { deployedMapsApiKey } from "./config.mjs";
 import {
@@ -80,8 +81,7 @@ import {
   OVERVIEW_ORBIT_SECONDS_PER_REV,
   OVERVIEW_ORBIT_DIRECTION,
   OVERVIEW_ANIM_INTRO_SECONDS,
-  HELICOPTER_FLYOVER,
-  AIRPLANE_FLYOVER,
+  ELLIPSE_FLYBY,
   OVERVIEW_MARGIN_FACTOR,
   OVERVIEW_RANGE_FACTOR,
   OVERVIEW_MIN_RANGE_METERS,
@@ -203,7 +203,7 @@ const state = {
   cameraMode: "follow",
   overviewCamera: null,
   // How the whole-route overview is presented at rest (user setting):
-  // "static" | "orbit" | "heli" | "airplane". overviewAnim holds the live
+  // "static" | "orbit" | "flyby". overviewAnim holds the live
   // animation state for the non-static modes; its loop drives the map directly.
   overviewMode: DEFAULT_OVERVIEW_MODE,
   overviewAnim: null,
@@ -1785,6 +1785,7 @@ function stepCameraFlight(now) {
   state.map.heading = camera.heading;
   state.map.range = camera.range;
   state.map.tilt = camera.tilt;
+  state.map.roll = 0;
   return settled;
 }
 
@@ -1827,11 +1828,12 @@ function currentMapCameraPose() {
   const range = Number(state.map?.range);
   const tilt = Number(state.map?.tilt);
   const heading = Number(state.map?.heading);
+  const roll = Number(state.map?.roll);
   if (![lat, lng, range, tilt, heading].every(Number.isFinite)) return null;
 
   const centerPoint = { lat, lng, altitude: Number(center?.altitude) || 0 };
   const eye = cameraEyePosition({ center: centerPoint, range, tilt, heading });
-  return eye ? { eye, center: centerPoint } : null;
+  return eye ? { eye, center: centerPoint, roll: Number.isFinite(roll) ? roll : 0 } : null;
 }
 
 // The movement loop drives the camera while the rider moves; this loop keeps
@@ -1845,7 +1847,7 @@ function ensureCameraFlightLoop() {
     if (
       !state.route.length || !state.map || state.userInteracting ||
       state.movementLoopActive || state.cameraMode === "manual" ||
-      // An animated overview (orbit/heli/airplane) owns the camera directly;
+      // An animated overview (orbit/flyby) owns the camera directly;
       // the chase flight must yield or the two loops fight — the flight would
       // re-init from the old pose and fly to the new route instead of the
       // animation snapping to it.
@@ -1892,8 +1894,8 @@ function enterOverviewMode({ instant = false } = {}) {
   if (!state.overviewCamera) return;
   state.cameraMode = "overview";
 
-  // Animated modes (orbit / helicopter / airplane) drive the map themselves.
-  // If one can't be set up (e.g. a flyover on a route too small to fly), fall
+  // Animated modes (orbit / flyby) drive the map themselves.
+  // If one can't be set up (e.g. a flyby on a route too small to fly), fall
   // through to the static framing below.
   if (state.overviewMode !== "static" && startOverviewAnimation({ instant })) return;
 
@@ -1905,25 +1907,26 @@ function enterOverviewMode({ instant = false } = {}) {
   ensureCameraFlightLoop();
 }
 
-// --- Animated overview (orbit / helicopter / airplane) --------------------------
+// --- Animated overview (orbit / flyby) ------------------------------------------
 //
 // These modes own the camera directly (the motion is already smooth, so there's
-// no chase). Orbit spins the static overview; the flyover flies a physics path
-// from flyover.mjs. On entry the view eases from the current pose into the
-// motion so switching modes or resetting never jumps.
+// no chase). Orbit spins the static overview; flyby drives an ellipse around
+// the route. On entry the view eases from the current pose into the motion so
+// switching modes or resetting never jumps.
 
 function startOverviewAnimation({ instant = false } = {}) {
   const mode = state.overviewMode;
-  let fly = null;
-  if (mode === "heli" || mode === "airplane") {
-    fly = createFlyover(state.route, mode === "heli" ? HELICOPTER_FLYOVER : AIRPLANE_FLYOVER);
-    if (!fly) return false; // route too small to fly — caller falls back to static
+  let flyby = null;
+  if (mode === "flyby") {
+    flyby = createEllipseFlyby(state.route, ELLIPSE_FLYBY);
+    if (!flyby) return false; // route too small to fly — caller falls back to static
   }
   const now = performance.now();
   state.overviewAnim = {
     mode,
-    fly,
+    flyby,
     s: 0,
+    lastFrame: null,
     startMs: now,
     lastMs: now,
     // Ease in from where the camera currently is, unless we're snapping (a
@@ -1978,11 +1981,12 @@ function stepOverviewAnimation(now) {
       direction: OVERVIEW_ORBIT_DIRECTION,
     });
     const eye = cam && cameraEyePosition(cam);
-    if (eye) pose = { eye, center: cam.center, heading: cam.heading };
-  } else if (anim.fly) {
-    anim.s = anim.fly.advance(anim.s, dt);
-    const frame = anim.fly.frameAt(anim.s);
-    pose = { eye: frame.eye, center: frame.lookAt, heading: null };
+    if (eye) pose = { eye, center: cam.center, heading: cam.heading, roll: 0 };
+  } else if (anim.flyby) {
+    anim.s = anim.flyby.advance(anim.s, dt);
+    const frame = anim.flyby.frameAt(anim.s);
+    anim.lastFrame = frame;
+    pose = { eye: frame.eye, center: frame.lookAt, heading: null, roll: frame.bankDegrees };
   }
   if (!pose) return;
 
@@ -1997,6 +2001,7 @@ function stepOverviewAnimation(now) {
         eye: lerpGeoPoint(anim.introFrom.eye, pose.eye, k),
         center: lerpGeoPoint(anim.introFrom.center, pose.center, k),
         heading: pose.heading,
+        roll: lerpAngle(anim.introFrom.roll ?? 0, pose.roll ?? 0, k),
       };
     }
   }
@@ -2006,6 +2011,7 @@ function stepOverviewAnimation(now) {
   state.map.heading = camera.heading;
   state.map.range = camera.range;
   state.map.tilt = camera.tilt;
+  state.map.roll = pose.roll ?? 0;
 }
 
 function lerpGeoPoint(a, b, t) {
@@ -2020,6 +2026,11 @@ function smoothstep(t) {
   return t * t * (3 - 2 * t);
 }
 
+function lerpAngle(from, to, t) {
+  const delta = ((to - from + 540) % 360) - 180;
+  return from + delta * t;
+}
+
 // Jump the map straight to `camera` with no flight, and park the chase state
 // there (zero velocity) so the next target change starts a fresh smooth move.
 function applyCameraNow(camera) {
@@ -2027,6 +2038,7 @@ function applyCameraNow(camera) {
   state.map.heading = camera.heading;
   state.map.range = camera.range;
   state.map.tilt = camera.tilt;
+  state.map.roll = 0;
 
   const eye = cameraEyePosition(camera);
   state.cameraFlight = eye
@@ -2268,13 +2280,17 @@ function syncCameraControls() {
 // re-frames the route immediately when at rest (so the user sees the mode take
 // effect) but never disturbs an in-progress ride.
 function updateOverviewModeFromControl() {
-  const mode = els.overviewModeSelect.value;
-  state.overviewMode = ["static", "orbit", "heli", "airplane"].includes(mode) ? mode : "static";
+  state.overviewMode = normalizeOverviewMode(els.overviewModeSelect.value);
   saveSettings();
   if (!isMoving() && state.route.length) {
     state.cameraMode = "overview";
     enterOverviewMode();
   }
+}
+
+function normalizeOverviewMode(mode) {
+  if (mode === "heli" || mode === "airplane") return "flyby";
+  return ["static", "orbit", "flyby"].includes(mode) ? mode : "static";
 }
 
 function updateCameraSettingsLabels() {
@@ -2402,6 +2418,7 @@ function renderCameraDebug() {
   const tilt = Number(map?.tilt);
   const range = Number(map?.range);
   const heading = Number(map?.heading);
+  const roll = Number(map?.roll);
   const center = map?.center;
   const lat = Number(center?.lat);
   const lng = Number(center?.lng);
@@ -2412,22 +2429,26 @@ function renderCameraDebug() {
   const num = (value, digits, suffix = "") =>
     (Number.isFinite(value) ? value.toFixed(digits) : "—") + (Number.isFinite(value) ? suffix : "");
 
-  const flyover = state.overviewAnim?.fly;
+  const flyby = state.overviewAnim?.flyby;
   const rows = [
     ["mode", state.cameraMode === "overview" ? `overview·${state.overviewMode}` : state.cameraMode],
     ["tilt", num(tilt, 1, "°")],
     ["range", num(range, 0, " m")],
     ["heading", num(heading, 1, "°")],
+    ["roll", num(roll, 1, "°")],
     ["eye alt", num(eye?.altitude, 0, " m")],
     ["ctr alt", num(centerAlt, 0, " m")],
     ["ctr lat", num(lat, 5)],
     ["ctr lng", num(lng, 5)],
     ["progress", `${(state.progressMeters / 1000).toFixed(2)} / ${(totalDistance / 1000).toFixed(2)} km`],
   ];
-  if (flyover) {
-    const speed = flyover.speedAt(state.overviewAnim.s);
+  if (flyby) {
+    const speed = flyby.speedAt(state.overviewAnim.s);
+    const frame = state.overviewAnim.lastFrame ?? flyby.frameAt(state.overviewAnim.s);
     rows.push(["fly speed", `${num(speed, 1)} m/s · ${num(speed * 3.6, 0)} km/h`]);
-    rows.push(["lap", num(flyover.lapSeconds, 0, " s")]);
+    rows.push(["turn radius", num(frame.turnRadiusMeters, 0, " m")]);
+    rows.push(["bank", num(frame.bankDegrees, 1, "°")]);
+    rows.push(["lap", num(flyby.lapSeconds, 0, " s")]);
   }
 
   body.innerHTML = rows
@@ -2675,9 +2696,7 @@ function restoreSettings() {
   const offsetForward = Number(settings?.cameraOffsetForwardMeters);
   const offsetRight = Number(settings?.cameraOffsetRightMeters);
 
-  if (["static", "orbit", "heli", "airplane"].includes(settings?.overviewMode)) {
-    state.overviewMode = settings.overviewMode;
-  }
+  state.overviewMode = normalizeOverviewMode(settings?.overviewMode);
 
   if (Number.isFinite(zoom)) {
     state.cameraZoom = clamp(zoom, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
