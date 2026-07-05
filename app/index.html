@@ -53,6 +53,19 @@
               <button id="resetCameraViewBtn" type="button" class="map-action-btn" title="Reset the camera to its default view" aria-label="Reset the camera to its default view">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a9 9 0 1 1-1.6 5"></path><path d="M3 3v5h5"></path></svg>
               </button>
+              <div id="mapOverviewControl" class="map-overview-control">
+                <button id="overviewToggleBtn" type="button" class="map-action-btn map-overview-toggle" title="Show route overview" aria-label="Show route overview" aria-pressed="true">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5c1-1 1.3-2.6.8-3.1s-2.1-.2-3.1.8L13.7 8.8 5.5 7 4 8.5l6.6 3.1-3.5 3.5-2.8-.6-1.2 1.2 4.1 2.1 2.1 4.1 1.2-1.2-.6-2.8 3.5-3.5 3.1 6.6z"></path></svg>
+                </button>
+                <button id="overviewMenuBtn" type="button" class="map-action-btn map-overview-menu-btn" title="Choose overview style" aria-label="Choose overview style" aria-haspopup="menu" aria-expanded="false">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                </button>
+                <div id="overviewModeMenu" class="map-overview-menu" role="menu" hidden>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="static">Static</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="orbit">Orbit</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="flyby">Fly-by</button>
+                </div>
+              </div>
               <button id="centerRiderBtn" type="button" class="map-action-btn" title="Keep rider centered" aria-label="Keep rider centered" aria-pressed="true">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><line x1="12" y1="1.5" x2="12" y2="4.5"></line><line x1="12" y1="19.5" x2="12" y2="22.5"></line><line x1="1.5" y1="12" x2="4.5" y2="12"></line><line x1="19.5" y1="12" x2="22.5" y2="12"></line><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"></circle></svg>
               </button>

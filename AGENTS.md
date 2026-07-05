@@ -314,8 +314,10 @@ in place).
   it's also large enough that a small-on-screen-footprint problem wouldn't
   reproduce the same way, and if it ever does, the fix here is the same:
   switch it to a `Model3DElement` too, not more polygon tweaking.
-- **Camera modes & physical motion**: `state.cameraMode` is `"overview"`
-  after a route loads (whole route framed via `computeRouteOverviewCamera`
+- **Camera modes & physical motion**: `state.overviewActive` is true by
+  default after a route loads, and `state.cameraMode` is `"overview"` while the
+  route overview is actually driving the map (whole route framed via
+  `computeRouteOverviewCamera`
   in `camera.mjs`: the framing axis is the route's *principal axis of spread*
   — a PCA over all points, not the start→end line, so loops/lollipops/
   out-and-backs still frame along their real long dimension instead of an
@@ -334,14 +336,26 @@ in place).
   — the lever for a lower, terrain-rich view, since Google's 3D map limits how
   far it will tilt toward the horizon at the large range a whole-route fit
   needs (use the Debug camera overlay to see the tilt it actually applies).
-  `state.cameraMode` becomes `"manual"` once the user grabs the overview, and
-  `"follow"` from the moment movement starts. The overview snaps into place
-  instantly on load (`applyCameraNow` — a new route may be across the
+  `state.cameraMode` becomes `"manual"` once the user grabs the overview, while
+  `state.overviewActive` stays true so the map reset button can restore that
+  selected overview. `"follow"` takes over from the moment movement starts and
+  clears `overviewActive`. The overview snaps into place instantly on load
+  (`applyCameraNow` — a new route may be across the
   world); every later camera move chases the target's eye/look-at pair with
   bounded acceleration (`chaseStep` + `chaseTuning` in `camera.mjs`: the
   acceleration budget grows with remaining distance, so follow tracking is
   gentle while transition flights are fast, braking to arrive), stepped by
   the movement loop while riding and by `ensureCameraFlightLoop` otherwise.
+- **Map overview control.** The map action bar has a split translucent overview
+  control: the plane button toggles `state.overviewActive` and switches between
+  the selected overview and rider camera; the chevron opens the same
+  `"static"`/`"orbit"`/`"flyby"` choices as the Camera & view settings select.
+  The split control is amber while overview is active. Picking a mode from the
+  dropdown activates overview when the ride is parked; changing the settings
+  select only reframes immediately if overview is already active. The map reset
+  camera button (`#resetCameraViewBtn`) resets follow-camera settings and
+  restores the currently selected surface after a manual drag; it must not
+  activate overview just because the rider is stationary.
 - **Overview motion modes** (`state.overviewMode`, a persisted user setting in
   Settings › Camera & view, default `DEFAULT_OVERVIEW_MODE` in `tuning.mjs`):
   `"static"` is the framed still (the `ensureCameraFlightLoop` path above);

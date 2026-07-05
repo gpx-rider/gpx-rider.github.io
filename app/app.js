@@ -210,6 +210,8 @@ const state = {
   // How the whole-route overview is presented at rest (user setting):
   // "static" | "orbit" | "flyby". overviewAnim holds the live
   // animation state for the non-static modes; its loop drives the map directly.
+  overviewActive: false,
+  overviewMenuOpen: false,
   overviewMode: DEFAULT_OVERVIEW_MODE,
   overviewAnim: null,
   overviewAnimLoopActive: false,
@@ -343,6 +345,11 @@ const els = {
   minimap: document.querySelector("#minimap"),
   fullscreenBtn: document.querySelector("#fullscreenBtn"),
   resetCameraViewBtn: document.querySelector("#resetCameraViewBtn"),
+  mapOverviewControl: document.querySelector("#mapOverviewControl"),
+  overviewToggleBtn: document.querySelector("#overviewToggleBtn"),
+  overviewMenuBtn: document.querySelector("#overviewMenuBtn"),
+  overviewModeMenu: document.querySelector("#overviewModeMenu"),
+  overviewModeButtons: Array.from(document.querySelectorAll("[data-map-overview-mode]")),
   screenshotBtn: document.querySelector("#screenshotBtn"),
   screenshotButtonInput: document.querySelector("#screenshotButtonInput"),
   screenshotAspectSelect: document.querySelector("#screenshotAspectSelect"),
@@ -652,6 +659,9 @@ function bindEvents() {
   els.fullscreenBtn.addEventListener("click", toggleMapFullscreen);
   els.dockToggleBtn.addEventListener("click", toggleHudDock);
   els.resetCameraViewBtn.addEventListener("click", resetCameraView);
+  els.overviewToggleBtn.addEventListener("click", toggleRouteOverview);
+  els.overviewMenuBtn.addEventListener("click", toggleOverviewModeMenu);
+  els.overviewModeButtons.forEach((button) => button.addEventListener("click", selectOverviewModeFromMenu));
   els.screenshotBtn.addEventListener("click", takeMapScreenshot);
   els.screenshotButtonInput.addEventListener("change", updateScreenshotSettingsFromControls);
   els.screenshotAspectSelect.addEventListener("change", updateScreenshotSettingsFromControls);
@@ -659,6 +669,10 @@ function bindEvents() {
   document.addEventListener("fullscreenchange", handleFullscreenChange);
   document.addEventListener("visibilitychange", handleVisibilityChange);
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.overviewMenuOpen) {
+      closeOverviewModeMenu();
+      return;
+    }
     // When the settings or gallery dialog is open, Escape closes it
     // (natively) and must not also kick the rider out of fullscreen.
     if (
@@ -666,6 +680,7 @@ function bindEvents() {
       !els.settingsDialog.open && !els.galleryDialog.open
     ) exitMapFullscreen();
   });
+  document.addEventListener("click", closeOverviewModeMenuOnOutsideClick);
   window.addEventListener("beforeunload", () => {
     saveRide();
     persistRideLog();
@@ -709,6 +724,7 @@ function applyGpxText(text, { overrideName = null, fallbackName = null } = {}) {
   state.profileHoverMeters = null;
   // A new route is a new ride: the ETA pace history starts over.
   state.rideEstimator = createRideEstimator();
+  state.overviewActive = true;
   enterOverviewMode({ instant: true });
   updateStartButton();
   renderRoute();
@@ -1214,7 +1230,12 @@ function ensureMovementLoop() {
   // Actual movement (not a mere seek) hands the camera over to the follow
   // view; the camera flight then flies it in from wherever it is — e.g. down
   // from the route overview when the rider starts pedaling.
-  if (isMoving()) state.cameraMode = "follow";
+  if (isMoving()) {
+    state.overviewActive = false;
+    closeOverviewModeMenu();
+    syncOverviewControls();
+    state.cameraMode = "follow";
+  }
   if (state.movementLoopActive) return;
   state.movementLoopActive = true;
   state.lastTick = performance.now();
@@ -1263,9 +1284,12 @@ function resetRide() {
   state.simulating = false;
   state.progressMeters = 0;
   state.lastTick = performance.now();
-  // A reset while stationary returns to the whole-route overview, like a
-  // fresh load; while pedaling the camera stays with the rider.
-  if (!isMoving()) enterOverviewMode();
+  // A reset while stationary honors the chosen camera surface: overview stays
+  // overview, rider camera stays with the rider.
+  if (!isMoving()) {
+    if (state.overviewActive) enterOverviewMode();
+    else returnToRiderCamera();
+  }
   updateStartButton();
   updateRideUi({ force: true });
   saveRide();
@@ -1897,6 +1921,8 @@ function enterOverviewMode({ instant = false } = {}) {
   // A rider already moving (e.g. a new GPX loaded mid-pedaling) stays in the
   // follow view — the overview is for routes loaded at rest.
   if (!state.route.length || !state.map || isMoving()) return;
+  state.overviewActive = true;
+  syncOverviewControls();
   if (state.overviewMode !== "flyby") state.map.fov = DEFAULT_MAP_FOV_DEGREES;
   const width = els.mapViewport?.clientWidth;
   const height = els.mapViewport?.clientHeight;
@@ -1926,6 +1952,24 @@ function enterOverviewMode({ instant = false } = {}) {
     return;
   }
   ensureCameraFlightLoop();
+}
+
+function returnToRiderCamera() {
+  state.overviewActive = false;
+  closeOverviewModeMenu();
+  clearOverviewAnimation();
+  if (!state.route.length || !state.map) {
+    syncOverviewControls();
+    return;
+  }
+
+  state.cameraMode = "follow";
+  state.cameraFlight = null;
+  state.map.fov = DEFAULT_MAP_FOV_DEGREES;
+  syncOverviewControls();
+  updateMapCamera();
+  if (!state.movementLoopActive) ensureCameraFlightLoop();
+  updateOverviewDebugLine();
 }
 
 // --- Animated overview (orbit / flyby) ------------------------------------------
@@ -2208,6 +2252,7 @@ function endUserInteraction() {
     state.cameraMode = "manual";
   }
   state.userInteracting = false;
+  syncOverviewControls();
   // The next flight step restarts from wherever the gesture left the camera.
   state.cameraFlight = null;
 
@@ -2307,6 +2352,7 @@ function syncCameraControls() {
   els.cameraAngleInput.value = String(Math.round(state.cameraAngleDegrees));
   els.cameraBehindInput.value = String(Math.round(state.cameraBehindMeters / 20) * 20);
   els.overviewModeSelect.value = state.overviewMode;
+  syncOverviewControls();
 }
 
 // The overview mode is a display choice, not a follow-camera parameter, so it
@@ -2316,10 +2362,69 @@ function updateOverviewModeFromControl() {
   state.overviewMode = normalizeOverviewMode(els.overviewModeSelect.value);
   saveSettings();
   updateOverviewDebugLine();
-  if (!isMoving() && state.route.length) {
-    state.cameraMode = "overview";
+  syncOverviewControls();
+  if (state.overviewActive && !isMoving() && state.route.length) {
     enterOverviewMode();
   }
+}
+
+function toggleRouteOverview() {
+  if (!state.route.length || isMoving()) {
+    syncOverviewControls();
+    return;
+  }
+  if (state.overviewActive) returnToRiderCamera();
+  else enterOverviewMode();
+}
+
+function toggleOverviewModeMenu(event) {
+  event.stopPropagation();
+  state.overviewMenuOpen = !state.overviewMenuOpen;
+  syncOverviewControls();
+}
+
+function closeOverviewModeMenu() {
+  if (!state.overviewMenuOpen) return;
+  state.overviewMenuOpen = false;
+  syncOverviewControls();
+}
+
+function closeOverviewModeMenuOnOutsideClick(event) {
+  if (!state.overviewMenuOpen) return;
+  if (els.mapOverviewControl?.contains(event.target)) return;
+  closeOverviewModeMenu();
+}
+
+function selectOverviewModeFromMenu(event) {
+  event.stopPropagation();
+  const mode = normalizeOverviewMode(event.currentTarget.dataset.mapOverviewMode);
+  state.overviewMode = mode;
+  els.overviewModeSelect.value = mode;
+  saveSettings();
+  closeOverviewModeMenu();
+  updateOverviewDebugLine();
+  if (state.route.length && !isMoving()) enterOverviewMode();
+  else syncOverviewControls();
+}
+
+function syncOverviewControls() {
+  const hasRoute = state.route.length > 1;
+  const canToggle = hasRoute && !isMoving();
+  const active = hasRoute && state.overviewActive;
+
+  els.mapOverviewControl.classList.toggle("active", active);
+  els.overviewToggleBtn.disabled = !canToggle;
+  els.overviewToggleBtn.setAttribute("aria-pressed", String(active));
+  els.overviewToggleBtn.title = active ? "Return to rider camera" : "Show route overview";
+  els.overviewToggleBtn.setAttribute("aria-label", active ? "Return to rider camera" : "Show route overview");
+
+  els.overviewMenuBtn.disabled = !hasRoute;
+  els.overviewMenuBtn.setAttribute("aria-expanded", String(state.overviewMenuOpen));
+  els.overviewModeMenu.hidden = !state.overviewMenuOpen;
+  els.overviewModeButtons.forEach((button) => {
+    const checked = normalizeOverviewMode(button.dataset.mapOverviewMode) === state.overviewMode;
+    button.setAttribute("aria-checked", String(checked));
+  });
 }
 
 function normalizeOverviewMode(mode) {
@@ -2618,14 +2723,17 @@ function resetCameraToDefaults() {
   updateRideUi();
 }
 
-// The map-action-bar shortcut for resetCameraToDefaults: it also has to pull
-// the camera out of "manual" mode (parked overview the user dragged away from
-// while stationary — cameraMode can't be "manual" while moving, see
-// ensureMovementLoop), or the default settings would apply invisibly while
-// updateMapCamera keeps ignoring a manually-parked camera.
+// The map-action-bar shortcut for resetCameraToDefaults restores the currently
+// selected camera surface after a manual drag; it no longer turns the rider
+// camera into a route overview by itself.
 function resetCameraView() {
   resetCameraToDefaults();
-  if (!isMoving()) enterOverviewMode();
+  if (!state.route.length) return;
+  if (state.overviewActive && !isMoving()) {
+    enterOverviewMode();
+    return;
+  }
+  returnToRiderCamera();
 }
 
 function updateRenderingSettingsFromControls() {
@@ -3029,6 +3137,7 @@ function restoreSavedRide() {
   state.simulating = false;
   state.lastTick = 0;
 
+  state.overviewActive = true;
   enterOverviewMode({ instant: true });
   updateStartButton();
   renderRoute();

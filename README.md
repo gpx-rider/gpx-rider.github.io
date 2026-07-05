@@ -113,7 +113,7 @@ The classification uses distance and elevation gain only; it does not depend on 
 
 ## Camera And HUD
 
-A freshly loaded route starts in a whole-route overview, framed from above so you can understand the shape of the ride before moving. The overview has three styles (Settings › Camera & view → Route overview):
+A freshly loaded route starts in a whole-route overview, framed from above so you can understand the shape of the ride before moving. The map action bar has a split overview button: the plane toggles between overview and the rider camera, and the chevron opens the overview style menu. The overview has three styles (also available in Settings › Camera & view → Route overview):
 
 - **Static** — the classic framed still shot.
 - **Orbit** — a slow turntable rotation around the route.
@@ -122,6 +122,8 @@ A freshly loaded route starts in a whole-route overview, framed from above so yo
 The fly-by ellipse can intentionally be smaller than the route footprint; altitude, pitch, field of view, inward horizontal look offset, and view distance determine how much of the route stays visible from the air. Direction, lap time, maximum speed, ellipse scale, minimum turning radius, baseline height, minimum terrain clearance, pitch, view distance, field of view, inward look offset, and maximum bank angle are configurable in `app/tuning.mjs`.
 
 Once you start pedaling or simulation begins, the camera flies down behind the rider and follows the route using GPX bearing.
+
+The map reset-camera button restores the currently chosen camera surface after a manual drag. It does not turn the rider camera back into the route overview unless the overview button is active.
 
 The fullscreen HUD is designed for riding, not just watching. It keeps the map full bleed while showing configurable metric tiles, the road-ahead elevation profile, distance progress, climbing progress, elapsed time, minimap, and climb banner. You can collapse the data dock when you want maximum map.
 

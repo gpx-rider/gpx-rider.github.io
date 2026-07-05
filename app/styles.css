@@ -327,6 +327,7 @@ body {
   top: 16px;
   right: 16px;
   display: flex;
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -465,6 +466,106 @@ body {
    off — matching the amber accent used for "on" states elsewhere. */
 .map-action-btn[aria-pressed="true"] {
   border-color: rgba(246, 165, 44, 0.5);
+  color: var(--accent);
+}
+
+.map-action-btn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.map-action-btn:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.map-overview-control {
+  position: relative;
+  display: flex;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(13, 16, 21, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.map-overview-control:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.map-overview-control.active {
+  border-color: rgba(246, 165, 44, 0.5);
+  color: var(--accent);
+}
+
+.map-overview-control .map-action-btn {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: inherit;
+}
+
+.map-overview-control .map-action-btn:hover {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.map-overview-toggle {
+  border-radius: 11px 0 0 11px !important;
+}
+
+.map-overview-menu-btn {
+  width: 29px !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 0 11px 11px 0 !important;
+}
+
+.map-overview-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 132px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(13, 16, 21, 0.74);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  z-index: 8;
+}
+
+.map-overview-menu[hidden] {
+  display: none;
+}
+
+.map-overview-menu button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font: 700 12px/1 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-overview-menu button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+}
+
+.map-overview-menu button[aria-checked="true"] {
+  background: rgba(246, 165, 44, 0.16);
   color: var(--accent);
 }
 
