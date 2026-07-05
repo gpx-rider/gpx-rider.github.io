@@ -95,11 +95,13 @@
                  the map viewport so they ride along when it goes fullscreen; CSS
                  keeps them out of the normal (non-fullscreen) map pane. -->
 
-            <!-- top-left: elapsed + distance, sitting above the minimap -->
+            <!-- top-left: local time + elapsed + distance, above the minimap -->
             <div id="fullscreenClock" class="fs-clock" hidden aria-live="polite">
-              <span id="fsClockElapsed" class="fs-clock-time">0:00</span>
+              <span id="fsClockLocal" class="fs-clock-time" title="Local time">00:00:00</span>
               <span class="fs-clock-sep"></span>
-              <span id="fsClockDistance" class="fs-clock-dist">--</span>
+              <span id="fsClockElapsed" class="fs-clock-elapsed" title="Ride time">0:00</span>
+              <span class="fs-clock-sep"></span>
+              <span id="fsClockDistance" class="fs-clock-dist" title="Ridden distance">--</span>
             </div>
 
             <!-- top-center: climb banner (on a climb, or approaching one) -->
@@ -617,6 +619,16 @@
               <select id="energyUnitSelect">
                 <option value="kcal">kcal</option>
                 <option value="kj">kJ</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Clock format</span>
+                <span class="setting-row-hint">fullscreen local time</span>
+              </div>
+              <select id="timeFormatSelect">
+                <option value="24">24-hour</option>
+                <option value="12">12-hour</option>
               </select>
             </div>
           </section>

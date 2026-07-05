@@ -157,7 +157,7 @@ export const DEFAULT_OVERVIEW_MODE = "orbit";
 
 // Orbit mode: seconds for one full revolution, and spin direction (1 =
 // clockwise seen from above, -1 = counter-clockwise). Longer = statelier.
-export const OVERVIEW_ORBIT_SECONDS_PER_REV = 40;
+export const OVERVIEW_ORBIT_SECONDS_PER_REV = 75;
 export const OVERVIEW_ORBIT_DIRECTION = 1;
 
 // Red overview travel line drawn while the camera debug overlay is enabled.
@@ -381,6 +381,12 @@ export const DEFAULT_SHOW_MINIMAP = true;
 // Place labels (roads, towns, POIs) on the main 3D map. Off = clean
 // satellite imagery, on = Google's hybrid mode with labels.
 export const DEFAULT_MAP_LABELS_ENABLED = false;
+
+// Local clock format used by the fullscreen top-left stats chip. The user's
+// choice is persisted with the other display settings.
+export const DEFAULT_TIME_FORMAT = "24";
+// Wall-clock refresh cadence while the fullscreen HUD is visible.
+export const FULLSCREEN_CLOCK_REFRESH_MS = 1000;
 
 // Developer overlay: a small translucent box on the map showing the live
 // camera values the 3D map actually applies (tilt/range/heading/center),
