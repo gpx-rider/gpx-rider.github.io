@@ -16,9 +16,17 @@ export function createEllipseFlyby(route, config = {}) {
   const ellipse = fitFlybyEllipse(route, config);
   if (!ellipse) return null;
 
-  const speedMps = Math.max(0.1, Number(config.speedMps) || 70);
-  const flyHeight = Math.max(1, Number(config.flyHeightMeters) || 1000);
+  const maxSpeedMps = Math.max(0.1, Number(config.maxSpeedMps ?? config.speedMps) || 70);
+  const targetLapSeconds = Math.max(1, Number(config.secondsPerLap) || 60);
+  const speedMps = Math.min(maxSpeedMps, ellipse.loopLength / targetLapSeconds);
+  const flyHeightMin = Math.max(1, Number(config.flyHeightMetersMin ?? config.flyHeightMeters) || 1000);
+  const terrainClearanceMin = Math.max(0, Number(config.flyHeightMetersAboveTerrainMin) || 0);
+  const flyHeight = Math.max(
+    flyHeightMin,
+    ellipse.highestTerrainAltitudeMeters + terrainClearanceMin - ellipse.centerAltitude,
+  );
   const viewDistance = Math.max(1, Number(config.viewDistanceMeters) || 2500);
+  const cameraFovDegrees = clamp(Number(config.cameraFovDegrees) || 35, 5, 80);
   const mountPitch = toRad(clamp(Number(config.mountPitchDegrees) || 28, 1, 89));
   const maxBankDegrees = Math.max(0, Number(config.maxBankDegrees) || 0);
   const minTurnRadius = Math.max(0, Number(config.minTurnRadiusMeters) || 0);
@@ -58,11 +66,19 @@ export function createEllipseFlyby(route, config = {}) {
     ellipse,
     loopLength: ellipse.loopLength,
     lapSeconds,
+    targetLapSeconds,
+    maxSpeedMps,
     speedAt() {
       return speedMps;
     },
     radiusAt,
     bankAt,
+    flyHeightMeters: flyHeight,
+    terrainClearanceMeters: flyHeight + ellipse.centerAltitude - ellipse.highestTerrainAltitudeMeters,
+    cameraFovDegrees,
+    pathAtAltitude(altitudeMeters = 0, sampleCount = 240) {
+      return ellipsePath(ellipse, altitudeMeters, sampleCount);
+    },
     positionAt: localAt,
     advance(s, dtSeconds) {
       const dt = clamp(Number(dtSeconds) || 0, 0, 0.5);
@@ -85,6 +101,13 @@ export function createEllipseFlyby(route, config = {}) {
         eye,
         lookAt,
         speedMps,
+        maxSpeedMps,
+        targetLapSeconds,
+        lapSeconds,
+        flyHeightMeters: flyHeight,
+        terrainClearanceMeters: flyHeight + ellipse.centerAltitude - ellipse.highestTerrainAltitudeMeters,
+        highestTerrainAltitudeMeters: ellipse.highestTerrainAltitudeMeters,
+        cameraFovDegrees,
         turnRadiusMeters: radiusAt(s),
         bankDegrees: bankAt(s),
       };
@@ -133,6 +156,7 @@ export function fitFlybyEllipse(route, config = {}) {
   const centerAltitude = elevations.length
     ? (Math.min(...elevations) + Math.max(...elevations)) / 2
     : 0;
+  const highestTerrainAltitudeMeters = highestTerrainUnderEllipse(points, local, footprint, semiMajor, semiMinor);
 
   const sampleCount = Math.max(64, Math.round(Number(config.sampleCount) || 360));
   const cumulative = [0];
@@ -163,6 +187,7 @@ export function fitFlybyEllipse(route, config = {}) {
   return {
     center: footprint.center,
     centerAltitude,
+    highestTerrainAltitudeMeters,
     major: footprint.major,
     minor: footprint.minor,
     routeHalfMajor: footprint.halfMajor,
@@ -191,6 +216,38 @@ export function fitFlybyEllipse(route, config = {}) {
       return ((semiMajor * semiMajor * s * s + semiMinor * semiMinor * c * c) ** 1.5) / (semiMajor * semiMinor);
     },
   };
+}
+
+function highestTerrainUnderEllipse(points, local, footprint, semiMajor, semiMinor) {
+  let highestInside = -Infinity;
+  let highestAny = -Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const ele = Number(points[i].ele);
+    if (!Number.isFinite(ele)) continue;
+    highestAny = Math.max(highestAny, ele);
+
+    const de = local[i][0] - footprint.center[0];
+    const dn = local[i][1] - footprint.center[1];
+    const along = de * footprint.major[0] + dn * footprint.major[1];
+    const cross = de * footprint.minor[0] + dn * footprint.minor[1];
+    const normalized = (along / semiMajor) ** 2 + (cross / semiMinor) ** 2;
+    if (normalized <= 1) highestInside = Math.max(highestInside, ele);
+  }
+  if (Number.isFinite(highestInside)) return highestInside;
+  if (Number.isFinite(highestAny)) return highestAny;
+  return 0;
+}
+
+function ellipsePath(ellipse, altitudeMeters, sampleCount) {
+  const count = Math.max(12, Math.round(Number(sampleCount) || 240));
+  const altitude = Number(altitudeMeters) || 0;
+  const path = [];
+  for (let i = 0; i <= count; i++) {
+    const theta = (i / count) * TWO_PI;
+    const [east, north] = ellipse.pointAtAngle(theta);
+    path.push(ellipse.toGeo([east, north, altitude]));
+  }
+  return path;
 }
 
 function routeFootprint(local) {

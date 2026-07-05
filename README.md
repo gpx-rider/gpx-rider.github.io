@@ -119,7 +119,7 @@ A freshly loaded route starts in a whole-route overview, framed from above so yo
 - **Orbit** — a slow turntable rotation around the route.
 - **Fly-by** — a camera flies a PCA-aligned ellipse around the route, looking along its direction of travel.
 
-The fly-by ellipse can intentionally be smaller than the route footprint; altitude, pitch, and view distance determine how much of the route stays visible from the air. Direction, speed, ellipse scale, minimum turning radius, altitude, pitch, view distance, and maximum bank angle are configurable in `app/tuning.mjs`.
+The fly-by ellipse can intentionally be smaller than the route footprint; altitude, pitch, field of view, and view distance determine how much of the route stays visible from the air. Direction, lap time, maximum speed, ellipse scale, minimum turning radius, baseline height, minimum terrain clearance, pitch, view distance, field of view, and maximum bank angle are configurable in `app/tuning.mjs`.
 
 Once you start pedaling or simulation begins, the camera flies down behind the rider and follows the route using GPX bearing.
 
@@ -127,7 +127,7 @@ The fullscreen HUD is designed for riding, not just watching. It keeps the map f
 
 Settings are grouped into practical categories: camera and view, rendering, HUD and data fields, units, trainer and sensors, screenshots, data storage, and debug. Preferences are remembered locally.
 
-The debug category has a **camera debug overlay** — a small translucent box on the map showing the live camera values the 3D map actually applies (tilt, range, heading, look-at center, eye altitude) alongside ride progress. It is handy for dialing in camera settings: read the values, drag the view by hand, and read them again.
+The debug category has a **camera debug overlay** — a collapsible translucent box on the map showing the live camera values the 3D map actually applies (tilt, range, heading, roll, field of view, look-at center, eye altitude) alongside ride progress. When the selected overview mode is Orbit or Fly-by, it also draws that mode's travel path in red, including after you drag the camera into manual mode.
 
 ## Hosting Your Own Copy
 

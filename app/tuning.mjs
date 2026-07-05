@@ -158,6 +158,23 @@ export const DEFAULT_OVERVIEW_MODE = "orbit";
 export const OVERVIEW_ORBIT_SECONDS_PER_REV = 40;
 export const OVERVIEW_ORBIT_DIRECTION = 1;
 
+// Red overview travel line drawn while the camera debug overlay is enabled.
+// Orbit draws the orbit eye ground track; Fly-by draws its fitted ellipse.
+export const OVERVIEW_DEBUG_LINE_COLOR = "#ff2d2d";
+
+// Pixel width of the red overview debug line.
+export const OVERVIEW_DEBUG_LINE_WIDTH = 8;
+
+// Height above terrain for the red overview debug line.
+export const OVERVIEW_DEBUG_LINE_ALTITUDE_METERS = 8;
+
+// Number of samples used for the red overview debug line.
+export const OVERVIEW_DEBUG_LINE_SAMPLE_COUNT = 240;
+
+// Map3DElement's documented default field of view, in degrees. Used to reset
+// camera modes that do not deliberately tune FOV.
+export const DEFAULT_MAP_FOV_DEGREES = 35;
+
 // When an animated overview (orbit/flyby) starts from a different
 // camera pose, ease into the motion over this many seconds instead of jumping.
 export const OVERVIEW_ANIM_INTRO_SECONDS = 1.5;
@@ -166,6 +183,15 @@ export const OVERVIEW_ANIM_INTRO_SECONDS = 1.5;
 // principal axis and looks along its direction of travel. ellipseScale below
 // 1 lets the flight path cut inside the route footprint; higher altitude,
 // viewDistance, and a flatter mountPitch keep more of the route in view.
+// secondsPerLap controls the target time for one complete ellipse circuit, like
+// orbit's revolution duration. maxSpeedMps caps the resulting speed; if the cap
+// is hit, the actual lap takes longer than secondsPerLap.
+// flyHeightMetersMin is the baseline height above the route's center altitude;
+// flyHeightMetersAboveTerrainMin keeps the camera at least that far above the
+// highest route terrain point under the ellipse. The actual fly height uses
+// whichever minimum requires the higher camera.
+// cameraFovDegrees is passed to Map3D's `fov` property while the fly-by runs;
+// 5 is telephoto, 80 is wide-angle, 35 matches the normal Map3D default.
 // direction is 1 for clockwise seen from above, -1 for counter-clockwise.
 // minTurnRadiusMeters is a radius: 2500 m means the tightest possible circle
 // would be 5 km across. maxBankDegrees is the roll applied at that tightest
@@ -174,13 +200,16 @@ export const ELLIPSE_FLYBY = {
   ellipseScale: 0.78,
   minSemiMajorMeters: 1200,
   minSemiMinorMeters: 700,
-  minTurnRadiusMeters: 500,
+  minTurnRadiusMeters: 750,
   direction: 1,
-  speedMps: 800,
-  flyHeightMeters: 1400,
-  mountPitchDegrees: 28,
+  secondsPerLap: 40,
+  maxSpeedMps: 10000,
+  flyHeightMetersMin: 1400,
+  flyHeightMetersAboveTerrainMin: 300,
+  cameraFovDegrees: 60,
+  mountPitchDegrees: 15,
   viewDistanceMeters: 3200,
-  maxBankDegrees: 90,
+  maxBankDegrees: 60,
   sampleCount: 360,
   startAngleDegrees: 0,
 };

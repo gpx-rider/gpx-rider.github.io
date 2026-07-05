@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { orbitCamera } from "../app/flyover.mjs";
+import { orbitCamera, orbitPath } from "../app/flyover.mjs";
 
 test("orbit spins the heading one full turn per period", () => {
   const base = { center: { lat: 50, lng: 14, altitude: 100 }, heading: 30, tilt: 60, range: 5000 };
@@ -20,4 +20,16 @@ test("orbit direction reverses the spin", () => {
   const ccw = orbitCamera(base, 15, { secondsPerRevolution: 60, direction: -1 });
   assert.ok(Math.abs(cw.heading - 90) < 1e-6);
   assert.ok(Math.abs(ccw.heading - 270) < 1e-6);
+});
+
+test("orbit path traces a closed debug loop around the camera center", () => {
+  const base = { center: { lat: 50, lng: 14, altitude: 100 }, heading: 30, tilt: 60, range: 5000 };
+  const path = orbitPath(base, { altitudeMeters: 8, sampleCount: 24 });
+
+  assert.equal(path.length, 25);
+  assert.equal(path[0].altitude, 8);
+  assert.ok(Math.abs(path[0].lat - path.at(-1).lat) < 1e-12);
+  assert.ok(Math.abs(path[0].lng - path.at(-1).lng) < 1e-12);
+  assert.notEqual(path[0].lat, base.center.lat);
+  assert.notEqual(path[6].lng, base.center.lng);
 });

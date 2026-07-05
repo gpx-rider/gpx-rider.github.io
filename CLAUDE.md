@@ -32,7 +32,8 @@ module:
 | `app/app.js` | Orchestrator: state, DOM, map rendering, camera capture, movement loop, settings & saved-ride persistence |
 | `app/tuning.mjs` | **All tunable behavior parameters**, one documented constant each (defaults, thresholds, model factors). New knobs go here, not inline |
 | `app/camera.mjs` | Pure follow-camera math (tested) |
-| `app/flyover.mjs` | Pure animated-overview math (tested): orbit (turntable) + a physics-driven helicopter/airplane flyover — path simplify/smooth to a turn radius, curvature+acceleration-limited speed profile, and a driver that emits camera eye/look-at frames along the loop |
+| `app/flyover.mjs` | Pure animated-overview math (tested): orbit turntable camera + orbit debug path |
+| `app/flyby.mjs` | Pure ellipse fly-by math (tested): PCA-aligned route footprint ellipse, minimum turn-radius enforcement, clockwise/counter-clockwise travel, camera eye/look-at frames, and bank angle |
 | `app/geo.mjs` | Pure geodesy helpers: haversine, bearing, destinationPoint, clamp, lerp |
 | `app/route.mjs` | GPX parsing, route enrichment (cumulative distance + noise-filtered ascent/descent), point interpolation, grade computation (tested) |
 | `app/eta.mjs` | Smart ETA: flat-equivalent pace model estimating remaining ride time (tested) |
@@ -136,10 +137,17 @@ in place).
   `DEFAULT_CAMERA_DEBUG_ENABLED`) shows a translucent readout (`#cameraDebug`,
   a plain map overlay — visible windowed *and* fullscreen, unlike the
   `.fs-*` HUD overlays) of the values the 3D map **actually applies**:
-  `state.map.{tilt,range,heading,center}` plus the derived eye altitude and
-  ride progress. It exists mainly to compare a requested camera against what
-  Google honours after a manual drag (e.g. how far a tilt is respected at a
-  given range). `renderCameraDebug` rebuilds the rows and
+  `state.map.{tilt,range,heading,roll,fov,center}` plus the derived eye altitude
+  and ride progress. The readout can be collapsed via
+  `#cameraDebugCollapseBtn` (`state.cameraDebugCollapsed`, persisted) while
+  keeping the debug overlay active. It exists mainly to compare a requested
+  camera against what Google honours after a manual drag (e.g. how far a tilt
+  is respected at a given range). While active and the selected overview mode is
+  `"orbit"` or `"flyby"`, app.js also draws that mode's travel path as a red
+  `Polyline3DElement` configured by `OVERVIEW_DEBUG_LINE_*`; for orbit this is
+  the camera eye's ground track, and for fly-by this is the fitted travel
+  ellipse. It stays visible if the user drags the camera into manual mode.
+  `renderCameraDebug` rebuilds the rows and
   `startCameraDebugLoop` re-runs it on its own `CAMERA_DEBUG_REFRESH_MS`
   `setTimeout` chain while the overlay is on — a dedicated poll because when
   the user is dragging the camera at rest nothing else steps it. Wired through
@@ -337,38 +345,37 @@ in place).
 - **Overview motion modes** (`state.overviewMode`, a persisted user setting in
   Settings › Camera & view, default `DEFAULT_OVERVIEW_MODE` in `tuning.mjs`):
   `"static"` is the framed still (the `ensureCameraFlightLoop` path above);
-  `"orbit"`, `"heli"` and `"airplane"` are *animated* and driven by
-  `app/flyover.mjs` through a separate `ensureOverviewAnimationLoop`/
-  `stepOverviewAnimation` loop that writes the map camera **directly** every
-  frame (the motion is already smooth, so there is no chase — chasing a fast
-  flyover target would only lag). `enterOverviewMode` still computes the static
-  `state.overviewCamera` (orbit spins its heading via `orbitCamera`; it's also
-  the fallback), then `startOverviewAnimation` takes over for the animated
-  modes — building a `createFlyover` driver for heli/airplane (returns `false`
-  and falls back to static if the route is too small to fly). Both animation
-  and the static flight write `state.map` directly, so only one runs at a time
-  (`enterOverviewMode` starts exactly one; `startOverviewAnimation` nulls
-  `state.cameraFlight`). The animated loop self-exits the instant the camera
-  leaves overview — grabbing the map (`endUserInteraction` → `"manual"`) or
-  movement starting (`"follow"`) — and eases in from the current pose over
-  `OVERVIEW_ANIM_INTRO_SECONDS` so switching modes never jumps. Helicopter vs
-  airplane are the same flyover engine with different physics presets
-  (`HELICOPTER_FLYOVER` / `AIRPLANE_FLYOVER` in `tuning.mjs`: max/min speed,
-  max tangential + lateral acceleration, min turn radius, fly height,
-  `mountPitchDegrees`, `viewDistanceMeters`); the plane's high min-speed and big
-  turn radius give it fast, high, wide-turning passes. The flyover camera is
-  **rigidly mounted on the airframe**, not a free cameraman: `frameAt` looks
-  straight along the aircraft's velocity (the path tangent, estimated
-  `FLYOVER_TANGENT_SAMPLE_METERS` ahead) pitched down by `mountPitchDegrees`, so
-  the view heading follows the direction of travel and the view tilt rises/falls
-  with the climb angle (roll/banking can't be represented in the Map3D camera,
-  so it's the one airframe axis not mirrored). The eye rides the vehicle at
-  fly-height; the derived look-at ray feeds `cameraFromEyeAndCenter`. A
-  `lookAtOverride` still lets a caller aim at a fixed point (e.g. the rider — the
-  hook for a future riding chase-cam). The Debug camera overlay shows the live
-  mode, flyover speed and lap time. **Not** yet wired: a heli/airplane view
-  *while riding* — the driver accepts the override, but the follow path still
-  uses `computeFollowCamera`.
+  `"orbit"` and `"flyby"` are *animated* and driven through a separate
+  `ensureOverviewAnimationLoop`/`stepOverviewAnimation` loop that writes the map
+  camera **directly** every frame (the motion is already smooth, so there is no
+  chase). `enterOverviewMode` still computes the static `state.overviewCamera`
+  (orbit spins its heading via `orbitCamera`; it's also the fallback), then
+  `startOverviewAnimation` takes over for animated modes — building a
+  `createEllipseFlyby` driver for `"flyby"` (returns `false` and falls back to
+  static if the route is too small to fly). Both animation and the static flight
+  write `state.map` directly, so only one runs at a time (`enterOverviewMode`
+  starts exactly one; `startOverviewAnimation` nulls `state.cameraFlight`). The
+  animated loop self-exits the instant the camera leaves overview — grabbing the
+  map (`endUserInteraction` → `"manual"`) or movement starting (`"follow"`) —
+  and eases in from the current pose over `OVERVIEW_ANIM_INTRO_SECONDS` so
+  switching modes never jumps. The ellipse fly-by (`app/flyby.mjs`, configured by
+  `ELLIPSE_FLYBY` in `tuning.mjs`) fits a PCA-aligned ellipse to the route
+  footprint, scales it independently of the route bounds, enforces
+  `minTurnRadiusMeters`, and supports `direction` (`1` clockwise seen from
+  above, `-1` counter-clockwise). Its camera looks along the direction of travel
+  and pitches down by `mountPitchDegrees`; `secondsPerLap`, `maxSpeedMps`,
+  `flyHeightMetersMin`, `flyHeightMetersAboveTerrainMin`, `cameraFovDegrees`,
+  `viewDistanceMeters`, `ellipseScale`, `minSemiMajorMeters`,
+  `minSemiMinorMeters`, `sampleCount`, and `startAngleDegrees` are all tunable.
+  The actual fly height is the higher of the baseline height and the height
+  needed to clear the highest route elevation sample under the fitted ellipse by
+  `flyHeightMetersAboveTerrainMin`. `maxBankDegrees` scales the bank angle from
+  the current turn radius
+  (`minTurnRadiusMeters` = max bank), and app.js applies it to `state.map.roll`.
+  The red debug line shown while the camera debug overlay is active is shared
+  by orbit and fly-by and tuned by `OVERVIEW_DEBUG_LINE_COLOR`,
+  `OVERVIEW_DEBUG_LINE_WIDTH`, `OVERVIEW_DEBUG_LINE_ALTITUDE_METERS`, and
+  `OVERVIEW_DEBUG_LINE_SAMPLE_COUNT`.
 - **Camera terrain avoidance** lifts the follow camera when its eye would
   sink below terrain + clearance and eases it back down as terrain allows
   (`currentTerrainLift` in `app.js`; pure math in `camera.mjs`'s
@@ -418,7 +425,10 @@ bundle.
   workflow change must be reflected in the README (Features, How to use it,
   Notes & limitations). The README is the project's landing page; stale
   docs are treated as bugs.
-- Keep this file updated when the architecture or conventions change.
+- Keep `AGENTS.md` and `CLAUDE.md` synchronized. Any change to one
+  agent-instruction file must be reflected in the other in the same change
+  (preserving only filename-specific titles if needed).
+- Keep these files updated when the architecture or conventions change.
 - The gallery section of the README between `<!-- gallery-start -->` and
   `<!-- gallery-end -->` is generated by `make gallery` — don't hand-edit
   it; edit `gallery/*/desc.md` and regenerate.

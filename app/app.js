@@ -17,7 +17,7 @@ import {
   signedHeadingDelta,
 } from "./camera.mjs";
 import { createEllipseFlyby } from "./flyby.mjs";
-import { orbitCamera } from "./flyover.mjs";
+import { orbitCamera, orbitPath } from "./flyover.mjs";
 import { bearing, clamp, destinationPoint, haversine, lerp, roundCoordinate, toRad } from "./geo.mjs";
 import { deployedMapsApiKey } from "./config.mjs";
 import {
@@ -62,6 +62,7 @@ import {
   DEFAULT_HUD_ELEMENTS,
   DEFAULT_CAMERA_DEBUG_ENABLED,
   CAMERA_DEBUG_REFRESH_MS,
+  DEFAULT_MAP_FOV_DEGREES,
   DEFAULT_MAP_LABELS_ENABLED,
   DEFAULT_SCREENSHOT_ASPECT,
   DEFAULT_SCREENSHOT_WIDTH,
@@ -78,6 +79,10 @@ import {
   OVERVIEW_TILT_DEGREES,
   OVERVIEW_HEADING_OFFSET_DEGREES,
   DEFAULT_OVERVIEW_MODE,
+  OVERVIEW_DEBUG_LINE_ALTITUDE_METERS,
+  OVERVIEW_DEBUG_LINE_COLOR,
+  OVERVIEW_DEBUG_LINE_SAMPLE_COUNT,
+  OVERVIEW_DEBUG_LINE_WIDTH,
   OVERVIEW_ORBIT_SECONDS_PER_REV,
   OVERVIEW_ORBIT_DIRECTION,
   OVERVIEW_ANIM_INTRO_SECONDS,
@@ -239,7 +244,11 @@ const state = {
   showMinimap: DEFAULT_SHOW_MINIMAP,
   mapLabelsEnabled: DEFAULT_MAP_LABELS_ENABLED,
   cameraDebugEnabled: DEFAULT_CAMERA_DEBUG_ENABLED,
+  cameraDebugCollapsed: false,
   cameraDebugTimer: null,
+  overviewDebugLine: null,
+  overviewDebugLineMode: null,
+  overviewDebugLineSource: null,
   hudElements: { ...DEFAULT_HUD_ELEMENTS },
   hudDockCollapsed: DEFAULT_HUD_DOCK_COLLAPSED,
   // startDistance of the climb whose mini-profile is currently drawn in the
@@ -388,6 +397,7 @@ const els = {
   mapLabelsInput: document.querySelector("#mapLabelsInput"),
   cameraDebugInput: document.querySelector("#cameraDebugInput"),
   cameraDebug: document.querySelector("#cameraDebug"),
+  cameraDebugCollapseBtn: document.querySelector("#cameraDebugCollapseBtn"),
   cameraDebugBody: document.querySelector("#cameraDebugBody"),
   recDistanceStat: document.querySelector("#recDistanceStat"),
   recTimeStat: document.querySelector("#recTimeStat"),
@@ -610,6 +620,7 @@ function bindEvents() {
   els.minimapInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.mapLabelsInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.cameraDebugInput.addEventListener("change", updateDisplaySettingsFromControls);
+  els.cameraDebugCollapseBtn.addEventListener("click", toggleCameraDebugCollapsed);
   els.hudToggles.forEach((input) => input.addEventListener("change", updateDisplaySettingsFromControls));
   els.overviewModeSelect.addEventListener("change", updateOverviewModeFromControl);
   els.cameraZoomInput.addEventListener("input", updateCameraSettingsFromControls);
@@ -1049,6 +1060,7 @@ function renderGoogle3DRoute(currentPoint) {
 
   renderRiderDot(currentPoint);
   updateMapCamera();
+  updateOverviewDebugLine();
 }
 
 function renderRiderDot(point) {
@@ -1119,6 +1131,7 @@ function clearRouteFromMap() {
   if (state.line) state.line.remove();
   if (state.riderDot) state.riderDot.remove();
   if (state.riderBeacon) state.riderBeacon.remove();
+  clearOverviewDebugLine();
 
   state.line = null;
   state.riderDot = null;
@@ -1786,6 +1799,7 @@ function stepCameraFlight(now) {
   state.map.range = camera.range;
   state.map.tilt = camera.tilt;
   state.map.roll = 0;
+  state.map.fov = DEFAULT_MAP_FOV_DEGREES;
   return settled;
 }
 
@@ -1829,11 +1843,17 @@ function currentMapCameraPose() {
   const tilt = Number(state.map?.tilt);
   const heading = Number(state.map?.heading);
   const roll = Number(state.map?.roll);
+  const fov = Number(state.map?.fov);
   if (![lat, lng, range, tilt, heading].every(Number.isFinite)) return null;
 
   const centerPoint = { lat, lng, altitude: Number(center?.altitude) || 0 };
   const eye = cameraEyePosition({ center: centerPoint, range, tilt, heading });
-  return eye ? { eye, center: centerPoint, roll: Number.isFinite(roll) ? roll : 0 } : null;
+  return eye ? {
+    eye,
+    center: centerPoint,
+    roll: Number.isFinite(roll) ? roll : 0,
+    fov: Number.isFinite(fov) ? fov : DEFAULT_MAP_FOV_DEGREES,
+  } : null;
 }
 
 // The movement loop drives the camera while the rider moves; this loop keeps
@@ -1877,6 +1897,7 @@ function enterOverviewMode({ instant = false } = {}) {
   // A rider already moving (e.g. a new GPX loaded mid-pedaling) stays in the
   // follow view — the overview is for routes loaded at rest.
   if (!state.route.length || !state.map || isMoving()) return;
+  if (state.overviewMode !== "flyby") state.map.fov = DEFAULT_MAP_FOV_DEGREES;
   const width = els.mapViewport?.clientWidth;
   const height = els.mapViewport?.clientHeight;
   state.overviewCamera = computeRouteOverviewCamera(state.route, {
@@ -1936,6 +1957,7 @@ function startOverviewAnimation({ instant = false } = {}) {
   };
   // The animation is the sole camera driver now; drop any parked chase state.
   state.cameraFlight = null;
+  updateOverviewDebugLine();
   // On an instant (fresh-load) entry, jump straight to the first frame now
   // instead of waiting for the first animation tick — so the map snaps to the
   // route exactly like the static overview, with no flight from wherever the
@@ -1946,6 +1968,7 @@ function startOverviewAnimation({ instant = false } = {}) {
 }
 
 function clearOverviewAnimation() {
+  clearOverviewDebugLine();
   state.overviewAnim = null;
 }
 
@@ -1957,6 +1980,7 @@ function ensureOverviewAnimationLoop() {
       !state.overviewAnim || state.cameraMode !== "overview" ||
       !state.route.length || !state.map || state.userInteracting || state.movementLoopActive
     ) {
+      updateOverviewDebugLine();
       state.overviewAnimLoopActive = false;
       return;
     }
@@ -1981,12 +2005,18 @@ function stepOverviewAnimation(now) {
       direction: OVERVIEW_ORBIT_DIRECTION,
     });
     const eye = cam && cameraEyePosition(cam);
-    if (eye) pose = { eye, center: cam.center, heading: cam.heading, roll: 0 };
+    if (eye) pose = { eye, center: cam.center, heading: cam.heading, roll: 0, fov: DEFAULT_MAP_FOV_DEGREES };
   } else if (anim.flyby) {
     anim.s = anim.flyby.advance(anim.s, dt);
     const frame = anim.flyby.frameAt(anim.s);
     anim.lastFrame = frame;
-    pose = { eye: frame.eye, center: frame.lookAt, heading: null, roll: frame.bankDegrees };
+    pose = {
+      eye: frame.eye,
+      center: frame.lookAt,
+      heading: null,
+      roll: frame.bankDegrees,
+      fov: frame.cameraFovDegrees,
+    };
   }
   if (!pose) return;
 
@@ -2002,6 +2032,7 @@ function stepOverviewAnimation(now) {
         center: lerpGeoPoint(anim.introFrom.center, pose.center, k),
         heading: pose.heading,
         roll: lerpAngle(anim.introFrom.roll ?? 0, pose.roll ?? 0, k),
+        fov: lerp(anim.introFrom.fov ?? DEFAULT_MAP_FOV_DEGREES, pose.fov ?? DEFAULT_MAP_FOV_DEGREES, k),
       };
     }
   }
@@ -2012,6 +2043,7 @@ function stepOverviewAnimation(now) {
   state.map.range = camera.range;
   state.map.tilt = camera.tilt;
   state.map.roll = pose.roll ?? 0;
+  state.map.fov = pose.fov ?? DEFAULT_MAP_FOV_DEGREES;
 }
 
 function lerpGeoPoint(a, b, t) {
@@ -2039,6 +2071,7 @@ function applyCameraNow(camera) {
   state.map.range = camera.range;
   state.map.tilt = camera.tilt;
   state.map.roll = 0;
+  state.map.fov = DEFAULT_MAP_FOV_DEGREES;
 
   const eye = cameraEyePosition(camera);
   state.cameraFlight = eye
@@ -2282,6 +2315,7 @@ function syncCameraControls() {
 function updateOverviewModeFromControl() {
   state.overviewMode = normalizeOverviewMode(els.overviewModeSelect.value);
   saveSettings();
+  updateOverviewDebugLine();
   if (!isMoving() && state.route.length) {
     state.cameraMode = "overview";
     enterOverviewMode();
@@ -2373,15 +2407,91 @@ function applyDisplaySettings() {
 // --- Camera debug overlay -------------------------------------------------------
 //
 // A developer readout of the values the 3D map actually applies. It polls the
-// live map camera (state.map.{tilt,range,heading,center}) on its own light
+// live map camera (state.map.{tilt,range,heading,roll,fov,center}) on its own light
 // interval while visible, so it keeps updating during a manual drag when
 // nothing else is stepping the camera. Off by default; a diagnostics aid for
 // reasoning about e.g. how far Google honours a requested tilt at a given range.
+// When Orbit or Fly-by is the selected overview mode, it also draws that mode's
+// travel path in red, even if the user has dragged the camera into manual mode.
 
 function applyCameraDebug() {
   if (!els.cameraDebug) return;
   els.cameraDebug.hidden = !state.cameraDebugEnabled;
-  if (state.cameraDebugEnabled) startCameraDebugLoop();
+  els.cameraDebug.setAttribute("aria-hidden", String(!state.cameraDebugEnabled));
+  els.cameraDebug.classList.toggle("collapsed", state.cameraDebugCollapsed);
+  if (els.cameraDebugCollapseBtn) {
+    const expanded = !state.cameraDebugCollapsed;
+    els.cameraDebugCollapseBtn.setAttribute("aria-expanded", String(expanded));
+    els.cameraDebugCollapseBtn.title = expanded ? "Collapse camera debug" : "Expand camera debug";
+    els.cameraDebugCollapseBtn.setAttribute("aria-label", expanded ? "Collapse camera debug" : "Expand camera debug");
+  }
+  if (state.cameraDebugEnabled) {
+    updateOverviewDebugLine();
+    startCameraDebugLoop();
+  } else {
+    clearOverviewDebugLine();
+  }
+}
+
+function toggleCameraDebugCollapsed() {
+  state.cameraDebugCollapsed = !state.cameraDebugCollapsed;
+  saveSettings();
+  applyCameraDebug();
+  if (!state.cameraDebugCollapsed) renderCameraDebug();
+}
+
+function updateOverviewDebugLine() {
+  if (!state.cameraDebugEnabled || !state.map || !state.route.length) {
+    clearOverviewDebugLine();
+    return;
+  }
+
+  let path = null;
+  let source = null;
+  if (state.overviewMode === "orbit") {
+    source = state.overviewCamera;
+    path = orbitPath(state.overviewCamera, {
+      altitudeMeters: OVERVIEW_DEBUG_LINE_ALTITUDE_METERS,
+      sampleCount: OVERVIEW_DEBUG_LINE_SAMPLE_COUNT,
+    });
+  } else if (state.overviewMode === "flyby") {
+    const flyby = state.overviewAnim?.flyby ?? createEllipseFlyby(state.route, ELLIPSE_FLYBY);
+    source = state.route;
+    path = flyby?.pathAtAltitude(OVERVIEW_DEBUG_LINE_ALTITUDE_METERS, OVERVIEW_DEBUG_LINE_SAMPLE_COUNT);
+  }
+
+  if (!path?.length || !source) {
+    clearOverviewDebugLine();
+    return;
+  }
+  if (
+    state.overviewDebugLine &&
+    state.overviewDebugLineMode === state.overviewMode &&
+    state.overviewDebugLineSource === source
+  ) {
+    return;
+  }
+
+  clearOverviewDebugLine();
+  const { AltitudeMode, Polyline3DElement } = state.maps3d ?? {};
+  if (!Polyline3DElement) return;
+
+  state.overviewDebugLine = new Polyline3DElement({
+    altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
+    path,
+    strokeColor: OVERVIEW_DEBUG_LINE_COLOR,
+    strokeWidth: OVERVIEW_DEBUG_LINE_WIDTH,
+  });
+  state.overviewDebugLineMode = state.overviewMode;
+  state.overviewDebugLineSource = source;
+  state.map.append(state.overviewDebugLine);
+}
+
+function clearOverviewDebugLine() {
+  if (state.overviewDebugLine) state.overviewDebugLine.remove();
+  state.overviewDebugLine = null;
+  state.overviewDebugLineMode = null;
+  state.overviewDebugLineSource = null;
 }
 
 function startCameraDebugLoop() {
@@ -2409,6 +2519,7 @@ function hasSelectionInCameraDebug() {
 function renderCameraDebug() {
   const body = els.cameraDebugBody;
   if (!body) return;
+  if (state.cameraDebugCollapsed) return;
 
   // Rebuilding the rows would clear an in-progress selection; freeze the
   // readout while the user is selecting text to copy.
@@ -2419,6 +2530,7 @@ function renderCameraDebug() {
   const range = Number(map?.range);
   const heading = Number(map?.heading);
   const roll = Number(map?.roll);
+  const fov = Number(map?.fov);
   const center = map?.center;
   const lat = Number(center?.lat);
   const lng = Number(center?.lng);
@@ -2436,6 +2548,7 @@ function renderCameraDebug() {
     ["range", num(range, 0, " m")],
     ["heading", num(heading, 1, "°")],
     ["roll", num(roll, 1, "°")],
+    ["fov", num(fov, 1, "°")],
     ["eye alt", num(eye?.altitude, 0, " m")],
     ["ctr alt", num(centerAlt, 0, " m")],
     ["ctr lat", num(lat, 5)],
@@ -2446,6 +2559,12 @@ function renderCameraDebug() {
     const speed = flyby.speedAt(state.overviewAnim.s);
     const frame = state.overviewAnim.lastFrame ?? flyby.frameAt(state.overviewAnim.s);
     rows.push(["fly speed", `${num(speed, 1)} m/s · ${num(speed * 3.6, 0)} km/h`]);
+    rows.push(["fly max", `${num(frame.maxSpeedMps, 1)} m/s · ${num(frame.maxSpeedMps * 3.6, 0)} km/h`]);
+    rows.push(["target lap", num(frame.targetLapSeconds, 0, " s")]);
+    rows.push(["fly height", num(frame.flyHeightMeters, 0, " m")]);
+    rows.push(["terrain high", num(frame.highestTerrainAltitudeMeters, 0, " m")]);
+    rows.push(["terrain clr", num(frame.terrainClearanceMeters, 0, " m")]);
+    rows.push(["fly fov", num(frame.cameraFovDegrees, 1, "°")]);
     rows.push(["turn radius", num(frame.turnRadiusMeters, 0, " m")]);
     rows.push(["bank", num(frame.bankDegrees, 1, "°")]);
     rows.push(["lap", num(flyby.lapSeconds, 0, " s")]);
@@ -2807,6 +2926,10 @@ function restoreSettings() {
     state.cameraDebugEnabled = settings.cameraDebugEnabled;
   }
 
+  if (typeof settings?.cameraDebugCollapsed === "boolean") {
+    state.cameraDebugCollapsed = settings.cameraDebugCollapsed;
+  }
+
   if (settings?.hudElements && typeof settings.hudElements === "object") {
     // Only known keys, only booleans — unknown junk in storage is ignored.
     for (const key of Object.keys(state.hudElements)) {
@@ -2866,6 +2989,7 @@ function saveSettings() {
     showMinimap: state.showMinimap,
     mapLabelsEnabled: state.mapLabelsEnabled,
     cameraDebugEnabled: state.cameraDebugEnabled,
+    cameraDebugCollapsed: state.cameraDebugCollapsed,
     hudElements: { ...state.hudElements },
     hudDockCollapsed: state.hudDockCollapsed,
   });

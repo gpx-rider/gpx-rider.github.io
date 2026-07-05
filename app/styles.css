@@ -366,11 +366,59 @@ body {
   visibility: hidden;
 }
 
+.camera-debug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .camera-debug-title {
   font: 700 9px/1 var(--font-mono);
   letter-spacing: 0.14em;
   color: var(--accent);
-  margin-bottom: 7px;
+}
+
+.camera-debug-toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+}
+
+.camera-debug-toggle:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.camera-debug-toggle-icon {
+  transition: transform 120ms ease;
+}
+
+.camera-debug.collapsed {
+  min-width: 128px;
+}
+
+.camera-debug.collapsed .camera-debug-head {
+  margin-bottom: 0;
+}
+
+.camera-debug.collapsed .camera-debug-toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.camera-debug.collapsed .camera-debug-body {
+  display: none;
 }
 
 .camera-debug-body {

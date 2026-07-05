@@ -67,7 +67,12 @@
                  overlay — shown in both windowed and fullscreen — its body is
                  filled live from the map's current camera values. -->
             <div id="cameraDebug" class="camera-debug" hidden aria-hidden="true">
-              <div class="camera-debug-title">CAMERA DEBUG</div>
+              <div class="camera-debug-head">
+                <div class="camera-debug-title">CAMERA DEBUG</div>
+                <button id="cameraDebugCollapseBtn" type="button" class="camera-debug-toggle" title="Collapse camera debug" aria-label="Collapse camera debug" aria-expanded="true">
+                  <svg class="camera-debug-toggle-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
               <dl id="cameraDebugBody" class="camera-debug-body"></dl>
             </div>
 
