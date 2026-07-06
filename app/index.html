@@ -433,6 +433,30 @@
             </div>
           </div>
 
+          <div class="panel-card gallery-export-card">
+            <div class="panel-card-head">
+              <div>
+                <span class="panel-card-title">Export to gallery</span>
+                <p class="panel-card-hint">Frame the map, then save this as metadata.json in the ride folder</p>
+              </div>
+              <button id="copyGalleryMetadataBtn" type="button" class="btn btn-ghost btn-sm" disabled>Copy JSON</button>
+            </div>
+            <div class="gallery-export-fields">
+              <label>
+                <span>Title</span>
+                <input id="galleryTitleInput" type="text" placeholder="Route title" disabled>
+              </label>
+              <label>
+                <span>Description</span>
+                <textarea id="galleryDescriptionInput" rows="4" placeholder="Markdown is supported" disabled></textarea>
+              </label>
+              <label>
+                <span>metadata.json</span>
+                <textarea id="galleryMetadataOutput" class="gallery-metadata-output" rows="12" spellcheck="false" readonly></textarea>
+              </label>
+            </div>
+          </div>
+
           <div class="help-note">
             <span class="help-note-mark">?</span>
             <div>No route file of your own? Plan any route for free at
