@@ -1,5 +1,16 @@
 {
   "title": "Boulder Foothills",
   "description": "A punchy ride through the Colorado foothills around Boulder, where the road keeps kicking up into short climbs before dropping into fast descents. Expect canyon roads, open mountain views, dry Rocky Mountain scenery, and a sawtooth profile that feels made for natural intervals.",
-  "previewCamera": null
+  "previewCamera": {
+    "center": {
+      "lat": 40.006029,
+      "lng": -105.296015,
+      "altitude": 1891.1
+    },
+    "heading": -64.04,
+    "range": 5465.4,
+    "tilt": 83.69,
+    "roll": 0,
+    "fov": 35
+  }
 }

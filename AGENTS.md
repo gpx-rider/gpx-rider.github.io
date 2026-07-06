@@ -45,7 +45,7 @@ module:
 | `app/fit.mjs` | Minimal FIT activity encoder — tags rides as sport=cycling, sub_sport=virtual_activity (tested) |
 | `app/units.mjs` | km/mi + kcal/kJ display formatting; internal state is always metric (tested) |
 | `app/screenshot.mjs` | One-click JPG of the map viewport via tab capture (`getDisplayMedia`) — the 3D map canvas sits in a closed shadow root and cannot be read directly |
-| `app/gallery.mjs` | Fullscreen ride-gallery overlay (`<dialog#galleryDialog>`): route cards from `app/gallery.json` — all stats/card data is precomputed by `generate_gallery_json.py`, while the preview is a live interactive Google 3D map using each route's `metadata.json#previewCamera` (falling back to the normal overview framing). |
+| `app/gallery.mjs` | Fullscreen ride-gallery overlay (`<dialog#galleryDialog>`): route cards from `app/gallery.json` — all stats/card data is precomputed by `generate_gallery_json.py`. Each card starts with a lightweight classic satellite map and route trace; its square `Show 3D` button creates the Photorealistic 3D preview on demand using `metadata.json#previewCamera` (falling back to the normal overview framing). |
 | `app/storage.mjs` | Persistence: IndexedDB behind a sync in-memory cache (localStorage fallback + one-time migration; tested) |
 | `app/config.mjs` | `deployedMapsApiKey()` — empty in source, rewritten at deploy time (see below) |
 

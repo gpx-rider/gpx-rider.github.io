@@ -2438,19 +2438,51 @@ input[type="color"] {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
+.gallery-card-preview-tools {
+  display: flex;
+  align-items: stretch;
+  height: 48px;
+  background: rgba(10, 13, 18, 0.5);
+  border-bottom: 1px solid var(--line-soft);
+}
+
 .gallery-card-profile {
   display: flex;
   align-items: flex-end;
   gap: 1px;
-  height: 34px;
+  flex: 1;
+  min-width: 0;
   padding: 0 3px;
-  background: rgba(10, 13, 18, 0.5);
-  border-bottom: 1px solid var(--line-soft);
 }
 
 .gallery-card-profile i {
   flex: 1 1 0;
   border-radius: 1.5px 1.5px 0 0;
+}
+
+.gallery-card-view-toggle {
+  width: 48px;
+  flex: 0 0 48px;
+  padding: 5px;
+  border: 0;
+  border-left: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.035);
+  font: 700 9px/1.15 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--blue-soft);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.gallery-card-view-toggle:hover,
+.gallery-card-view-toggle[aria-pressed="true"] {
+  background: rgba(10, 132, 255, 0.13);
+  color: #8cc8ff;
+}
+
+.gallery-card-view-toggle:disabled {
+  color: var(--faint);
+  cursor: wait;
 }
 
 .gallery-card-body {
