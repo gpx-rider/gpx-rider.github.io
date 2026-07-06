@@ -516,6 +516,18 @@ body {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.icon-segment-focus {
+  display: none;
+}
+
+.map-climb-overview-control.segment-focus .icon-climb-focus {
+  display: none;
+}
+
+.map-climb-overview-control.segment-focus .icon-segment-focus {
+  display: block;
+}
+
 .map-overview-toggle {
   border-radius: 11px 0 0 11px !important;
 }
@@ -618,7 +630,7 @@ body {
   right: 24px;
 }
 
-.map-action-btn-fs-only {
+.map-action-btn-settings {
   display: flex;
 }
 
@@ -858,6 +870,11 @@ body {
 
 .climb-banner-on {
   display: block;
+}
+
+.segment-banner {
+  display: grid;
+  gap: 11px;
 }
 
 .cb-progress {
@@ -1265,6 +1282,7 @@ body {
   width: 100%;
   height: 128px;
   cursor: pointer;
+  touch-action: none;
 }
 
 #profile.profile-translucent {
