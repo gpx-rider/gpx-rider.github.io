@@ -964,6 +964,16 @@ function startFullscreenClock() {
 function updateTrainingMeters(grade) {
   const power = state.trainerPowerWatts;
   const heartRate = currentHeartRate();
+  const gradeValue = Number.isFinite(grade) ? grade : null;
+  const showPowerMeter = Number.isFinite(power);
+  const showHeartRateMeter = Number.isFinite(heartRate);
+  const showGradeMeter = state.route.length > 1 && Number.isFinite(gradeValue);
+
+  els.powerMeter.hidden = !showPowerMeter;
+  els.heartRateMeter.hidden = !showHeartRateMeter;
+  els.gradeMeter.hidden = !showGradeMeter;
+  els.fullscreenTrainingMeters.hidden = !(showPowerMeter || showHeartRateMeter || showGradeMeter);
+
   const powerZones = currentPowerZones();
   const heartRateZones = currentHeartRateZones();
   const powerScale = zoneDisplayBounds(powerZones, 0, state.ftpWatts ? state.ftpWatts * 1.6 : 500);
@@ -997,7 +1007,6 @@ function updateTrainingMeters(grade) {
     fallbackMeta: `Max ${state.maxHeartRateBpm} bpm`,
   });
 
-  const gradeValue = Number.isFinite(grade) ? grade : null;
   const gradeZones = gradeMeterZones();
   updateZoneMeter({
     meter: els.gradeMeter,
@@ -1855,6 +1864,7 @@ function handleTrainerTelemetry(telemetry) {
     state.trainerHeartRateBpm = null;
     setPedaling(false);
     updateTelemetryUi();
+    updateTrainingMeters(state.route.length ? gradeAt(state.route, state.progressMeters) : NaN);
     return;
   }
 
@@ -1865,6 +1875,7 @@ function handleTrainerTelemetry(telemetry) {
 
   updatePedalingFromSpeed();
   updateTelemetryUi();
+  updateTrainingMeters(state.route.length ? gradeAt(state.route, state.progressMeters) : NaN);
 }
 
 function handleTrainerStatus(text, { onlyClearError = false } = {}) {
@@ -3430,10 +3441,10 @@ function renderCameraDebug() {
 // auto-flow, so only the tile width is set here.
 function layoutMetricTiles() {
   const visible = [...els.hudTiles].filter((tile) => !tile.hidden).length;
-  let width = "150px";
-  if (visible >= 11) width = "98px";
-  else if (visible >= 9) width = "110px";
-  else if (visible >= 7) width = "126px";
+  let width = "136px";
+  if (visible >= 11) width = "88px";
+  else if (visible >= 9) width = "98px";
+  else if (visible >= 7) width = "112px";
   els.fullscreenHud.style.setProperty("--metric-tile-w", width);
 }
 

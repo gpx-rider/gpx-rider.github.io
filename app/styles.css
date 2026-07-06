@@ -603,6 +603,8 @@ body {
   --fs-glass-bg: rgba(13, 16, 21, 0.3);
   --fs-glass-border: rgba(255, 255, 255, 0.14);
   --fs-label: rgba(255, 255, 255, 0.5);
+  --fs-dock-inset: 12px;
+  --fs-dock-gap: 10px;
 }
 
 #minimap {
@@ -888,7 +890,7 @@ body {
      stay visible (Google Maps ToS). */
   bottom: 36px;
   display: block;
-  padding: 22px 26px;
+  padding: var(--fs-dock-inset);
   border-radius: 20px;
   background: rgba(11, 14, 19, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -898,8 +900,8 @@ body {
 
 .fs-dock-top-tools {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: var(--fs-dock-inset);
+  right: var(--fs-dock-inset);
   z-index: 3;
   display: flex;
   align-items: center;
@@ -910,9 +912,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.75);
@@ -927,26 +929,26 @@ body {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .fs-dock-field-controls {
   flex: none;
   display: grid;
-  gap: 7px;
+  gap: 6px;
 }
 
 .fs-dock-field-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 9px;
+  border-radius: 7px;
   color: rgba(255, 255, 255, 0.78);
   background: rgba(255, 255, 255, 0.06);
-  font: 700 14px/1 var(--font-ui);
+  font: 700 13px/1 var(--font-ui);
   cursor: pointer;
 }
 
@@ -967,7 +969,7 @@ body {
 .fs-dock-body {
   display: flex;
   align-items: stretch;
-  gap: 28px;
+  gap: var(--fs-dock-gap);
 }
 
 /* Two rows of tiles; the column count and tile width are set from JS to fit
@@ -978,7 +980,7 @@ body {
   grid-template-rows: repeat(2, 1fr);
   grid-auto-flow: column;
   grid-auto-columns: var(--metric-tile-w, 150px);
-  gap: 13px;
+  gap: 8px;
   align-content: center;
 }
 
@@ -986,8 +988,8 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 15px 17px;
-  border-radius: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.05);
   cursor: grab;
@@ -1011,7 +1013,7 @@ body {
 }
 
 .fs-tile-value {
-  margin-top: 10px;
+  margin-top: 7px;
   font: 600 20px/1 var(--font-num);
   letter-spacing: -0.02em;
   color: #fff;
@@ -1033,18 +1035,20 @@ body {
 .fs-road-head {
   display: flex;
   align-items: center;
-  margin-bottom: 12px;
-  min-height: 30px;
-  padding-right: 180px;
+  margin-bottom: 6px;
+  min-height: 26px;
+  padding-right: 168px;
 }
 
 .fs-road-title {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 9px;
+  min-width: 0;
 }
 
 .fs-road-eyebrow {
+  flex: none;
   font: 600 12px/1 var(--font-ui);
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -1052,6 +1056,10 @@ body {
 }
 
 .fs-road-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font: 500 11px/1 var(--font-mono);
   color: rgba(255, 255, 255, 0.4);
 }
@@ -1059,23 +1067,23 @@ body {
 .profile-series-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
 .profile-series-toggle button {
-  min-height: 26px;
-  padding: 0 9px;
+  min-height: 24px;
+  padding: 0 7px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
+  border-radius: 7px;
   color: rgba(255, 255, 255, 0.62);
   background: rgba(255, 255, 255, 0.05);
-  font: 600 10px/1 var(--font-ui);
+  font: 600 9px/1 var(--font-ui);
   cursor: pointer;
 }
 
 .fs-dock-series-toggle button {
-  min-width: 48px;
-  min-height: 30px;
+  min-width: 38px;
+  min-height: 26px;
 }
 
 .profile-series-toggle button[aria-pressed="true"] {
@@ -1109,13 +1117,13 @@ body {
 .fs-road-plot {
   position: relative;
   flex: 1;
-  min-height: 0;
+  min-height: 92px;
 }
 
 .fs-dock-progress {
   display: flex;
-  gap: 26px;
-  margin-top: 13px;
+  gap: var(--fs-dock-gap);
+  margin-top: 8px;
 }
 
 .fs-bar {
@@ -1125,7 +1133,7 @@ body {
 .fs-bar-head {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .fs-bar-head span:first-child {
@@ -1145,7 +1153,7 @@ body {
 }
 
 .fs-bar-track {
-  height: 8px;
+  height: 6px;
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.14);
   overflow: hidden;
@@ -1169,12 +1177,12 @@ body {
    inline strip, and keep the two progress bars beside each other. */
 .fs-dock.collapsed .fs-dock-body {
   align-items: center;
-  gap: 24px;
+  gap: var(--fs-dock-gap);
 }
 
 .fs-dock.collapsed .fs-dock-metrics {
   display: flex;
-  gap: 22px;
+  gap: 16px;
 }
 
 .fs-dock.collapsed .fs-dock-metric-wrap {
@@ -1192,6 +1200,11 @@ body {
 .fs-dock.collapsed .fs-dock-field-controls {
   display: flex;
   gap: 6px;
+}
+
+.fs-dock.collapsed .fs-dock-top-tools {
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .fs-dock.collapsed .fs-dock-series-toggle {
@@ -1216,7 +1229,7 @@ body {
 }
 
 .fs-dock.collapsed .fs-dock-progress {
-  gap: 16px;
+  gap: var(--fs-dock-gap);
   margin-top: 0;
 }
 
@@ -2673,6 +2686,7 @@ input[type="color"] {
   .fs-road-plot {
     flex: none;
     height: 76px;
+    min-height: 0;
   }
 
   .fs-road-head {
