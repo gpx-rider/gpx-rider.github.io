@@ -7,6 +7,15 @@ import { gradeAt } from "./route.mjs";
 // share their boundary point, so separately rendered polylines remain a
 // visually continuous route.
 export function gradeColoredRouteSegments(route, path, colorForGrade) {
+  return styledRouteSegments(route, path, ({ grade }) => {
+    const color = colorForGrade(grade);
+    return { key: color, color };
+  });
+}
+
+// General form used when route state affects styling as well as grade (for
+// example, replacing selected-climb runs with a wider highlighted treatment).
+export function styledRouteSegments(route, path, styleAt) {
   if (!route?.length || !Array.isArray(path) || path.length < 2) return [];
 
   const segments = [];
@@ -17,12 +26,14 @@ export function gradeColoredRouteSegments(route, path, colorForGrade) {
     const toDistance = Number(to.distance);
     if (!Number.isFinite(fromDistance) || !Number.isFinite(toDistance)) continue;
 
-    const color = colorForGrade(gradeAt(route, (fromDistance + toDistance) / 2));
+    const distance = (fromDistance + toDistance) / 2;
+    const style = styleAt({ distance, grade: gradeAt(route, distance) });
+    if (!style?.key) continue;
     const current = segments.at(-1);
-    if (current?.color === color) {
+    if (current?.key === style.key) {
       current.path.push(to);
     } else {
-      segments.push({ color, path: [from, to] });
+      segments.push({ ...style, path: [from, to] });
     }
   }
   return segments;

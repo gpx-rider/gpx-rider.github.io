@@ -34,6 +34,8 @@ const PROFILE_THEME_PANEL = {
   axisLine: "rgba(255, 255, 255, 0.2)",
   marker: "#f6a52c",
   hoverGuide: "rgba(255, 255, 255, 0.55)",
+  focusFill: "rgba(255, 255, 255, 0.08)",
+  focusMarker: "rgba(246, 165, 44, 0.9)",
 };
 const PROFILE_THEME_DARK = {
   ...PROFILE_THEME_PANEL,
@@ -54,6 +56,7 @@ export function drawProfile(
     route,
     progress = 0,
     hoverMeters = null,
+    focusRange = null,
     dark = false,
     distanceUnits = "metric",
     historySamples = [],
@@ -87,6 +90,7 @@ export function drawProfile(
   const yFor = (ele) => chartBottom - ((ele - paddedMin) / paddedSpan) * (chartBottom - chartTop);
 
   drawElevationGridlines(ctx, { min, max, chartLeft, chartRight, chartTop, yFor, theme, distanceUnits });
+  drawProfileFocus(ctx, { focusRange, totalDistance, chartLeft, chartRight, chartTop, chartBottom, xFor, theme });
   drawGradeBars(ctx, { route, totalDistance, chartLeft, chartRight, chartBottom, xFor, yFor });
   drawElevationLine(ctx, { route, xFor, yFor, theme });
   drawHistorySeries(ctx, {
@@ -126,6 +130,32 @@ export function drawProfile(
       visibleSeries,
     });
   }
+}
+
+function drawProfileFocus(
+  ctx,
+  { focusRange, totalDistance, chartLeft, chartRight, chartTop, chartBottom, xFor, theme },
+) {
+  if (!focusRange) return;
+  const start = clamp(Number(focusRange.startMeters), 0, totalDistance);
+  const end = clamp(Number(focusRange.endMeters), start, totalDistance);
+  if (end <= start) return;
+
+  const startX = clamp(xFor(start), chartLeft, chartRight);
+  const endX = clamp(xFor(end), chartLeft, chartRight);
+  ctx.fillStyle = theme.focusFill;
+  ctx.fillRect(startX, chartTop, Math.max(1, endX - startX), chartBottom - chartTop);
+
+  ctx.strokeStyle = theme.focusMarker;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 3]);
+  for (const x of [startX, endX]) {
+    ctx.beginPath();
+    ctx.moveTo(x, chartTop);
+    ctx.lineTo(x, chartBottom);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
 }
 
 export function distanceAtProfileX(canvas, clientX, route) {

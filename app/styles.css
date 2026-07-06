@@ -326,6 +326,7 @@ body {
   position: absolute;
   top: 16px;
   right: 16px;
+  z-index: 10;
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -1629,6 +1630,12 @@ body {
 .climbs-list li.active {
   border-color: rgba(246, 165, 44, 0.45);
   background: rgba(246, 165, 44, 0.08);
+}
+
+.climbs-list li.focused {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(246, 165, 44, 0.12);
+  box-shadow: 0 0 14px rgba(246, 165, 44, 0.28);
 }
 
 .climbs-list li.climb-seekable {

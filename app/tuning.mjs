@@ -163,11 +163,20 @@ export const OVERVIEW_MAX_RANGE_METERS = Infinity;
 //   "flyover"          — a camera flies a figure-eight over the route (shares ELLIPSE_FLYBY)
 //   "satellite"        — straight-down, north-up view with the route framed as big as fits
 export const DEFAULT_OVERVIEW_MODE = "orbit";
+// Camera behavior after selecting a detected climb: "static" holds the
+// fitted climb view; "orbit" circles it; "satellite" shows it north-up.
+export const DEFAULT_CLIMB_FOCUS_MODE = "static";
 
 // Orbit mode: seconds for one full revolution, and spin direction (1 =
 // clockwise seen from above, -1 = counter-clockwise). Longer = statelier.
 export const OVERVIEW_ORBIT_SECONDS_PER_REV = 75;
 export const OVERVIEW_ORBIT_DIRECTION = 1;
+
+// Selected climbs are much smaller than whole routes, so their orbit gets its
+// own faster, user-adjustable revolution time.
+export const DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV = 30;
+export const CLIMB_ORBIT_SECONDS_PER_REV_MIN = 10;
+export const CLIMB_ORBIT_SECONDS_PER_REV_MAX = 90;
 
 // Red overview travel line drawn while the camera debug overlay is enabled.
 // Orbit draws the orbit eye ground track; Fly-by draws its fitted ellipse.
@@ -377,6 +386,11 @@ export const ROUTE_LINE_COLOR = "#0a84ff";
 export const ROUTE_LINE_WIDTH = 14;
 export const ROUTE_LINE_OUTER_COLOR = "rgba(255, 255, 255, 0.72)";
 export const ROUTE_LINE_OUTER_WIDTH = 0.35;
+// Selected climbs replace their normal route segments with this wider,
+// brighter-cased treatment. No second stacked line is used, avoiding z-fight.
+export const ROUTE_FOCUS_LINE_WIDTH = 19;
+export const ROUTE_FOCUS_OUTER_COLOR = "rgba(255, 255, 255, 0.96)";
+export const ROUTE_FOCUS_OUTER_WIDTH = 0.8;
 
 // The path is densified so elevated segments follow the ground between GPX
 // points; spacing grows on very long routes to cap the vertex count the map
