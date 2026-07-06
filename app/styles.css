@@ -311,8 +311,8 @@ body {
 
 #minimap {
   position: absolute;
-  left: 16px;
-  top: 16px;
+  right: 16px;
+  bottom: calc(36px + var(--fs-dock-height, 210px) + 12px);
   width: 150px;
   height: 150px;
   overflow: hidden;
@@ -326,6 +326,7 @@ body {
   position: absolute;
   top: 16px;
   right: 16px;
+  z-index: 10;
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -608,8 +609,8 @@ body {
 }
 
 #minimap {
-  left: 24px;
-  top: 78px;
+  right: 24px;
+  bottom: calc(36px + var(--fs-dock-height, 210px) + 12px);
 }
 
 .map-actions {
@@ -621,7 +622,7 @@ body {
   display: flex;
 }
 
-/* top-left: local time + elapsed + ridden distance, above the minimap */
+/* top-left: local time + elapsed + ridden distance */
 .fs-clock {
   position: absolute;
   top: 24px;
@@ -971,6 +972,12 @@ body {
   display: flex;
   align-items: stretch;
   gap: var(--fs-dock-gap);
+}
+
+/* Give the expanded road-ahead view a little more breathing room without
+   changing the compact collapsed strip. */
+.fs-dock:not(.collapsed) .fs-dock-body {
+  min-height: 186px;
 }
 
 /* Two rows of tiles; the column count and tile width are set from JS to fit
@@ -1623,6 +1630,12 @@ body {
 .climbs-list li.active {
   border-color: rgba(246, 165, 44, 0.45);
   background: rgba(246, 165, 44, 0.08);
+}
+
+.climbs-list li.focused {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(246, 165, 44, 0.12);
+  box-shadow: 0 0 14px rgba(246, 165, 44, 0.28);
 }
 
 .climbs-list li.climb-seekable {
@@ -2701,8 +2714,8 @@ input[type="color"] {
    into a compact, always-fits column. */
 @media (max-width: 860px) {
   #minimap {
-    left: 14px;
-    top: 62px;
+    right: 14px;
+    bottom: calc(36px + var(--fs-dock-height, 290px) + 10px);
   }
 
   .map-actions {
