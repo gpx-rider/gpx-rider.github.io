@@ -116,6 +116,7 @@ export function drawProfile(
 
   if (selectionStats) {
     drawProfileSelectionStats(ctx, {
+      route,
       selectionStats,
       totalDistance,
       chartLeft,
@@ -123,6 +124,7 @@ export function drawProfile(
       chartTop,
       chartBottom,
       xFor,
+      yFor,
       theme,
       distanceUnits,
     });
@@ -148,6 +150,7 @@ export function drawProfile(
 function drawProfileSelectionStats(
   ctx,
   {
+    route,
     selectionStats,
     totalDistance,
     chartLeft,
@@ -155,6 +158,7 @@ function drawProfileSelectionStats(
     chartTop,
     chartBottom,
     xFor,
+    yFor,
     theme,
     distanceUnits,
   },
@@ -165,6 +169,7 @@ function drawProfileSelectionStats(
 
   const startX = clamp(xFor(start), chartLeft, chartRight);
   const endX = clamp(xFor(end), chartLeft, chartRight);
+  const selectionY = profileSelectionAverageY(route, start, end, yFor);
   const centerX = (startX + endX) / 2;
 
   const metrics = [
@@ -178,12 +183,24 @@ function drawProfileSelectionStats(
   drawProfileMetricReadout(ctx, {
     metrics,
     anchorX: centerX,
-    preferTop: true,
+    preferTop: selectionY > (chartTop + chartBottom) / 2,
+    avoidRange: { startX, endX },
     chartLeft,
     chartRight,
     chartTop,
     chartBottom,
   });
+}
+
+function profileSelectionAverageY(route, start, end, yFor) {
+  const span = Math.max(1, end - start);
+  const sampleCount = clamp(Math.round(span / 200), 6, 24);
+  let sum = 0;
+  for (let i = 0; i <= sampleCount; i += 1) {
+    const distance = start + (span * i) / sampleCount;
+    sum += yFor(interpolateRoutePoint(route, distance).ele);
+  }
+  return sum / (sampleCount + 1);
 }
 
 function drawProfileFocus(
@@ -474,6 +491,7 @@ function drawProfileMetricReadout(
     metrics,
     anchorX,
     preferTop,
+    avoidRange = null,
     chartLeft,
     chartRight,
     chartTop,
@@ -492,7 +510,17 @@ function drawProfileMetricReadout(
   const widths = baseWidths.map((width) => width * scale);
   const boxWidth = Math.min(availableWidth, baseWidth);
   const boxHeight = Math.max(40, 50 * scale);
+  const sideGap = 8;
   let boxX = anchorX - boxWidth / 2;
+  if (avoidRange) {
+    const rightX = avoidRange.endX + sideGap;
+    const leftX = avoidRange.startX - sideGap - boxWidth;
+    if (rightX + boxWidth <= chartRight) {
+      boxX = rightX;
+    } else if (leftX >= chartLeft) {
+      boxX = leftX;
+    }
+  }
   boxX = clamp(boxX, chartLeft, chartRight - boxWidth);
   const boxY = preferTop
     ? chartTop + 2

@@ -338,7 +338,7 @@ const state = {
 const els = {
   brandName: document.querySelector("#brandName"),
   settingsBtn: document.querySelector("#settingsBtn"),
-  mapSettingsShortcutBtn: document.querySelector("#mapSettingsShortcutBtn"),
+  mapSettingsShortcutBtn: document.querySelector("#mapSettingsShortcutBtn, #fullscreenSettingsBtn"),
   settingsDialog: document.querySelector("#settingsDialog"),
   settingsCloseBtn: document.querySelector("#settingsCloseBtn"),
   settingsDoneBtn: document.querySelector("#settingsDoneBtn"),
@@ -737,7 +737,7 @@ function loadGoogleMaps(apiKey) {
 
 function bindEvents() {
   els.settingsBtn.addEventListener("click", () => openSettings());
-  els.mapSettingsShortcutBtn.addEventListener("click", () => openSettings());
+  els.mapSettingsShortcutBtn?.addEventListener("click", () => openSettings());
   els.settingsCloseBtn.addEventListener("click", () => els.settingsDialog.close());
   els.settingsDoneBtn.addEventListener("click", () => els.settingsDialog.close());
   els.settingsTabs.forEach((tab) => {
