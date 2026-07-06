@@ -1,5 +1,16 @@
 {
   "title": "Prague Landmarks",
   "description": "A compact sightseeing ride through the heart of Prague, linking Vyšehrad, the National Theatre, Old Town Square, the Astronomical Clock, Charles Bridge, Petřín, Prague Castle, Letná, and Vítkov. Expect river views, historic squares, park climbs, castle panoramas, and a steady stream of postcard moments.",
-  "previewCamera": null
+  "previewCamera": {
+    "center": {
+      "lat": 50.090377,
+      "lng": 14.401329,
+      "altitude": 280.1
+    },
+    "heading": -55.63,
+    "range": 222.5,
+    "tilt": 78.97,
+    "roll": 0,
+    "fov": 35
+  }
 }

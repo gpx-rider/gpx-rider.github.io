@@ -1,5 +1,16 @@
 {
   "title": "Griffith Observatory",
   "description": "Ride from downtown Los Angeles into the Hollywood Hills, passing city landmarks before climbing through Griffith Park to one of LA’s most famous viewpoints. Expect skyline views, dry canyon scenery, rolling park roads, and a finish near Griffith Observatory above the city.",
-  "previewCamera": null
+  "previewCamera": {
+    "center": {
+      "lat": 34.118049,
+      "lng": -118.300234,
+      "altitude": 345.8
+    },
+    "heading": -36.09,
+    "range": 125.1,
+    "tilt": 81.47,
+    "roll": 0,
+    "fov": 35
+  }
 }

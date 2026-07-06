@@ -4,7 +4,18 @@
       "id": "0100_goldengate",
       "title": "Golden Gate Bridge",
       "description": "A short scenic ride along the San Francisco coast, heading toward the iconic red towers of the Golden Gate Bridge. Expect big ocean views, rolling hills, glimpses of San Francisco Bay, and a finish near Point Lobos.",
-      "previewCamera": null,
+      "previewCamera": {
+        "center": {
+          "lat": 37.814005,
+          "lng": -122.474482,
+          "altitude": -0.2
+        },
+        "heading": 121.66,
+        "range": 999.8,
+        "tilt": 75.11,
+        "roll": 0,
+        "fov": 35
+      },
       "gpx": "gallery/0100_goldengate/export.gpx",
       "distanceMeters": 10020,
       "ascentMeters": 192,
@@ -1173,7 +1184,18 @@
       "id": "0700_los_angeles",
       "title": "Griffith Observatory",
       "description": "Ride from downtown Los Angeles into the Hollywood Hills, passing city landmarks before climbing through Griffith Park to one of LA’s most famous viewpoints. Expect skyline views, dry canyon scenery, rolling park roads, and a finish near Griffith Observatory above the city.",
-      "previewCamera": null,
+      "previewCamera": {
+        "center": {
+          "lat": 34.118049,
+          "lng": -118.300234,
+          "altitude": 345.8
+        },
+        "heading": -36.09,
+        "range": 125.1,
+        "tilt": 81.47,
+        "roll": 0,
+        "fov": 35
+      },
       "gpx": "gallery/0700_los_angeles/export.gpx",
       "distanceMeters": 36167,
       "ascentMeters": 736,
@@ -1559,7 +1581,18 @@
       "id": "0900_prague",
       "title": "Prague Landmarks",
       "description": "A compact sightseeing ride through the heart of Prague, linking Vyšehrad, the National Theatre, Old Town Square, the Astronomical Clock, Charles Bridge, Petřín, Prague Castle, Letná, and Vítkov. Expect river views, historic squares, park climbs, castle panoramas, and a steady stream of postcard moments.",
-      "previewCamera": null,
+      "previewCamera": {
+        "center": {
+          "lat": 50.090377,
+          "lng": 14.401329,
+          "altitude": 280.1
+        },
+        "heading": -55.63,
+        "range": 222.5,
+        "tilt": 78.97,
+        "roll": 0,
+        "fov": 35
+      },
       "gpx": "gallery/0900_prague/export.gpx",
       "distanceMeters": 21087,
       "ascentMeters": 201,

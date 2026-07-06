@@ -1,5 +1,16 @@
 {
   "title": "Golden Gate Bridge",
   "description": "A short scenic ride along the San Francisco coast, heading toward the iconic red towers of the Golden Gate Bridge. Expect big ocean views, rolling hills, glimpses of San Francisco Bay, and a finish near Point Lobos.",
-  "previewCamera": null
+  "previewCamera": {
+    "center": {
+      "lat": 37.814005,
+      "lng": -122.474482,
+      "altitude": -0.2
+    },
+    "heading": 121.66,
+    "range": 999.8,
+    "tilt": 75.11,
+    "roll": 0,
+    "fov": 35
+  }
 }
