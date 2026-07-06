@@ -88,7 +88,7 @@ Or run the default target:
 make
 ```
 
-That regenerates derived gallery data, refreshes the generated README route gallery, and runs the tests. The deploy GitHub Action performs the same generation before publishing.
+That regenerates derived gallery data and runs the tests. The deploy GitHub Action performs the same generation before publishing.
 
 ## How to ride
 
@@ -165,119 +165,9 @@ Route and place names identify real-world locations only. Third-party trademarks
 
 ## Routes
 
-A small collection of ready-to-ride GPX routes. Download any of them and load it straight into GPX Rider.
+The in-app gallery ships with a small collection of ready-to-ride GPX routes. Each route lives under `gallery/<route-id>/` with `export.gpx` and `metadata.json`; `make gallery-data` parses those files into `app/gallery.json` for the static app.
 
-Gallery screenshots are rendered from Google Photorealistic 3D Maps. The screenshots are meant to keep the Google/data-provider attribution visible; do not crop, hide, or remove that attribution when adding new gallery images.
-
-<!-- gallery-start -->
-#### [Golden Gate Bridge](gallery/0100_goldengate/export.gpx)
-
-![](gallery/0100_goldengate/screenshot.jpeg)
-
-A short scenic ride along the San Francisco coast, heading toward the iconic red towers of the Golden Gate Bridge. Expect big ocean views, rolling hills, glimpses of San Francisco Bay, and a finish near Point Lobos.
-
-**10 km** · **184 m up** · **184 m down**
-
-[⬇ Download GPX](gallery/0100_goldengate/export.gpx)
-
----
-
-#### [Stelvio Pass](gallery/0200_stelvio_pass/export.gpx)
-
-![](gallery/0200_stelvio_pass/screenshot.jpeg)
-
-A high-alpine ride from Stilfs over the legendary Stelvio Pass and down toward Bormio. Expect towering mountain views, dramatic switchbacks, exposed slopes, and one of the most recognizable roads in cycling.
-
-**30 km** · **1,495 m up** · **866 m down**
-
-[⬇ Download GPX](gallery/0200_stelvio_pass/export.gpx)
-
----
-
-#### [Alpe d’Huez](gallery/0300_alpe_d_huez/export.gpx)
-
-![](gallery/0300_alpe_d_huez/screenshot.jpeg)
-
-A classic alpine climb from Le Bourg-d’Oisans to Alpe d’Huez, famous for its 21 hairpins and years of grand-tour drama. Expect tight switchbacks, big valley views, and a final stretch high above the mountains before an easy cooldown.
-
-**20 km** · **1,174 m up** · **124 m down**
-
-[⬇ Download GPX](gallery/0300_alpe_d_huez/export.gpx)
-
----
-
-#### [Zlaté návrší](gallery/0400_zlate_navrsi/export.gpx)
-
-![](gallery/0400_zlate_navrsi/screenshot.jpeg)
-
-Climb from Semily deep into the Krkonoše mountains, taking on a 40 km ascent toward Zlaté návrší - often claimed to be the longest climb in the Czech Republic. After the main climb, the route crosses the high ridges past Labská bouda, the source of the Elbe, and Vosecká bouda - including a protected stretch that is much easier to enjoy when your bike is virtual.
-
-**54.6 km** · **1,164 m up** · **711 m down**
-
-[⬇ Download GPX](gallery/0400_zlate_navrsi/export.gpx)
-
----
-
-#### [Amalfi Coast](gallery/0500_amalfi_coast/export.gpx)
-
-![](gallery/0500_amalfi_coast/screenshot.jpeg)
-
-A punchy coastal ride along the Amalfi Coast, where the road keeps climbing out of seaside towns and dropping back toward the Mediterranean. Expect cliffside views, tight bends, short hard efforts, and plenty of downhill breaks before finishing at Piazza Giacomo Matteotti.
-
-**32.3 km** · **1,176 m up** · **1,237 m down**
-
-[⬇ Download GPX](gallery/0500_amalfi_coast/export.gpx)
-
----
-
-#### [Boulder Foothills](gallery/0600_boulder/export.gpx)
-
-![](gallery/0600_boulder/screenshot.jpeg)
-
-A punchy ride through the Colorado foothills around Boulder, where the road keeps kicking up into short climbs before dropping into fast descents. Expect canyon roads, open mountain views, dry Rocky Mountain scenery, and a sawtooth profile that feels made for natural intervals.
-
-**48.2 km** · **1,473 m up** · **1,737 m down**
-
-[⬇ Download GPX](gallery/0600_boulder/export.gpx)
-
----
-
-#### [Griffith Observatory](gallery/0700_los_angeles/export.gpx)
-
-![](gallery/0700_los_angeles/screenshot.jpeg)
-
-Ride from downtown Los Angeles into the Hollywood Hills, passing city landmarks before climbing through Griffith Park to one of LA’s most famous viewpoints. Expect skyline views, dry canyon scenery, rolling park roads, and a finish near Griffith Observatory above the city.
-
-**36.2 km** · **586 m up** · **341 m down**
-
-[⬇ Download GPX](gallery/0700_los_angeles/export.gpx)
-
----
-
-#### [Big Island Full-Distance Ride](gallery/0800_kona/export.gpx)
-
-![](gallery/0800_kona/screenshot.jpeg)
-
-Ride a full-distance route across Hawaiʻi’s Big Island: lava fields, ocean views, long exposed roads, and a distance that turns “I’ll just try it for a bit” into a very serious conversation with your legs.
-
-Nobody expects anyone to finish a 180 km virtual ride in one go. Except Jan, obviously. But the route is there whenever you feel dangerously optimistic.
-
-**182.4 km** · **781 m up** · **781 m down**
-
-[⬇ Download GPX](gallery/0800_kona/export.gpx)
-
----
-
-#### [Prague Landmarks](gallery/0900_prague/export.gpx)
-
-![](gallery/0900_prague/screenshot.jpeg)
-
-A compact sightseeing ride through the heart of Prague, linking Vyšehrad, the National Theatre, Old Town Square, the Astronomical Clock, Charles Bridge, Petřín, Prague Castle, Letná, and Vítkov. Expect river views, historic squares, park climbs, castle panoramas, and a steady stream of postcard moments.
-
-**21.1 km** · **172 m up** · **200 m down**
-
-[⬇ Download GPX](gallery/0900_prague/export.gpx)
-<!-- gallery-end -->
+To add or refresh a gallery route, load the GPX in GPX Rider, position the 3D map camera to frame the route, then use the setup page's **Export to gallery** card to copy a `metadata.json` draft. Descriptions can use simple Markdown formatting, and the gallery renders the preview as a live interactive Google Photorealistic 3D Map instead of a screenshot.
 
 ## Contributing
 
