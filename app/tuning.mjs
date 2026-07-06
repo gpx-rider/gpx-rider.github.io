@@ -178,6 +178,15 @@ export const DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV = 30;
 export const CLIMB_ORBIT_SECONDS_PER_REV_MIN = 10;
 export const CLIMB_ORBIT_SECONDS_PER_REV_MAX = 90;
 
+// Horizontal pointer movement before a profile interaction becomes a segment
+// selection instead of a normal click-to-seek.
+export const PROFILE_SEGMENT_SELECTION_DRAG_PIXELS = 8;
+
+// The smallest elevation-profile drag interval accepted as a selected segment.
+// Very short routes scale this down by PROFILE_SEGMENT_SELECTION_MIN_ROUTE_FRACTION.
+export const PROFILE_SEGMENT_SELECTION_MIN_METERS = 50;
+export const PROFILE_SEGMENT_SELECTION_MIN_ROUTE_FRACTION = 0.01;
+
 // Red overview travel line drawn while the camera debug overlay is enabled.
 // Orbit draws the orbit eye ground track; Fly-by draws its fitted ellipse.
 export const OVERVIEW_DEBUG_LINE_COLOR = "#ff2d2d";

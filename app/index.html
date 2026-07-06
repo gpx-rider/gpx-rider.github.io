@@ -70,7 +70,8 @@
               </div>
               <div id="climbOverviewControl" class="map-overview-control map-climb-overview-control" hidden>
                 <button id="climbOverviewToggleBtn" type="button" class="map-action-btn map-overview-toggle" title="Return to route overview" aria-label="Return to route overview" aria-pressed="true">
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 19 6.5-12 3.5 6 2-3 6 9H3Z"></path><path d="m8.2 9.4 1.3-2.4 1.4 2.4"></path></svg>
+                  <svg class="icon-climb-focus" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 19 6.5-12 3.5 6 2-3 6 9H3Z"></path><path d="m8.2 9.4 1.3-2.4 1.4 2.4"></path></svg>
+                  <svg class="icon-segment-focus" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12c3.2-4.5 6.8 4.5 10 0s3.8-3.2 4-3"></path><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="9" r="2"></circle></svg>
                 </button>
                 <button id="climbOverviewMenuBtn" type="button" class="map-action-btn map-overview-menu-btn" title="Choose climb overview style" aria-label="Choose climb overview style" aria-haspopup="menu" aria-expanded="false">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
@@ -86,7 +87,7 @@
               </button>
               <!-- Fullscreen hides the top bar (and its Settings button), so
                    surface Settings here — only while fullscreen. -->
-              <button id="fullscreenSettingsBtn" type="button" class="map-action-btn map-action-btn-fs-only" title="Settings" aria-label="Open settings">
+              <button id="mapSettingsShortcutBtn" type="button" class="map-action-btn map-action-btn-settings" title="Settings" aria-label="Open settings">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
               </button>
             </div>
@@ -181,6 +182,16 @@
                 <div class="cb-progress">
                   <div class="cb-progress-track"><div id="cbDistFill" class="cb-progress-fill fs-bar-fill-blue"></div></div>
                   <div class="cb-progress-track"><div id="cbAscFill" class="cb-progress-fill fs-bar-fill-amber"></div></div>
+                </div>
+              </div>
+              <div id="segmentBanner" class="segment-banner" hidden>
+                <span class="cb-order">Selected segment</span>
+                <div class="cb-stats">
+                  <div class="cb-stat"><span>START</span><strong id="sbStart">--</strong></div>
+                  <div class="cb-stat"><span>END</span><strong id="sbEnd">--</strong></div>
+                  <div class="cb-stat"><span>LENGTH</span><strong id="sbLen">--</strong></div>
+                  <div class="cb-stat"><span>ASCENT</span><strong id="sbAsc" class="cb-stat-accent">--</strong></div>
+                  <div class="cb-stat"><span>DESCENT</span><strong id="sbDesc">--</strong></div>
                 </div>
               </div>
             </div>

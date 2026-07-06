@@ -128,6 +128,9 @@ import {
   PEDALING_STOP_KPH,
   POWER_ZONE_DEFINITIONS,
   PROFILE_HISTORY_SAMPLE_LIMIT,
+  PROFILE_SEGMENT_SELECTION_DRAG_PIXELS,
+  PROFILE_SEGMENT_SELECTION_MIN_METERS,
+  PROFILE_SEGMENT_SELECTION_MIN_ROUTE_FRACTION,
   RIDER_DOT_ALTITUDE_METERS,
   RIDER_DOT_DIAMETER_METERS,
   RIDER_DOT_MODEL_PATH,
@@ -249,6 +252,12 @@ const state = {
   lastRideSavedAt: 0,
   lastGalleryMetadataRefreshMs: 0,
   profileHoverMeters: null,
+  profileSelectStartMeters: null,
+  profileSelectStartX: null,
+  profileSelectPointerId: null,
+  profileSelecting: false,
+  profileSelectionSuppressClick: false,
+  selectedProfileSegment: null,
   userInteracting: false,
   interactionSettleTimer: null,
   interactionDotLoopActive: false,
@@ -329,7 +338,7 @@ const state = {
 const els = {
   brandName: document.querySelector("#brandName"),
   settingsBtn: document.querySelector("#settingsBtn"),
-  fullscreenSettingsBtn: document.querySelector("#fullscreenSettingsBtn"),
+  mapSettingsShortcutBtn: document.querySelector("#mapSettingsShortcutBtn"),
   settingsDialog: document.querySelector("#settingsDialog"),
   settingsCloseBtn: document.querySelector("#settingsCloseBtn"),
   settingsDoneBtn: document.querySelector("#settingsDoneBtn"),
@@ -495,6 +504,7 @@ const els = {
   climbBanner: document.querySelector("#climbBanner"),
   climbBannerAhead: document.querySelector("#climbBannerAhead"),
   climbBannerOn: document.querySelector("#climbBannerOn"),
+  segmentBanner: document.querySelector("#segmentBanner"),
   cbCategory: document.querySelector("#cbCategory"),
   cbAheadOrder: document.querySelector("#cbAheadOrder"),
   cbOnOrder: document.querySelector("#cbOnOrder"),
@@ -514,6 +524,11 @@ const els = {
   cbGradeLeft: document.querySelector("#cbGradeLeft"),
   cbDistFill: document.querySelector("#cbDistFill"),
   cbAscFill: document.querySelector("#cbAscFill"),
+  sbStart: document.querySelector("#sbStart"),
+  sbEnd: document.querySelector("#sbEnd"),
+  sbLen: document.querySelector("#sbLen"),
+  sbAsc: document.querySelector("#sbAsc"),
+  sbDesc: document.querySelector("#sbDesc"),
   minimapInput: document.querySelector("#minimapInput"),
   mapLabelsInput: document.querySelector("#mapLabelsInput"),
   cameraDebugInput: document.querySelector("#cameraDebugInput"),
@@ -722,7 +737,7 @@ function loadGoogleMaps(apiKey) {
 
 function bindEvents() {
   els.settingsBtn.addEventListener("click", () => openSettings());
-  els.fullscreenSettingsBtn.addEventListener("click", () => openSettings());
+  els.mapSettingsShortcutBtn.addEventListener("click", () => openSettings());
   els.settingsCloseBtn.addEventListener("click", () => els.settingsDialog.close());
   els.settingsDoneBtn.addEventListener("click", () => els.settingsDialog.close());
   els.settingsTabs.forEach((tab) => {
@@ -792,6 +807,10 @@ function bindEvents() {
   els.clearRideDataBtn.addEventListener("click", confirmClearRideData);
   els.profile.addEventListener("mousemove", handleProfileHover);
   els.profile.addEventListener("mouseleave", handleProfileLeave);
+  els.profile.addEventListener("pointerdown", handleProfilePointerDown);
+  els.profile.addEventListener("pointermove", handleProfilePointerMove);
+  els.profile.addEventListener("pointerup", handleProfilePointerUp);
+  els.profile.addEventListener("pointercancel", cancelProfileSelection);
   els.profile.addEventListener("click", handleProfileClick);
   els.fullscreenBtn.addEventListener("click", toggleMapFullscreen);
   els.dockToggleBtn.addEventListener("click", toggleHudDock);
@@ -870,6 +889,7 @@ function applyGpxText(text, { overrideName = null, fallbackName = null, galleryM
     ? structuredClone(galleryMetadata)
     : null;
   state.focusedClimbIndex = null;
+  state.selectedProfileSegment = null;
   state.lastGalleryMetadataRefreshMs = 0;
   state.progressMeters = 0;
   state.simulating = false;
@@ -972,6 +992,7 @@ function focusClimb(index) {
   if (climbRoute.length < 2) return;
 
   seekToMeters(climb.startDistanceMeters);
+  state.selectedProfileSegment = null;
   state.focusedClimbIndex = shouldEnterClimbOverview ? index : null;
   syncFocusedClimbList();
   renderProfile();
@@ -981,6 +1002,80 @@ function focusClimb(index) {
       route: climbRoute,
       mode: state.climbFocusMode,
     });
+  }
+}
+
+function focusProfileSegment(startDistance, endDistance) {
+  const segment = buildProfileSegment(startDistance, endDistance);
+  if (!segment) return;
+
+  const shouldEnterSegmentOverview = state.overviewActive && !isMoving();
+  const segmentRoute = sliceRoute(
+    state.route,
+    segment.startDistanceMeters,
+    segment.endDistanceMeters,
+  );
+  if (segmentRoute.length < 2) return;
+
+  seekToMeters(segment.startDistanceMeters);
+  state.selectedProfileSegment = segment;
+  state.focusedClimbIndex = null;
+  syncFocusedClimbList();
+  renderProfile();
+  rebuildRouteStyle();
+  if (shouldEnterSegmentOverview) {
+    enterOverviewMode({
+      route: segmentRoute,
+      mode: state.climbFocusMode,
+    });
+  } else {
+    updateRideUi({ force: true });
+  }
+  syncOverviewControls();
+}
+
+function buildProfileSegment(startDistance, endDistance) {
+  if (!state.route.length) return null;
+  const total = routeTotalDistance(state.route);
+  const start = clamp(Math.min(startDistance, endDistance), 0, total);
+  const end = clamp(Math.max(startDistance, endDistance), 0, total);
+  const minLength = Math.min(
+    PROFILE_SEGMENT_SELECTION_MIN_METERS,
+    total * PROFILE_SEGMENT_SELECTION_MIN_ROUTE_FRACTION,
+  );
+  if (end - start < minLength) return null;
+
+  const startPoint = interpolateRoutePoint(state.route, start);
+  const endPoint = interpolateRoutePoint(state.route, end);
+  const ascent = Math.max(0, ascentAt(state.route, end) - ascentAt(state.route, start));
+  const descent = Math.max(0, descentAt(state.route, end) - descentAt(state.route, start));
+  return {
+    startDistanceMeters: start,
+    endDistanceMeters: end,
+    lengthMeters: end - start,
+    ascentMeters: ascent,
+    descentMeters: descent,
+    startElevationMeters: startPoint.ele,
+    endElevationMeters: endPoint.ele,
+  };
+}
+
+function focusedRouteRange() {
+  if (state.selectedProfileSegment) return state.selectedProfileSegment;
+  return state.climbs[state.focusedClimbIndex] ?? null;
+}
+
+function clearSelectedProfileSegment() {
+  if (!state.selectedProfileSegment) return;
+  state.selectedProfileSegment = null;
+  state.profileHoverMeters = null;
+  renderProfile();
+  rebuildRouteStyle();
+  if (state.overviewActive && state.overviewRoute !== state.route && state.focusedClimbIndex === null) {
+    enterOverviewMode();
+  } else {
+    syncOverviewControls();
+    updateRideUi({ force: true });
   }
 }
 
@@ -1295,9 +1390,15 @@ function buildClimbMiniBars(climb) {
   return bars;
 }
 
-// Top-center banner: shown on a detected climb, or while approaching the next
-// one within CLIMB_BANNER_APPROACH_METERS; hidden otherwise.
+// Top-center banner: selected segment stats while riding, otherwise a detected
+// climb or the next climb within CLIMB_BANNER_APPROACH_METERS; hidden otherwise.
 function updateFullscreenClimbBanner(point) {
+  if (state.selectedProfileSegment && isMoving()) {
+    showSegmentBanner(state.selectedProfileSegment);
+    return;
+  }
+  els.segmentBanner.hidden = true;
+
   if (!state.climbs.length) {
     els.climbBanner.hidden = true;
     return;
@@ -1327,6 +1428,7 @@ function showAheadClimbBanner(climb, distanceToClimb, orderLabel) {
   els.climbBanner.hidden = false;
   els.climbBannerAhead.hidden = false;
   els.climbBannerOn.hidden = true;
+  els.segmentBanner.hidden = true;
   els.cbAheadOrder.textContent = orderLabel;
 
   const category = climbCategory(climb.averageGradePercent);
@@ -1358,6 +1460,7 @@ function showOnClimbBanner(climb, point, orderLabel) {
   els.climbBanner.hidden = false;
   els.climbBannerAhead.hidden = true;
   els.climbBannerOn.hidden = false;
+  els.segmentBanner.hidden = true;
   els.cbOnOrder.textContent = orderLabel;
   state.bannerClimbKey = null;
 
@@ -1379,6 +1482,20 @@ function showOnClimbBanner(climb, point, orderLabel) {
   const ascentFraction = (point.ele - climb.startElevationMeters) / ascentSpan;
   els.cbDistFill.style.width = `${clamp(distanceFraction, 0, 1) * 100}%`;
   els.cbAscFill.style.width = `${clamp(ascentFraction, 0, 1) * 100}%`;
+}
+
+function showSegmentBanner(segment) {
+  els.climbBanner.hidden = false;
+  els.climbBannerAhead.hidden = true;
+  els.climbBannerOn.hidden = true;
+  els.segmentBanner.hidden = false;
+  state.bannerClimbKey = null;
+
+  els.sbStart.textContent = formatDistance(segment.startDistanceMeters, state.distanceUnits, 1);
+  els.sbEnd.textContent = formatDistance(segment.endDistanceMeters, state.distanceUnits, 1);
+  els.sbLen.textContent = formatDistance(segment.lengthMeters, state.distanceUnits, 1);
+  els.sbAsc.textContent = formatAltitude(segment.ascentMeters, state.distanceUnits);
+  els.sbDesc.textContent = formatAltitude(segment.descentMeters, state.distanceUnits);
 }
 
 function renderRoute() {
@@ -1483,16 +1600,16 @@ function renderRouteLines(linePoints) {
 }
 
 function styledMapRouteSegments(path) {
-  const focusedClimb = state.climbs[state.focusedClimbIndex] ?? null;
-  if (!focusedClimb && state.routeGradeColorsEnabled) {
+  const focusedRange = focusedRouteRange();
+  if (!focusedRange && state.routeGradeColorsEnabled) {
     return gradeColoredRouteSegments(state.route, path, gradeColor);
   }
   return styledRouteSegments(state.route, path, ({ distance, grade }) => {
     const color = state.routeGradeColorsEnabled ? gradeColor(grade) : ROUTE_LINE_COLOR;
     const focused = Boolean(
-      focusedClimb &&
-      distance >= focusedClimb.startDistanceMeters &&
-      distance <= focusedClimb.endDistanceMeters
+      focusedRange &&
+      distance >= focusedRange.startDistanceMeters &&
+      distance <= focusedRange.endDistanceMeters
     );
     return {
       key: `${color}|${focused ? "focus" : "normal"}`,
@@ -1508,15 +1625,15 @@ function currentRouteLinePoints() {
     routeTotalDistance(state.route) / ROUTE_LINE_MAX_POINTS,
   );
   const points = densifyRoute(state.route, spacing);
-  const focusedClimb = state.climbs[state.focusedClimbIndex] ?? null;
-  if (!focusedClimb) return points;
+  const focusedRange = focusedRouteRange();
+  if (!focusedRange) return points;
 
   // Add exact style boundaries so the highlighted replacement starts and ends
-  // at the detected climb boundaries rather than the nearest densified vertex.
+  // at the focused range boundaries rather than the nearest densified vertex.
   return [
     ...points,
-    interpolateRoutePoint(state.route, focusedClimb.startDistanceMeters),
-    interpolateRoutePoint(state.route, focusedClimb.endDistanceMeters),
+    interpolateRoutePoint(state.route, focusedRange.startDistanceMeters),
+    interpolateRoutePoint(state.route, focusedRange.endDistanceMeters),
   ]
     .sort((a, b) => a.distance - b.distance)
     .filter((point, index, all) => index === 0 || point.distance !== all[index - 1].distance);
@@ -1945,17 +2062,18 @@ function renderProfile(progress = currentRideProgress()) {
     drawEmptyProfile(els.profile, { dark: true });
     return;
   }
-  const focusedClimb = state.climbs[state.focusedClimbIndex] ?? null;
+  const focusedRange = focusedRouteRange();
   drawProfile(els.profile, {
     route: state.route,
     progress,
-    hoverMeters: state.profileHoverMeters,
-    focusRange: focusedClimb
+    hoverMeters: state.selectedProfileSegment ? null : state.profileHoverMeters,
+    focusRange: focusedRange
       ? {
-        startMeters: focusedClimb.startDistanceMeters,
-        endMeters: focusedClimb.endDistanceMeters,
+        startMeters: focusedRange.startDistanceMeters,
+        endMeters: focusedRange.endDistanceMeters,
       }
       : null,
+    selectionStats: state.selectedProfileSegment,
     dark: true,
     distanceUnits: state.distanceUnits,
     historySamples: rideLogSamples().slice(-PROFILE_HISTORY_SAMPLE_LIMIT),
@@ -1964,6 +2082,7 @@ function renderProfile(progress = currentRideProgress()) {
 }
 
 function handleProfileHover(event) {
+  if (state.selectedProfileSegment) return;
   const distance = distanceAtProfileX(els.profile, event.clientX, state.route);
   if (distance === null) return;
   state.profileHoverMeters = distance;
@@ -1971,15 +2090,68 @@ function handleProfileHover(event) {
 }
 
 function handleProfileLeave() {
+  if (state.profileSelectPointerId !== null) return;
   if (state.profileHoverMeters === null) return;
   state.profileHoverMeters = null;
   renderProfile();
 }
 
 function handleProfileClick(event) {
+  if (state.profileSelectionSuppressClick) {
+    state.profileSelectionSuppressClick = false;
+    return;
+  }
   const distance = distanceAtProfileX(els.profile, event.clientX, state.route);
   if (distance === null) return;
+  clearSelectedProfileSegment();
   seekToMeters(distance);
+}
+
+function handleProfilePointerDown(event) {
+  if (event.button !== 0 || !state.route.length) return;
+  const distance = distanceAtProfileX(els.profile, event.clientX, state.route);
+  if (distance === null) return;
+  state.profileSelectStartMeters = distance;
+  state.profileSelectStartX = event.clientX;
+  state.profileSelectPointerId = event.pointerId;
+  state.profileSelecting = false;
+  els.profile.setPointerCapture?.(event.pointerId);
+}
+
+function handleProfilePointerMove(event) {
+  if (state.profileSelectPointerId !== event.pointerId) return;
+  const distance = distanceAtProfileX(els.profile, event.clientX, state.route);
+  if (distance === null) return;
+  if (
+    !state.profileSelecting &&
+    Math.abs(event.clientX - state.profileSelectStartX) >= PROFILE_SEGMENT_SELECTION_DRAG_PIXELS
+  ) {
+    state.profileSelecting = true;
+  }
+  if (!state.profileSelecting) return;
+  state.profileHoverMeters = distance;
+  const preview = buildProfileSegment(state.profileSelectStartMeters, distance);
+  state.selectedProfileSegment = preview;
+  renderProfile();
+}
+
+function handleProfilePointerUp(event) {
+  if (state.profileSelectPointerId !== event.pointerId) return;
+  const selecting = state.profileSelecting;
+  const start = state.profileSelectStartMeters;
+  const distance = distanceAtProfileX(els.profile, event.clientX, state.route);
+  cancelProfileSelection(event);
+  if (!selecting || distance === null) return;
+  state.profileSelectionSuppressClick = true;
+  focusProfileSegment(start, distance);
+}
+
+function cancelProfileSelection(event) {
+  if (event?.pointerId != null) els.profile.releasePointerCapture?.(event.pointerId);
+  state.profileSelectStartMeters = null;
+  state.profileSelectStartX = null;
+  state.profileSelectPointerId = null;
+  state.profileSelecting = false;
 }
 
 // Jump the rider to a distance along the route (profile click, climb click).
@@ -2474,8 +2646,9 @@ function enterOverviewMode({
   // overview off" (ensureMovementLoop); everything else here is user-driven.
   if (!route.length || !state.map) return;
   const focusingWholeRoute = route === state.route;
-  if (focusingWholeRoute && state.focusedClimbIndex !== null) {
+  if (focusingWholeRoute && (state.focusedClimbIndex !== null || state.selectedProfileSegment)) {
     state.focusedClimbIndex = null;
+    state.selectedProfileSegment = null;
     state.climbOverviewMenuOpen = false;
     syncFocusedClimbList();
     renderProfile();
@@ -2656,7 +2829,7 @@ function stepOverviewAnimation(now) {
 
   let pose = null;
   if (anim.mode === "orbit") {
-    const secondsPerRevolution = state.focusedClimbIndex !== null && state.overviewRoute !== state.route
+    const secondsPerRevolution = focusedRouteRange() && state.overviewRoute !== state.route
       ? state.climbOrbitSecondsPerRev
       : OVERVIEW_ORBIT_SECONDS_PER_REV;
     const cam = orbitCamera(state.overviewCamera, (now - anim.startMs) / 1000, {
@@ -2998,12 +3171,12 @@ function updateOverviewModeFromControl() {
 function updateClimbFocusModeFromControl() {
   state.climbFocusMode = normalizeClimbFocusMode(els.climbFocusModeSelect.value);
   saveSettings();
-  if (state.focusedClimbIndex !== null && state.overviewActive) {
-    const climb = state.climbs[state.focusedClimbIndex];
-    const route = climb && sliceRoute(
+  if (focusedRouteRange() && state.overviewActive) {
+    const range = focusedRouteRange();
+    const route = range && sliceRoute(
       state.route,
-      climb.startDistanceMeters,
-      climb.endDistanceMeters,
+      range.startDistanceMeters,
+      range.endDistanceMeters,
     );
     if (route?.length > 1) {
       enterOverviewMode({ route, mode: state.climbFocusMode });
@@ -3025,7 +3198,7 @@ function updateClimbOrbitSpeedFromControl() {
   const anim = state.overviewAnim;
   if (
     anim?.mode === "orbit" &&
-    state.focusedClimbIndex !== null &&
+    focusedRouteRange() &&
     state.overviewRoute !== state.route &&
     previous > 0
   ) {
@@ -3043,11 +3216,11 @@ function toggleRouteOverview() {
   // A climb-focused camera is one level deeper than the whole-route overview:
   // its mountain button returns to that overview first. The plane button then
   // keeps its existing overview ↔ rider-camera behavior.
-  const climbFocused =
+  const rangeFocused =
     state.overviewActive &&
-    state.focusedClimbIndex !== null &&
+    focusedRouteRange() &&
     state.overviewRoute !== state.route;
-  if (climbFocused) enterOverviewMode();
+  if (rangeFocused) enterOverviewMode();
   else if (state.overviewActive) returnToRiderCamera();
   else enterOverviewMode();
 }
@@ -3111,11 +3284,11 @@ function selectClimbOverviewModeFromMenu(event) {
   saveSettings();
   closeClimbOverviewModeMenu();
 
-  const climb = state.climbs[state.focusedClimbIndex];
-  const route = climb && sliceRoute(
+  const range = focusedRouteRange();
+  const route = range && sliceRoute(
     state.route,
-    climb.startDistanceMeters,
-    climb.endDistanceMeters,
+    range.startDistanceMeters,
+    range.endDistanceMeters,
   );
   if (route?.length > 1) {
     enterOverviewMode({ route, mode: state.climbFocusMode });
@@ -3129,12 +3302,12 @@ function syncOverviewControls() {
   // it off automatically once (in ensureMovementLoop).
   const canToggle = hasRoute;
   const active = hasRoute && state.overviewActive;
-  const climbFocused =
+  const rangeFocused =
     active &&
-    state.focusedClimbIndex !== null &&
+    focusedRouteRange() &&
     state.overviewRoute !== state.route;
 
-  const routeOverviewActive = active && !climbFocused;
+  const routeOverviewActive = active && !rangeFocused;
   els.mapOverviewControl.classList.toggle("active", routeOverviewActive);
   els.overviewToggleBtn.disabled = !canToggle;
   els.overviewToggleBtn.setAttribute("aria-pressed", String(routeOverviewActive));
@@ -3150,11 +3323,12 @@ function syncOverviewControls() {
     button.setAttribute("aria-checked", String(checked));
   });
 
-  els.climbOverviewControl.hidden = !climbFocused;
-  els.climbOverviewControl.classList.toggle("active", climbFocused);
-  els.climbOverviewToggleBtn.setAttribute("aria-pressed", String(climbFocused));
+  els.climbOverviewControl.hidden = !rangeFocused;
+  els.climbOverviewControl.classList.toggle("active", rangeFocused);
+  els.climbOverviewControl.classList.toggle("segment-focus", Boolean(rangeFocused && state.selectedProfileSegment));
+  els.climbOverviewToggleBtn.setAttribute("aria-pressed", String(rangeFocused));
   els.climbOverviewMenuBtn.setAttribute("aria-expanded", String(state.climbOverviewMenuOpen));
-  els.climbOverviewModeMenu.hidden = !state.climbOverviewMenuOpen || !climbFocused;
+  els.climbOverviewModeMenu.hidden = !state.climbOverviewMenuOpen || !rangeFocused;
   els.climbOverviewModeButtons.forEach((button) => {
     const checked = normalizeClimbFocusMode(button.dataset.mapClimbMode) === state.climbFocusMode;
     button.setAttribute("aria-checked", String(checked));
@@ -4351,6 +4525,7 @@ function restoreSavedRide() {
   state.route = enrichRoute(route);
   state.routeName = typeof savedRide.name === "string" ? savedRide.name : null;
   state.focusedClimbIndex = null;
+  state.selectedProfileSegment = null;
   state.galleryMetadata = savedRide.galleryMetadata && typeof savedRide.galleryMetadata === "object"
     ? structuredClone(savedRide.galleryMetadata)
     : null;
