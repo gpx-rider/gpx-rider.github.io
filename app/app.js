@@ -36,7 +36,7 @@ import {
 import { createRideEstimator, estimateRemainingSeconds, recordEstimatorTick } from "./eta.mjs";
 import { classifyRoute } from "./difficulty.mjs";
 import { detectClimbs } from "./climbs.mjs";
-import { distanceAtProfileX, drawEmptyProfile, drawProfile, gradeColor } from "./profile.mjs";
+import { GRADE_PROFILE_COLORS, distanceAtProfileX, drawEmptyProfile, drawProfile, gradeColor } from "./profile.mjs";
 import {
   activeCaloriesFromPower,
   formatAltitude,
@@ -89,6 +89,8 @@ import {
   FULLSCREEN_CLOCK_REFRESH_MS,
   GRADE_INTERVAL_MAX_SECONDS,
   GRADE_INTERVAL_MIN_SECONDS,
+  GRADE_MAX_PERCENT,
+  GRADE_MIN_PERCENT,
   HEART_RATE_MAX_AGE_FORMULA_BASE,
   HEART_RATE_REFRESH_MS,
   HEART_RATE_ZONE_DEFINITIONS,
@@ -997,21 +999,18 @@ function updateTrainingMeters(grade) {
 
   const gradeValue = Number.isFinite(grade) ? grade : null;
   const gradeZones = gradeMeterZones();
-  const gradeScale = zoneDisplayBounds(gradeZones, -15, 20);
   updateZoneMeter({
     meter: els.gradeMeter,
     valueEl: els.zoneGradeValue,
     metaEl: els.zoneGradeMeta,
     fillEl: els.zoneGradeFill,
     value: gradeValue,
-    min: gradeScale.min,
-    max: gradeScale.max,
+    min: GRADE_MIN_PERCENT,
+    max: GRADE_MAX_PERCENT,
     zones: gradeZones,
     text: Number.isFinite(gradeValue) ? `${gradeValue.toFixed(1)}%` : "--",
     fallbackMeta: "Live road",
-    zone: Number.isFinite(gradeValue)
-      ? (gradeValue <= 0 ? 0 : gradeValue < 3.5 ? 2 : gradeValue < 7 ? 3 : 5)
-      : null,
+    zone: zoneIndexFromZones(gradeValue, gradeZones),
     color: Number.isFinite(gradeValue) ? gradeColor(gradeValue) : null,
   });
 }
@@ -1061,13 +1060,15 @@ function calculatePowerZones(ftp) {
 }
 
 function gradeMeterZones() {
-  return [
-    { min: -15, max: 0, color: gradeColor(-4) },
-    { min: 0.1, max: 3.4, color: gradeColor(1) },
-    { min: 3.5, max: 6.9, color: gradeColor(5) },
-    { min: 7, max: 11.9, color: gradeColor(9) },
-    { min: 12, max: 20, color: gradeColor(14) },
-  ];
+  const span = GRADE_MAX_PERCENT - GRADE_MIN_PERCENT;
+  const step = span / GRADE_PROFILE_COLORS.length;
+  return GRADE_PROFILE_COLORS.map((color, index) => ({
+    min: GRADE_MIN_PERCENT + step * index,
+    max: index === GRADE_PROFILE_COLORS.length - 1
+      ? GRADE_MAX_PERCENT
+      : GRADE_MIN_PERCENT + step * (index + 1),
+    color,
+  }));
 }
 
 function zoneDisplayBounds(zones, fallbackMin, fallbackMax) {

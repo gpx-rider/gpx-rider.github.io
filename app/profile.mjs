@@ -410,16 +410,25 @@ function niceStep(range, candidates) {
 }
 
 // Stepped grade palette shared with the panel legend and the gallery's mini
-// profiles: green for descents, gray for flat, amber → orange → red as the
-// climb steepens. Exported so the fullscreen climb banner's mini-profile
-// (app.js) colors its bars from the same palette instead of a fourth copy.
+// profiles: green for descents, gray for flat, amber -> orange -> red as the
+// climb steepens. Exported so the map HUD and fullscreen climb banner color
+// from the same palette instead of copying it again.
+export const GRADE_PROFILE_COLORS = [
+  "#3fae6a",
+  "#57b877",
+  "rgba(125, 138, 134, 0.55)",
+  "#e8b74e",
+  "#e8823c",
+  "#d9542f",
+];
+
 export function gradeColor(grade) {
-  if (grade <= -3) return "#3fae6a";
-  if (grade <= -0.6) return "#57b877";
-  if (grade < 0.8) return "rgba(125, 138, 134, 0.55)";
-  if (grade < 3.5) return "#e8b74e";
-  if (grade < 7) return "#e8823c";
-  return "#d9542f";
+  if (grade <= -3) return GRADE_PROFILE_COLORS[0];
+  if (grade <= -0.6) return GRADE_PROFILE_COLORS[1];
+  if (grade < 0.8) return GRADE_PROFILE_COLORS[2];
+  if (grade < 3.5) return GRADE_PROFILE_COLORS[3];
+  if (grade < 7) return GRADE_PROFILE_COLORS[4];
+  return GRADE_PROFILE_COLORS[5];
 }
 
 function configureCanvas(canvas) {
