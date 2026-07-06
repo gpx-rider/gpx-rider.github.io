@@ -5,16 +5,19 @@ import { clamp } from "./geo.mjs";
 import { gradeAt, interpolateRoutePoint, routeTotalDistance } from "./route.mjs";
 import { FEET_PER_METER, KM_PER_MILE, distanceUnitLabel, kmToDisplay } from "./units.mjs";
 
-const PROFILE_PADDING_LEFT = 44;
-const PROFILE_PADDING_RIGHT = 14;
+const PROFILE_CHART_EDGE_PADDING = 14;
+const PROFILE_Y_AXIS_GUTTER = 60;
+const PROFILE_Y_LABEL_GAP = 8;
+const PROFILE_PADDING_LEFT = PROFILE_Y_AXIS_GUTTER;
+const PROFILE_PADDING_RIGHT = PROFILE_CHART_EDGE_PADDING;
 const PROFILE_PADDING_TOP = 10;
 const PROFILE_PADDING_BOTTOM = 22;
 const PROFILE_GRADE_STEEP_PERCENT = 12;
 const PROFILE_BAR_SAMPLE_PX = 4;
 const HISTORY_COLORS = {
-  speed: "#6fb8ff",
-  power: "#b38cff",
-  heartRate: "#ff6f8f",
+  speed: "#5aa9ff",
+  power: "#f6a52c",
+  heartRate: "#e4574c",
 };
 const ELEVATION_STEP_CANDIDATES = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000];
 const DISTANCE_STEP_METERS_CANDIDATES = [50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000];
@@ -176,7 +179,7 @@ function drawElevationGridlines(ctx, { min, max, chartLeft, chartRight, chartTop
     ctx.stroke();
 
     ctx.fillStyle = theme.label;
-    ctx.fillText(`${Math.round(value)} ${unit}`, chartLeft - 6, y);
+    ctx.fillText(`${Math.round(value)} ${unit}`, chartLeft - PROFILE_Y_LABEL_GAP, y);
   }
 }
 

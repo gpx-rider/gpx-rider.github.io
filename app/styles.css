@@ -1083,14 +1083,29 @@ body {
   cursor: pointer;
 }
 
+.profile-series-toggle button[data-profile-series="speed"] {
+  --series-active-color: var(--blue);
+  --series-active-ink: #06101b;
+}
+
+.profile-series-toggle button[data-profile-series="power"] {
+  --series-active-color: var(--accent);
+  --series-active-ink: var(--accent-ink);
+}
+
+.profile-series-toggle button[data-profile-series="heartRate"] {
+  --series-active-color: var(--red);
+  --series-active-ink: #fff;
+}
+
 .fs-dock-series-toggle button {
   min-width: 38px;
   min-height: 26px;
 }
 
 .profile-series-toggle button[aria-pressed="true"] {
-  color: #11141a;
-  background: var(--accent);
+  color: var(--series-active-ink, #11141a);
+  background: var(--series-active-color, var(--accent));
   border-color: transparent;
 }
 
