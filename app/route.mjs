@@ -114,6 +114,7 @@ export function interpolateRoutePoint(route, distance) {
     lat: lerp(previous.lat, next.lat, ratio),
     lng: lerp(previous.lng, next.lng, ratio),
     ele: lerp(previous.ele, next.ele, ratio),
+    distance,
   };
 }
 
@@ -133,6 +134,24 @@ export function densifyRoute(route, maxSpacingMeters) {
     points.push(route[i]);
   }
   return points;
+}
+
+// Extract a route interval and rebase its cumulative distance to zero. The
+// exact requested endpoints are interpolated, so camera framing can treat a
+// climb as a complete standalone route without duplicating overview math.
+export function sliceRoute(route, startDistance, endDistance) {
+  if (!route?.length) return [];
+  const total = routeTotalDistance(route);
+  const start = clamp(Number(startDistance) || 0, 0, total);
+  const end = clamp(Number(endDistance) || 0, start, total);
+  if (end <= start) return [];
+
+  const points = [
+    interpolateRoutePoint(route, start),
+    ...route.filter((point) => point.distance > start && point.distance < end),
+    interpolateRoutePoint(route, end),
+  ].map(({ lat, lng, ele }) => ({ lat, lng, ele }));
+  return enrichRoute(points);
 }
 
 // Highest route elevation within `radiusMeters` of a location, or null when

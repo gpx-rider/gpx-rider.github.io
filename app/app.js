@@ -32,11 +32,13 @@ import {
   routeTotalAscent,
   routeTotalDescent,
   routeTotalDistance,
+  sliceRoute,
 } from "./route.mjs";
+import { gradeColoredRouteSegments, styledRouteSegments } from "./route-style.mjs";
 import { createRideEstimator, estimateRemainingSeconds, recordEstimatorTick } from "./eta.mjs";
 import { classifyRoute } from "./difficulty.mjs";
 import { detectClimbs } from "./climbs.mjs";
-import { GRADE_PROFILE_COLORS, distanceAtProfileX, drawEmptyProfile, drawProfile, gradeColor } from "./profile.mjs";
+import { distanceAtProfileX, drawEmptyProfile, drawProfile, gradeColor, gradeColorZones } from "./profile.mjs";
 import {
   activeCaloriesFromPower,
   formatAltitude,
@@ -58,6 +60,8 @@ import {
   CLIMB_BANNER_APPROACH_METERS,
   CLIMB_BANNER_MINI_BAR_COUNT,
   CLIMB_CATEGORIES,
+  CLIMB_ORBIT_SECONDS_PER_REV_MAX,
+  CLIMB_ORBIT_SECONDS_PER_REV_MIN,
   CYCLING_GROSS_EFFICIENCY,
   DEFAULT_BEACON_COLOR,
   DEFAULT_BEACON_DIAMETER_METERS,
@@ -67,9 +71,12 @@ import {
   DEFAULT_CAMERA_ANGLE_DEGREES,
   DEFAULT_CAMERA_BEHIND_METERS,
   DEFAULT_CAMERA_ZOOM,
+  DEFAULT_CLIMB_FOCUS_MODE,
+  DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV,
   DEFAULT_GRADE_INTERVAL_SECONDS,
   DEFAULT_MAX_HEART_RATE_BPM,
   DEFAULT_RESTING_HEART_RATE_BPM,
+  DEFAULT_ROUTE_GRADE_COLORS_ENABLED,
   DEFAULT_HUD_DOCK_COLLAPSED,
   DEFAULT_DURATION_FORMAT,
   DEFAULT_HUD_FIELD_ORDER,
@@ -87,9 +94,12 @@ import {
   DEFAULT_TERRAIN_CLEARANCE_METERS,
   DEFAULT_TIME_FORMAT,
   FULLSCREEN_CLOCK_REFRESH_MS,
+  GALLERY_METADATA_CAMERA_REFRESH_MS,
   GRADE_INTERVAL_MAX_SECONDS,
   GRADE_INTERVAL_MIN_SECONDS,
   GRADE_MAX_PERCENT,
+  GRADE_METER_MAX_PERCENT,
+  GRADE_METER_MIN_PERCENT,
   GRADE_MIN_PERCENT,
   HEART_RATE_MAX_AGE_FORMULA_BASE,
   HEART_RATE_REFRESH_MS,
@@ -126,8 +136,15 @@ import {
   RIDER_DOT_SCALE,
   RIDE_SAVE_THROTTLE_MS,
   ROUTE_LINE_ALTITUDE_METERS,
+  ROUTE_LINE_COLOR,
   ROUTE_LINE_MAX_POINTS,
+  ROUTE_LINE_OUTER_COLOR,
+  ROUTE_LINE_OUTER_WIDTH,
   ROUTE_LINE_SPACING_METERS,
+  ROUTE_LINE_WIDTH,
+  ROUTE_FOCUS_LINE_WIDTH,
+  ROUTE_FOCUS_OUTER_COLOR,
+  ROUTE_FOCUS_OUTER_WIDTH,
   SCREENSHOT_WIDTH_MAX,
   SCREENSHOT_WIDTH_MIN,
   SIMULATION_SPEED_MAX_KPH,
@@ -194,6 +211,9 @@ const state = {
   // Display name shown above the route classification: a gallery ride's
   // curated title, else the GPX's own <name>, else the uploaded filename.
   routeName: null,
+  // Source metadata for a library route. Gallery export keeps this content
+  // intact and replaces only its preview camera with the live map camera.
+  galleryMetadata: null,
   // Detected climbs for the loaded route (see climbs.mjs), recomputed once
   // per route load in updateRouteOverview and read every ride tick to drive
   // the live "current climb" / "next climb" status.
@@ -205,14 +225,14 @@ const state = {
   tickRaf: null,
   tickTimeout: null,
   lastTick: 0,
-  line: null,
+  routeLines: [],
   riderDot: null,
   riderBeacon: null,
   map: null,
   mapProvider: null,
   maps3d: null,
   minimapMap: null,
-  minimapPath: null,
+  minimapPaths: [],
   minimapMarker: null,
   trainerSpeedKph: null,
   trainerPowerWatts: null,
@@ -227,6 +247,7 @@ const state = {
   lastRiderDot: null,
   lastRiderBeacon: null,
   lastRideSavedAt: 0,
+  lastGalleryMetadataRefreshMs: 0,
   profileHoverMeters: null,
   userInteracting: false,
   interactionSettleTimer: null,
@@ -235,13 +256,19 @@ const state = {
   // the user grabs the overview camera, "follow" once movement starts.
   cameraMode: "follow",
   overviewCamera: null,
+  overviewRoute: null,
+  activeOverviewMode: DEFAULT_OVERVIEW_MODE,
   // How the whole-route overview is presented (user setting): "static" |
   // "orbit" | "flyby" | "flyover" | "satellite" | "satellite-north".
   // overviewAnim holds the live animation state for the animated modes (orbit /
   // flyby / flyover); its loop drives the map directly.
   overviewActive: false,
   overviewMenuOpen: false,
+  climbOverviewMenuOpen: false,
   overviewMode: DEFAULT_OVERVIEW_MODE,
+  climbFocusMode: DEFAULT_CLIMB_FOCUS_MODE,
+  climbOrbitSecondsPerRev: DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV,
+  focusedClimbIndex: null,
   overviewAnim: null,
   overviewAnimLoopActive: false,
   cameraFlight: null,
@@ -265,6 +292,7 @@ const state = {
   beaconColor: DEFAULT_BEACON_COLOR,
   terrainAvoidEnabled: DEFAULT_TERRAIN_AVOID_ENABLED,
   terrainClearanceMeters: DEFAULT_TERRAIN_CLEARANCE_METERS,
+  routeGradeColorsEnabled: DEFAULT_ROUTE_GRADE_COLORS_ENABLED,
   cameraLiftMeters: 0,
   cameraLiftTargetMeters: 0,
   lastLiftComputeMs: 0,
@@ -346,6 +374,9 @@ const els = {
   timeFormatSelect: document.querySelector("#timeFormatSelect"),
   durationFormatSelect: document.querySelector("#durationFormatSelect"),
   overviewModeSelect: document.querySelector("#overviewModeSelect"),
+  climbFocusModeSelect: document.querySelector("#climbFocusModeSelect"),
+  climbOrbitSpeedInput: document.querySelector("#climbOrbitSpeedInput"),
+  climbOrbitSpeedOutput: document.querySelector("#climbOrbitSpeedOutput"),
   cameraZoomInput: document.querySelector("#cameraZoomInput"),
   cameraZoomOutput: document.querySelector("#cameraZoomOutput"),
   cameraAngleInput: document.querySelector("#cameraAngleInput"),
@@ -366,6 +397,7 @@ const els = {
   terrainAvoidInput: document.querySelector("#terrainAvoidInput"),
   terrainClearanceInput: document.querySelector("#terrainClearanceInput"),
   terrainClearanceOutput: document.querySelector("#terrainClearanceOutput"),
+  routeGradeColorsInput: document.querySelector("#routeGradeColorsInput"),
   resetRenderingBtn: document.querySelector("#resetRenderingBtn"),
   connectBtn: document.querySelector("#connectBtn"),
   connectHrBtn: document.querySelector("#connectHrBtn"),
@@ -397,6 +429,11 @@ const els = {
   overviewMenuBtn: document.querySelector("#overviewMenuBtn"),
   overviewModeMenu: document.querySelector("#overviewModeMenu"),
   overviewModeButtons: Array.from(document.querySelectorAll("[data-map-overview-mode]")),
+  climbOverviewControl: document.querySelector("#climbOverviewControl"),
+  climbOverviewToggleBtn: document.querySelector("#climbOverviewToggleBtn"),
+  climbOverviewMenuBtn: document.querySelector("#climbOverviewMenuBtn"),
+  climbOverviewModeMenu: document.querySelector("#climbOverviewModeMenu"),
+  climbOverviewModeButtons: Array.from(document.querySelectorAll("[data-map-climb-mode]")),
   screenshotBtn: document.querySelector("#screenshotBtn"),
   screenshotButtonInput: document.querySelector("#screenshotButtonInput"),
   screenshotAspectSelect: document.querySelector("#screenshotAspectSelect"),
@@ -517,6 +554,8 @@ async function startApp() {
   els.speedInput.min = String(SIMULATION_SPEED_MIN_KPH);
   els.speedInput.max = String(SIMULATION_SPEED_MAX_KPH);
   els.speedInput.value = String(DEFAULT_SIMULATION_SPEED_KPH);
+  els.climbOrbitSpeedInput.min = String(CLIMB_ORBIT_SECONDS_PER_REV_MIN);
+  els.climbOrbitSpeedInput.max = String(CLIMB_ORBIT_SECONDS_PER_REV_MAX);
 
   restoreSettings();
   restoreRideLog();
@@ -725,6 +764,8 @@ function bindEvents() {
   els.hudVisibleMoreBtn.addEventListener("click", () => adjustHudVisibleCount(1));
   els.profileSeriesButtons.forEach((button) => button.addEventListener("click", toggleProfileSeries));
   els.overviewModeSelect.addEventListener("change", updateOverviewModeFromControl);
+  els.climbFocusModeSelect.addEventListener("change", updateClimbFocusModeFromControl);
+  els.climbOrbitSpeedInput.addEventListener("input", updateClimbOrbitSpeedFromControl);
   els.cameraZoomInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraBehindInput.addEventListener("input", updateCameraSettingsFromControls);
@@ -741,6 +782,7 @@ function bindEvents() {
   els.beaconColorInput.addEventListener("input", updateRenderingSettingsFromControls);
   els.terrainAvoidInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.terrainClearanceInput.addEventListener("input", updateRenderingSettingsFromControls);
+  els.routeGradeColorsInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.resetRenderingBtn.addEventListener("click", resetRenderingToDefaults);
   els.connectBtn.addEventListener("click", connectTrainer);
   els.connectHrBtn.addEventListener("click", connectHeartRate);
@@ -757,6 +799,9 @@ function bindEvents() {
   els.overviewToggleBtn.addEventListener("click", toggleRouteOverview);
   els.overviewMenuBtn.addEventListener("click", toggleOverviewModeMenu);
   els.overviewModeButtons.forEach((button) => button.addEventListener("click", selectOverviewModeFromMenu));
+  els.climbOverviewToggleBtn.addEventListener("click", returnFromClimbOverview);
+  els.climbOverviewMenuBtn.addEventListener("click", toggleClimbOverviewModeMenu);
+  els.climbOverviewModeButtons.forEach((button) => button.addEventListener("click", selectClimbOverviewModeFromMenu));
   els.screenshotBtn.addEventListener("click", takeMapScreenshot);
   els.screenshotButtonInput.addEventListener("change", updateScreenshotSettingsFromControls);
   els.screenshotAspectSelect.addEventListener("change", updateScreenshotSettingsFromControls);
@@ -801,17 +846,17 @@ async function loadGpxFile(event) {
 // Gallery rides pass their curated title as `overrideName`, which wins over
 // whatever technical name the GPX export itself carries (e.g. a
 // map-tool-generated "Route from A to B").
-async function loadGpxFromUrl(url, overrideName) {
+async function loadGpxFromUrl(url, overrideName, galleryMetadata = null) {
   const response = await fetch(url);
   const text = await response.text();
-  applyGpxText(text, { overrideName });
+  applyGpxText(text, { overrideName, galleryMetadata });
 }
 
 function filenameToRouteName(filename) {
   return filename.replace(/\.[^./\\]+$/, "").trim() || null;
 }
 
-function applyGpxText(text, { overrideName = null, fallbackName = null } = {}) {
+function applyGpxText(text, { overrideName = null, fallbackName = null, galleryMetadata = null } = {}) {
   const { points: route, name: gpxName } = parseGpx(text);
 
   if (route.length < 2) {
@@ -821,6 +866,11 @@ function applyGpxText(text, { overrideName = null, fallbackName = null } = {}) {
 
   state.route = enrichRoute(route);
   state.routeName = overrideName || gpxName || fallbackName;
+  state.galleryMetadata = galleryMetadata && typeof galleryMetadata === "object"
+    ? structuredClone(galleryMetadata)
+    : null;
+  state.focusedClimbIndex = null;
+  state.lastGalleryMetadataRefreshMs = 0;
   state.progressMeters = 0;
   state.simulating = false;
   state.lastTick = 0;
@@ -890,21 +940,50 @@ function updateRouteOverview() {
       grade.className = "climb-grade";
       grade.textContent = `${climb.averageGradePercent.toFixed(1)}%`;
       item.append(line, grade);
-      // Click (or keyboard-activate) a climb to jump the rider to its foot.
+      // Click (or keyboard-activate) a climb to jump to its foot, frame that
+      // sub-route with the configured camera, and highlight it on the map.
       item.classList.add("climb-seekable");
       item.tabIndex = 0;
       item.setAttribute("role", "button");
-      item.title = "Jump to the start of this climb";
-      item.addEventListener("click", () => seekToMeters(climb.startDistanceMeters));
+      item.title = "Focus this climb";
+      item.addEventListener("click", () => focusClimb(index));
       item.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          seekToMeters(climb.startDistanceMeters);
+          focusClimb(index);
         }
       });
       return item;
     }),
   );
+  syncFocusedClimbList();
+}
+
+function focusClimb(index) {
+  const climb = state.climbs[index];
+  if (!climb) return;
+  const climbRoute = sliceRoute(
+    state.route,
+    climb.startDistanceMeters,
+    climb.endDistanceMeters,
+  );
+  if (climbRoute.length < 2) return;
+
+  seekToMeters(climb.startDistanceMeters);
+  state.focusedClimbIndex = index;
+  syncFocusedClimbList();
+  renderProfile();
+  rebuildRouteStyle();
+  enterOverviewMode({
+    route: climbRoute,
+    mode: state.climbFocusMode,
+  });
+}
+
+function syncFocusedClimbList() {
+  [...els.climbsList.children].forEach((item, index) => {
+    item.classList.toggle("focused", index === state.focusedClimbIndex);
+  });
 }
 
 // Live "current climb" / "next climb" status shown above the climbs list
@@ -1025,12 +1104,12 @@ function updateTrainingMeters(grade) {
     metaEl: els.zoneGradeMeta,
     fillEl: els.zoneGradeFill,
     value: gradeValue,
-    min: GRADE_MIN_PERCENT,
-    max: GRADE_MAX_PERCENT,
+    min: GRADE_METER_MIN_PERCENT,
+    max: GRADE_METER_MAX_PERCENT,
     zones: gradeZones,
     text: Number.isFinite(gradeValue) ? `${gradeValue.toFixed(1)}%` : "--",
     fallbackMeta: "Live road",
-    zone: zoneIndexFromZones(gradeValue, gradeZones),
+    zone: gradeZones.findIndex((zone) => zone.color === gradeColor(gradeValue)),
     color: Number.isFinite(gradeValue) ? gradeColor(gradeValue) : null,
   });
 }
@@ -1080,15 +1159,7 @@ function calculatePowerZones(ftp) {
 }
 
 function gradeMeterZones() {
-  const span = GRADE_MAX_PERCENT - GRADE_MIN_PERCENT;
-  const step = span / GRADE_PROFILE_COLORS.length;
-  return GRADE_PROFILE_COLORS.map((color, index) => ({
-    min: GRADE_MIN_PERCENT + step * index,
-    max: index === GRADE_PROFILE_COLORS.length - 1
-      ? GRADE_MAX_PERCENT
-      : GRADE_MIN_PERCENT + step * (index + 1),
-    color,
-  }));
+  return gradeColorZones(GRADE_METER_MIN_PERCENT, GRADE_METER_MAX_PERCENT);
 }
 
 function zoneDisplayBounds(zones, fallbackMin, fallbackMax) {
@@ -1322,16 +1393,18 @@ function renderRoute() {
 function renderMinimapRoute() {
   if (!state.minimapMap || !state.route.length) return;
 
-  if (state.minimapPath) state.minimapPath.setMap(null);
+  state.minimapPaths.forEach((line) => line.setMap(null));
+  state.minimapPaths = [];
 
   const path = state.route.map((point) => ({ lat: point.lat, lng: point.lng }));
-  state.minimapPath = new google.maps.Polyline({
-    path,
+  const styledSegments = styledMapRouteSegments(state.route);
+  state.minimapPaths = styledSegments.map((segment) => new google.maps.Polyline({
+    path: segment.path.map((point) => ({ lat: point.lat, lng: point.lng })),
     map: state.minimapMap,
-    strokeColor: "#0a84ff",
-    strokeOpacity: 0.95,
-    strokeWeight: 3,
-  });
+    strokeColor: segment.color,
+    strokeOpacity: segment.focused ? 1 : 0.95,
+    strokeWeight: segment.focused ? 6 : 3,
+  }));
 
   const bounds = new google.maps.LatLngBounds();
   path.forEach((point) => bounds.extend(point));
@@ -1365,40 +1438,84 @@ function updateMinimapPosition(point) {
 }
 
 function renderGoogle3DRoute(currentPoint) {
-  const { AltitudeMode, Polyline3DElement } = state.maps3d;
-
   // CLAMP_TO_GROUND drapes the stroke onto the terrain mesh like a decal, so
   // on steep slopes the line smears down the hillside into wide blobs. A line
   // held a couple of meters above the ground renders with a constant
   // screen-pixel width instead. Densify the path so the elevated segments
   // stay short enough to follow the terrain between GPX points.
-  const spacing = Math.max(ROUTE_LINE_SPACING_METERS, routeTotalDistance(state.route) / ROUTE_LINE_MAX_POINTS);
-  const linePoints = densifyRoute(state.route, spacing);
-  const pathAt = (altitude) => linePoints.map((point) => ({
-    lat: point.lat,
-    lng: point.lng,
-    altitude,
-  }));
-
-  if (Polyline3DElement) {
-    // One polyline with the built-in casing (outerColor/outerWidth), never a
-    // second stacked line for the outline: separate geometries a fraction of
-    // a meter apart z-fight once the camera is far enough that their altitude
-    // gap falls below depth precision, leaving only the outline visible.
-    state.line = new Polyline3DElement({
-      altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
-      path: pathAt(ROUTE_LINE_ALTITUDE_METERS),
-      strokeColor: "#0a84ff",
-      strokeWidth: 14,
-      outerColor: "rgba(255, 255, 255, 0.72)",
-      outerWidth: 0.35,
-    });
-    state.map.append(state.line);
-  }
+  renderRouteLines(currentRouteLinePoints());
 
   renderRiderDot(currentPoint);
   updateMapCamera();
   updateOverviewDebugLine();
+}
+
+function renderRouteLines(linePoints) {
+  const { AltitudeMode, Polyline3DElement } = state.maps3d;
+  if (!Polyline3DElement) return;
+  state.routeLines.forEach((line) => line.remove());
+  state.routeLines = [];
+
+  const styledSegments = styledMapRouteSegments(linePoints);
+
+  // Use each polyline's built-in casing, never a second stacked line for the
+  // outline: stacked geometries z-fight at overview distances.
+  state.routeLines = styledSegments.map((segment) => {
+    const line = new Polyline3DElement({
+      altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
+      path: segment.path.map((point) => ({
+        lat: point.lat,
+        lng: point.lng,
+        altitude: ROUTE_LINE_ALTITUDE_METERS,
+      })),
+      strokeColor: segment.color,
+      strokeWidth: segment.focused ? ROUTE_FOCUS_LINE_WIDTH : ROUTE_LINE_WIDTH,
+      outerColor: segment.focused ? ROUTE_FOCUS_OUTER_COLOR : ROUTE_LINE_OUTER_COLOR,
+      outerWidth: segment.focused ? ROUTE_FOCUS_OUTER_WIDTH : ROUTE_LINE_OUTER_WIDTH,
+    });
+    state.map.append(line);
+    return line;
+  });
+}
+
+function styledMapRouteSegments(path) {
+  const focusedClimb = state.climbs[state.focusedClimbIndex] ?? null;
+  if (!focusedClimb && state.routeGradeColorsEnabled) {
+    return gradeColoredRouteSegments(state.route, path, gradeColor);
+  }
+  return styledRouteSegments(state.route, path, ({ distance, grade }) => {
+    const color = state.routeGradeColorsEnabled ? gradeColor(grade) : ROUTE_LINE_COLOR;
+    const focused = Boolean(
+      focusedClimb &&
+      distance >= focusedClimb.startDistanceMeters &&
+      distance <= focusedClimb.endDistanceMeters
+    );
+    return {
+      key: `${color}|${focused ? "focus" : "normal"}`,
+      color,
+      focused,
+    };
+  });
+}
+
+function currentRouteLinePoints() {
+  const spacing = Math.max(
+    ROUTE_LINE_SPACING_METERS,
+    routeTotalDistance(state.route) / ROUTE_LINE_MAX_POINTS,
+  );
+  const points = densifyRoute(state.route, spacing);
+  const focusedClimb = state.climbs[state.focusedClimbIndex] ?? null;
+  if (!focusedClimb) return points;
+
+  // Add exact style boundaries so the highlighted replacement starts and ends
+  // at the detected climb boundaries rather than the nearest densified vertex.
+  return [
+    ...points,
+    interpolateRoutePoint(state.route, focusedClimb.startDistanceMeters),
+    interpolateRoutePoint(state.route, focusedClimb.endDistanceMeters),
+  ]
+    .sort((a, b) => a.distance - b.distance)
+    .filter((point, index, all) => index === 0 || point.distance !== all[index - 1].distance);
 }
 
 function renderRiderDot(point) {
@@ -1466,12 +1583,12 @@ function beaconFillColor() {
 }
 
 function clearRouteFromMap() {
-  if (state.line) state.line.remove();
+  state.routeLines.forEach((line) => line.remove());
   if (state.riderDot) state.riderDot.remove();
   if (state.riderBeacon) state.riderBeacon.remove();
   clearOverviewDebugLine();
 
-  state.line = null;
+  state.routeLines = [];
   state.riderDot = null;
   state.riderBeacon = null;
   state.lastRiderDot = null;
@@ -1818,10 +1935,17 @@ function renderProfile(progress = currentRideProgress()) {
     drawEmptyProfile(els.profile, { dark: true });
     return;
   }
+  const focusedClimb = state.climbs[state.focusedClimbIndex] ?? null;
   drawProfile(els.profile, {
     route: state.route,
     progress,
     hoverMeters: state.profileHoverMeters,
+    focusRange: focusedClimb
+      ? {
+        startMeters: focusedClimb.startDistanceMeters,
+        endMeters: focusedClimb.endDistanceMeters,
+      }
+      : null,
     dark: true,
     distanceUnits: state.distanceUnits,
     historySamples: rideLogSamples().slice(-PROFILE_HISTORY_SAMPLE_LIMIT),
@@ -2235,6 +2359,7 @@ function stepCameraFlight(now) {
   state.map.tilt = camera.tilt;
   state.map.roll = 0;
   state.map.fov = DEFAULT_MAP_FOV_DEGREES;
+  updateGalleryMetadataExport();
   return settled;
 }
 
@@ -2328,20 +2453,33 @@ function ensureCameraFlightLoop() {
 // margin. The camera stays there until movement starts. A fresh load snaps
 // there instantly (a new route can be on the other side of the world — no
 // flight); a reset flies back smoothly.
-function enterOverviewMode({ instant = false } = {}) {
+function enterOverviewMode({
+  instant = false,
+  route = state.route,
+  mode = state.overviewMode,
+} = {}) {
   // Overview can be shown whenever a route is loaded — while parked or, as a
   // deliberate user choice, while riding. The only automatic transitions are
   // "route loaded → overview on" (loadRoute / restore) and "movement started →
   // overview off" (ensureMovementLoop); everything else here is user-driven.
-  if (!state.route.length || !state.map) return;
+  if (!route.length || !state.map) return;
+  const focusingWholeRoute = route === state.route;
+  if (focusingWholeRoute && state.focusedClimbIndex !== null) {
+    state.focusedClimbIndex = null;
+    state.climbOverviewMenuOpen = false;
+    syncFocusedClimbList();
+    renderProfile();
+    rebuildRouteStyle();
+  }
   state.overviewActive = true;
+  state.overviewRoute = route;
+  state.activeOverviewMode = mode;
   syncOverviewControls();
-  const mode = state.overviewMode;
   // Only the fly modes deliberately tune FOV; everything else uses the default.
   if (!isFlyOverviewMode(mode)) state.map.fov = DEFAULT_MAP_FOV_DEGREES;
   const width = els.mapViewport?.clientWidth;
   const height = els.mapViewport?.clientHeight;
-  state.overviewCamera = computeRouteOverviewCamera(state.route, {
+  state.overviewCamera = computeRouteOverviewCamera(route, {
     ...overviewCameraParams(mode),
     viewportAspect: width && height ? width / height : undefined,
     // Newer Maps versions expose the actual field of view; older ones fall
@@ -2406,6 +2544,7 @@ function isAnimatedOverviewMode(mode) {
 
 function returnToRiderCamera() {
   state.overviewActive = false;
+  state.climbOverviewMenuOpen = false;
   closeOverviewModeMenu();
   clearOverviewAnimation();
   if (!state.route.length || !state.map) {
@@ -2414,6 +2553,8 @@ function returnToRiderCamera() {
   }
 
   state.cameraMode = "follow";
+  state.overviewRoute = state.route;
+  state.activeOverviewMode = state.overviewMode;
   state.cameraFlight = null;
   state.map.fov = DEFAULT_MAP_FOV_DEGREES;
   syncOverviewControls();
@@ -2430,12 +2571,13 @@ function returnToRiderCamera() {
 // current pose into the motion so switching modes or resetting never jumps.
 
 function startOverviewAnimation({ instant = false } = {}) {
-  const mode = state.overviewMode;
+  const mode = state.activeOverviewMode;
+  const route = state.overviewRoute ?? state.route;
   let flyby = null;
   if (isFlyOverviewMode(mode)) {
     flyby = mode === "flyover"
-      ? createFigureEightFlyover(state.route, ELLIPSE_FLYBY)
-      : createEllipseFlyby(state.route, ELLIPSE_FLYBY);
+      ? createFigureEightFlyover(route, ELLIPSE_FLYBY)
+      : createEllipseFlyby(route, ELLIPSE_FLYBY);
     if (!flyby) return false; // route too small to fly — caller falls back to static
   }
   const now = performance.now();
@@ -2504,8 +2646,11 @@ function stepOverviewAnimation(now) {
 
   let pose = null;
   if (anim.mode === "orbit") {
+    const secondsPerRevolution = state.focusedClimbIndex !== null && state.overviewRoute !== state.route
+      ? state.climbOrbitSecondsPerRev
+      : OVERVIEW_ORBIT_SECONDS_PER_REV;
     const cam = orbitCamera(state.overviewCamera, (now - anim.startMs) / 1000, {
-      secondsPerRevolution: OVERVIEW_ORBIT_SECONDS_PER_REV,
+      secondsPerRevolution,
       direction: OVERVIEW_ORBIT_DIRECTION,
     });
     const eye = cam && cameraEyePosition(cam);
@@ -2548,6 +2693,7 @@ function stepOverviewAnimation(now) {
   state.map.tilt = camera.tilt;
   state.map.roll = pose.roll ?? 0;
   state.map.fov = pose.fov ?? DEFAULT_MAP_FOV_DEGREES;
+  updateGalleryMetadataExport();
 }
 
 function lerpGeoPoint(a, b, t) {
@@ -2587,6 +2733,7 @@ function applyCameraNow(camera) {
       lastStepMs: performance.now(),
     }
     : null;
+  updateGalleryMetadataExport();
 }
 
 // --- Terrain avoidance ---------------------------------------------------------
@@ -2712,6 +2859,7 @@ function endUserInteraction() {
     // the overview is then an explicit action via the overview control.
     clearOverviewAnimation();
     state.overviewActive = false;
+    state.climbOverviewMenuOpen = false;
     state.cameraMode = "manual";
   }
   state.userInteracting = false;
@@ -2726,6 +2874,7 @@ function endUserInteraction() {
   state.cameraLiftTargetMeters = 0;
 
   updateRideUi();
+  updateGalleryMetadataExport(true);
 }
 
 function captureManualCameraSettings() {
@@ -2815,6 +2964,9 @@ function syncCameraControls() {
   els.cameraAngleInput.value = String(Math.round(state.cameraAngleDegrees));
   els.cameraBehindInput.value = String(Math.round(state.cameraBehindMeters / 20) * 20);
   els.overviewModeSelect.value = state.overviewMode;
+  els.climbFocusModeSelect.value = state.climbFocusMode;
+  els.climbOrbitSpeedInput.value = String(state.climbOrbitSecondsPerRev);
+  els.climbOrbitSpeedOutput.value = `${state.climbOrbitSecondsPerRev} s/lap`;
   syncOverviewControls();
 }
 
@@ -2833,14 +2985,60 @@ function updateOverviewModeFromControl() {
   }
 }
 
+function updateClimbFocusModeFromControl() {
+  state.climbFocusMode = normalizeClimbFocusMode(els.climbFocusModeSelect.value);
+  saveSettings();
+  if (state.focusedClimbIndex !== null && state.overviewActive) {
+    const climb = state.climbs[state.focusedClimbIndex];
+    const route = climb && sliceRoute(
+      state.route,
+      climb.startDistanceMeters,
+      climb.endDistanceMeters,
+    );
+    if (route?.length > 1) {
+      enterOverviewMode({ route, mode: state.climbFocusMode });
+    }
+  }
+}
+
+function updateClimbOrbitSpeedFromControl() {
+  const previous = state.climbOrbitSecondsPerRev;
+  state.climbOrbitSecondsPerRev = clamp(
+    Number(els.climbOrbitSpeedInput.value),
+    CLIMB_ORBIT_SECONDS_PER_REV_MIN,
+    CLIMB_ORBIT_SECONDS_PER_REV_MAX,
+  );
+  els.climbOrbitSpeedOutput.value = `${state.climbOrbitSecondsPerRev} s/lap`;
+
+  // Preserve the current orbit phase while changing its pace, avoiding a
+  // visible heading jump as the slider moves.
+  const anim = state.overviewAnim;
+  if (
+    anim?.mode === "orbit" &&
+    state.focusedClimbIndex !== null &&
+    state.overviewRoute !== state.route &&
+    previous > 0
+  ) {
+    const now = performance.now();
+    anim.startMs = now - (now - anim.startMs) * (state.climbOrbitSecondsPerRev / previous);
+  }
+  saveSettings();
+}
+
 function toggleRouteOverview() {
   if (!state.route.length) {
     syncOverviewControls();
     return;
   }
-  // Toggling works whether parked or riding — showing the overview mid-ride is
-  // an explicit user choice, and it does nothing to the ride itself.
-  if (state.overviewActive) returnToRiderCamera();
+  // A climb-focused camera is one level deeper than the whole-route overview:
+  // its mountain button returns to that overview first. The plane button then
+  // keeps its existing overview ↔ rider-camera behavior.
+  const climbFocused =
+    state.overviewActive &&
+    state.focusedClimbIndex !== null &&
+    state.overviewRoute !== state.route;
+  if (climbFocused) enterOverviewMode();
+  else if (state.overviewActive) returnToRiderCamera();
   else enterOverviewMode();
 }
 
@@ -2850,16 +3048,31 @@ function toggleOverviewModeMenu(event) {
   syncOverviewControls();
 }
 
+function toggleClimbOverviewModeMenu(event) {
+  event.stopPropagation();
+  state.climbOverviewMenuOpen = !state.climbOverviewMenuOpen;
+  syncOverviewControls();
+}
+
 function closeOverviewModeMenu() {
   if (!state.overviewMenuOpen) return;
   state.overviewMenuOpen = false;
   syncOverviewControls();
 }
 
+function closeClimbOverviewModeMenu() {
+  if (!state.climbOverviewMenuOpen) return;
+  state.climbOverviewMenuOpen = false;
+  syncOverviewControls();
+}
+
 function closeOverviewModeMenuOnOutsideClick(event) {
-  if (!state.overviewMenuOpen) return;
-  if (els.mapOverviewControl?.contains(event.target)) return;
-  closeOverviewModeMenu();
+  if (state.overviewMenuOpen && !els.mapOverviewControl?.contains(event.target)) {
+    closeOverviewModeMenu();
+  }
+  if (state.climbOverviewMenuOpen && !els.climbOverviewControl?.contains(event.target)) {
+    closeClimbOverviewModeMenu();
+  }
 }
 
 function selectOverviewModeFromMenu(event) {
@@ -2876,6 +3089,29 @@ function selectOverviewModeFromMenu(event) {
   else syncOverviewControls();
 }
 
+function returnFromClimbOverview() {
+  closeClimbOverviewModeMenu();
+  if (state.route.length) enterOverviewMode();
+}
+
+function selectClimbOverviewModeFromMenu(event) {
+  event.stopPropagation();
+  state.climbFocusMode = normalizeClimbFocusMode(event.currentTarget.dataset.mapClimbMode);
+  els.climbFocusModeSelect.value = state.climbFocusMode;
+  saveSettings();
+  closeClimbOverviewModeMenu();
+
+  const climb = state.climbs[state.focusedClimbIndex];
+  const route = climb && sliceRoute(
+    state.route,
+    climb.startDistanceMeters,
+    climb.endDistanceMeters,
+  );
+  if (route?.length > 1) {
+    enterOverviewMode({ route, mode: state.climbFocusMode });
+  }
+}
+
 function syncOverviewControls() {
   const hasRoute = state.route.length > 1;
   // The overview is always the user's to toggle when a route is loaded — even
@@ -2883,18 +3119,34 @@ function syncOverviewControls() {
   // it off automatically once (in ensureMovementLoop).
   const canToggle = hasRoute;
   const active = hasRoute && state.overviewActive;
+  const climbFocused =
+    active &&
+    state.focusedClimbIndex !== null &&
+    state.overviewRoute !== state.route;
 
-  els.mapOverviewControl.classList.toggle("active", active);
+  const routeOverviewActive = active && !climbFocused;
+  els.mapOverviewControl.classList.toggle("active", routeOverviewActive);
   els.overviewToggleBtn.disabled = !canToggle;
-  els.overviewToggleBtn.setAttribute("aria-pressed", String(active));
-  els.overviewToggleBtn.title = active ? "Return to rider camera" : "Show route overview";
-  els.overviewToggleBtn.setAttribute("aria-label", active ? "Return to rider camera" : "Show route overview");
+  els.overviewToggleBtn.setAttribute("aria-pressed", String(routeOverviewActive));
+  const toggleLabel = routeOverviewActive ? "Return to rider camera" : "Show route overview";
+  els.overviewToggleBtn.title = toggleLabel;
+  els.overviewToggleBtn.setAttribute("aria-label", toggleLabel);
 
   els.overviewMenuBtn.disabled = !hasRoute;
   els.overviewMenuBtn.setAttribute("aria-expanded", String(state.overviewMenuOpen));
   els.overviewModeMenu.hidden = !state.overviewMenuOpen;
   els.overviewModeButtons.forEach((button) => {
     const checked = normalizeOverviewMode(button.dataset.mapOverviewMode) === state.overviewMode;
+    button.setAttribute("aria-checked", String(checked));
+  });
+
+  els.climbOverviewControl.hidden = !climbFocused;
+  els.climbOverviewControl.classList.toggle("active", climbFocused);
+  els.climbOverviewToggleBtn.setAttribute("aria-pressed", String(climbFocused));
+  els.climbOverviewMenuBtn.setAttribute("aria-expanded", String(state.climbOverviewMenuOpen));
+  els.climbOverviewModeMenu.hidden = !state.climbOverviewMenuOpen || !climbFocused;
+  els.climbOverviewModeButtons.forEach((button) => {
+    const checked = normalizeClimbFocusMode(button.dataset.mapClimbMode) === state.climbFocusMode;
     button.setAttribute("aria-checked", String(checked));
   });
 
@@ -2928,7 +3180,13 @@ function normalizeOverviewMode(mode) {
   if (mode === "satellite-north") return "satellite"; // satellite is now north-up only
   return ["static", "orbit", "flyby", "flyover", "satellite"].includes(mode)
     ? mode
-    : "static";
+    : DEFAULT_OVERVIEW_MODE;
+}
+
+function normalizeClimbFocusMode(mode) {
+  return ["static", "orbit", "satellite"].includes(mode)
+    ? mode
+    : DEFAULT_CLIMB_FOCUS_MODE;
 }
 
 function updateCameraSettingsLabels() {
@@ -3308,24 +3566,26 @@ function updateOverviewDebugLine() {
 
   let path = null;
   let source = null;
-  if (state.overviewMode === "orbit") {
+  const mode = state.activeOverviewMode ?? state.overviewMode;
+  const route = state.overviewRoute ?? state.route;
+  if (mode === "orbit") {
     source = state.overviewCamera;
     path = orbitPath(state.overviewCamera, {
       altitudeMeters: OVERVIEW_DEBUG_LINE_ALTITUDE_METERS,
       sampleCount: OVERVIEW_DEBUG_LINE_SAMPLE_COUNT,
     });
-  } else if (isFlyOverviewMode(state.overviewMode)) {
+  } else if (isFlyOverviewMode(mode)) {
     // Only reuse the live driver when it's for the *current* mode; during a mode
     // switch state.overviewAnim still holds the previous mode's driver (its
     // replacement is built moments later), so build a fresh one for the newly
     // selected mode or the debug line would draw one pattern behind.
     const anim = state.overviewAnim;
-    const flyby = anim && anim.mode === state.overviewMode && anim.flyby
+    const flyby = anim && anim.mode === mode && anim.flyby
       ? anim.flyby
-      : (state.overviewMode === "flyover"
-        ? createFigureEightFlyover(state.route, ELLIPSE_FLYBY)
-        : createEllipseFlyby(state.route, ELLIPSE_FLYBY));
-    source = state.route;
+      : (mode === "flyover"
+        ? createFigureEightFlyover(route, ELLIPSE_FLYBY)
+        : createEllipseFlyby(route, ELLIPSE_FLYBY));
+    source = route;
     path = flyby?.pathAtAltitude(OVERVIEW_DEBUG_LINE_ALTITUDE_METERS, OVERVIEW_DEBUG_LINE_SAMPLE_COUNT);
   }
 
@@ -3335,7 +3595,7 @@ function updateOverviewDebugLine() {
   }
   if (
     state.overviewDebugLine &&
-    state.overviewDebugLineMode === state.overviewMode &&
+    state.overviewDebugLineMode === mode &&
     state.overviewDebugLineSource === source
   ) {
     return;
@@ -3351,7 +3611,7 @@ function updateOverviewDebugLine() {
     strokeColor: OVERVIEW_DEBUG_LINE_COLOR,
     strokeWidth: OVERVIEW_DEBUG_LINE_WIDTH,
   });
-  state.overviewDebugLineMode = state.overviewMode;
+  state.overviewDebugLineMode = mode;
   state.overviewDebugLineSource = source;
   state.map.append(state.overviewDebugLine);
 }
@@ -3412,7 +3672,7 @@ function renderCameraDebug() {
 
   const flyby = state.overviewAnim?.flyby;
   const rows = [
-    ["mode", state.cameraMode === "overview" ? `overview·${state.overviewMode}` : state.cameraMode],
+    ["mode", state.cameraMode === "overview" ? `overview·${state.activeOverviewMode}` : state.cameraMode],
     ["tilt", num(tilt, 1, "°")],
     ["range", num(range, 0, " m")],
     ["heading", num(heading, 1, "°")],
@@ -3485,6 +3745,8 @@ function resetCameraToDefaults() {
   state.cameraOffsetForwardMeters = 0;
   state.cameraOffsetRightMeters = 0;
   state.cameraCenterAltitudeOffsetMeters = 0;
+  state.climbFocusMode = DEFAULT_CLIMB_FOCUS_MODE;
+  state.climbOrbitSecondsPerRev = DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV;
 
   syncCameraControls();
   updateCameraSettingsLabels();
@@ -3505,6 +3767,8 @@ function resetCameraView() {
 }
 
 function updateRenderingSettingsFromControls() {
+  const routeGradeColorsChanged = state.routeGradeColorsEnabled !== els.routeGradeColorsInput.checked;
+  state.routeGradeColorsEnabled = els.routeGradeColorsInput.checked;
   state.beaconEnabled = els.beaconEnabledInput.checked;
   state.beaconDiameterMeters = Number(els.beaconDiameterInput.value);
   state.beaconHeightMeters = Number(els.beaconHeightInput.value);
@@ -3515,10 +3779,13 @@ function updateRenderingSettingsFromControls() {
   updateRenderingSettingsLabels();
   saveSettings();
   rebuildRiderBeacon();
+  if (routeGradeColorsChanged) rebuildRouteStyle();
   updateRideUi();
 }
 
 function resetRenderingToDefaults() {
+  const routeGradeColorsChanged = state.routeGradeColorsEnabled !== DEFAULT_ROUTE_GRADE_COLORS_ENABLED;
+  state.routeGradeColorsEnabled = DEFAULT_ROUTE_GRADE_COLORS_ENABLED;
   state.beaconEnabled = DEFAULT_BEACON_ENABLED;
   state.beaconDiameterMeters = DEFAULT_BEACON_DIAMETER_METERS;
   state.beaconHeightMeters = DEFAULT_BEACON_HEIGHT_METERS;
@@ -3530,7 +3797,15 @@ function resetRenderingToDefaults() {
   updateRenderingSettingsLabels();
   saveSettings();
   rebuildRiderBeacon();
+  if (routeGradeColorsChanged) rebuildRouteStyle();
   updateRideUi();
+}
+
+function rebuildRouteStyle() {
+  if (!state.route.length) return;
+  renderMinimapRoute();
+  if (!state.map || !state.maps3d) return;
+  renderRouteLines(currentRouteLinePoints());
 }
 
 function rebuildRiderBeacon() {
@@ -3541,6 +3816,7 @@ function rebuildRiderBeacon() {
 }
 
 function syncRenderingControls() {
+  els.routeGradeColorsInput.checked = state.routeGradeColorsEnabled;
   els.beaconEnabledInput.checked = state.beaconEnabled;
   els.beaconDiameterInput.value = String(state.beaconDiameterMeters);
   els.beaconHeightInput.value = String(state.beaconHeightMeters);
@@ -3597,8 +3873,12 @@ function syncCenterRiderButton() {
 // --- Gallery metadata export ------------------------------------------------------
 
 function resetGalleryMetadataExportForRoute() {
-  if (els.galleryTitleInput) els.galleryTitleInput.value = state.routeName || "";
-  if (els.galleryDescriptionInput) els.galleryDescriptionInput.value = "";
+  if (els.galleryTitleInput) {
+    els.galleryTitleInput.value = state.galleryMetadata?.title || state.routeName || "";
+  }
+  if (els.galleryDescriptionInput) {
+    els.galleryDescriptionInput.value = state.galleryMetadata?.description || "";
+  }
   syncGalleryMetadataExportAvailability();
 }
 
@@ -3617,11 +3897,15 @@ function syncGalleryMetadataExportAvailability() {
   }
 }
 
-function updateGalleryMetadataExport() {
+function updateGalleryMetadataExport(force = false) {
   if (!els.galleryMetadataOutput || !state.route.length || !state.map) return;
+  const now = performance.now();
+  if (!force && now - state.lastGalleryMetadataRefreshMs < GALLERY_METADATA_CAMERA_REFRESH_MS) return;
+  state.lastGalleryMetadataRefreshMs = now;
   const title = els.galleryTitleInput.value.trim() || state.routeName || "Untitled route";
   const description = els.galleryDescriptionInput.value.trim();
   const metadata = {
+    ...(state.galleryMetadata ?? {}),
     title,
     description,
     previewCamera: currentGalleryPreviewCamera(),
@@ -3653,7 +3937,7 @@ function roundCameraNumber(value, digits = 0) {
 }
 
 async function copyGalleryMetadata() {
-  updateGalleryMetadataExport();
+  updateGalleryMetadataExport(true);
   const text = els.galleryMetadataOutput.value;
   if (!text.trim()) return;
   try {
@@ -3706,6 +3990,14 @@ function initializeMapHud() {
   startFullscreenClock();
   renderProfile();
   updateTrainingMeters(state.route.length ? gradeAt(state.route, state.progressMeters) : NaN);
+  if (window.ResizeObserver) {
+    new ResizeObserver(([entry]) => {
+      const height = entry?.borderBoxSize?.[0]?.blockSize ?? entry?.contentRect?.height;
+      if (Number.isFinite(height)) {
+        els.mapViewport.style.setProperty("--fs-dock-height", `${Math.ceil(height)}px`);
+      }
+    }).observe(els.fullscreenOverlayBottom);
+  }
 }
 
 function enterMapFullscreen() {
@@ -3763,8 +4055,18 @@ function restoreSettings() {
   const headingOffset = Number(settings?.cameraHeadingOffsetDegrees);
   const offsetForward = Number(settings?.cameraOffsetForwardMeters);
   const offsetRight = Number(settings?.cameraOffsetRightMeters);
+  const climbOrbitSeconds = Number(settings?.climbOrbitSecondsPerRev);
 
   state.overviewMode = normalizeOverviewMode(settings?.overviewMode);
+  state.climbFocusMode = normalizeClimbFocusMode(settings?.climbFocusMode);
+  state.activeOverviewMode = state.overviewMode;
+  if (Number.isFinite(climbOrbitSeconds)) {
+    state.climbOrbitSecondsPerRev = clamp(
+      climbOrbitSeconds,
+      CLIMB_ORBIT_SECONDS_PER_REV_MIN,
+      CLIMB_ORBIT_SECONDS_PER_REV_MAX,
+    );
+  }
 
   if (Number.isFinite(zoom)) {
     state.cameraZoom = clamp(zoom, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
@@ -3874,6 +4176,10 @@ function restoreSettings() {
     state.terrainAvoidEnabled = settings.terrainAvoidEnabled;
   }
 
+  if (typeof settings?.routeGradeColorsEnabled === "boolean") {
+    state.routeGradeColorsEnabled = settings.routeGradeColorsEnabled;
+  }
+
   const terrainClearance = Number(settings?.terrainClearanceMeters);
   if (Number.isFinite(terrainClearance)) {
     state.terrainClearanceMeters = clamp(terrainClearance, Number(els.terrainClearanceInput.min), Number(els.terrainClearanceInput.max));
@@ -3966,6 +4272,8 @@ function saveSettings() {
   writeJson(SETTINGS_STORAGE_KEY, {
     cameraZoom: state.cameraZoom,
     overviewMode: state.overviewMode,
+    climbFocusMode: state.climbFocusMode,
+    climbOrbitSecondsPerRev: state.climbOrbitSecondsPerRev,
     cameraAngleDegrees: state.cameraAngleDegrees,
     cameraBehindMeters: state.cameraBehindMeters,
     cameraHeadingOffsetDegrees: state.cameraHeadingOffsetDegrees,
@@ -3973,6 +4281,7 @@ function saveSettings() {
     cameraOffsetRightMeters: state.cameraOffsetRightMeters,
     cameraCenterAltitudeOffsetMeters: state.cameraCenterAltitudeOffsetMeters,
     centerRider: state.centerRider,
+    routeGradeColorsEnabled: state.routeGradeColorsEnabled,
     beaconEnabled: state.beaconEnabled,
     beaconDiameterMeters: state.beaconDiameterMeters,
     beaconHeightMeters: state.beaconHeightMeters,
@@ -4031,6 +4340,11 @@ function restoreSavedRide() {
 
   state.route = enrichRoute(route);
   state.routeName = typeof savedRide.name === "string" ? savedRide.name : null;
+  state.focusedClimbIndex = null;
+  state.galleryMetadata = savedRide.galleryMetadata && typeof savedRide.galleryMetadata === "object"
+    ? structuredClone(savedRide.galleryMetadata)
+    : null;
+  state.lastGalleryMetadataRefreshMs = 0;
   state.progressMeters = clamp(Number(savedRide.progressMeters) || 0, 0, routeTotalDistance(state.route));
   state.simulating = false;
   state.lastTick = 0;
@@ -4070,6 +4384,7 @@ function saveRide() {
   const saved = writeJson(RIDE_STORAGE_KEY, {
     route,
     name: state.routeName,
+    galleryMetadata: state.galleryMetadata,
     progressMeters: Math.round(state.progressMeters),
     speedKph: Number(els.speedInput.value),
     savedAt: new Date().toISOString(),

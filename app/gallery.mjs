@@ -78,7 +78,7 @@ export async function initGallery(onLoadRoute, {
   previewServices = { getMaps3d, getMapLabelsEnabled };
 
   const loadRoute = async (route) => {
-    await onLoadRoute(route.gpx, route.title);
+    await onLoadRoute(route.gpx, route.title, galleryRouteMetadata(route));
     refreshCards(getCurrentRouteName, getDistanceUnits);
     els.dialog.close();
   };
@@ -100,9 +100,17 @@ export async function initGallery(onLoadRoute, {
   els.closeBtn.addEventListener("click", () => els.dialog.close());
 
   if (routes[0].gpx && shouldAutoLoadFirst()) {
-    await onLoadRoute(routes[0].gpx, routes[0].title);
+    await onLoadRoute(routes[0].gpx, routes[0].title, galleryRouteMetadata(routes[0]));
     refreshCards(getCurrentRouteName, getDistanceUnits);
   }
+}
+
+function galleryRouteMetadata(route) {
+  return {
+    title: route.title,
+    description: route.description,
+    previewCamera: route.previewCamera,
+  };
 }
 
 function refreshCards(getCurrentRouteName, getDistanceUnits) {

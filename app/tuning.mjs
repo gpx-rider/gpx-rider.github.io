@@ -70,6 +70,12 @@ export const GRADE_LOOKAROUND_METERS = 18;
 export const GRADE_MIN_PERCENT = -15;
 export const GRADE_MAX_PERCENT = 20;
 
+// The HUD grade meter caps its visual scale more tightly than the underlying
+// trainer/stat clamp above. Values beyond these endpoints pin to the edge,
+// keeping the outer green/red bands comparable in width to the middle bands.
+export const GRADE_METER_MIN_PERCENT = -6;
+export const GRADE_METER_MAX_PERCENT = 10;
+
 // Total ascent/descent noise filter: an elevation change only counts toward
 // the cumulative ascent/descent once it exceeds this many meters in one
 // direction. GPX elevation jitters by a meter or so point-to-point; summing
@@ -157,11 +163,20 @@ export const OVERVIEW_MAX_RANGE_METERS = Infinity;
 //   "flyover"          — a camera flies a figure-eight over the route (shares ELLIPSE_FLYBY)
 //   "satellite"        — straight-down, north-up view with the route framed as big as fits
 export const DEFAULT_OVERVIEW_MODE = "orbit";
+// Camera behavior after selecting a detected climb: "static" holds the
+// fitted climb view; "orbit" circles it; "satellite" shows it north-up.
+export const DEFAULT_CLIMB_FOCUS_MODE = "static";
 
 // Orbit mode: seconds for one full revolution, and spin direction (1 =
 // clockwise seen from above, -1 = counter-clockwise). Longer = statelier.
 export const OVERVIEW_ORBIT_SECONDS_PER_REV = 75;
 export const OVERVIEW_ORBIT_DIRECTION = 1;
+
+// Selected climbs are much smaller than whole routes, so their orbit gets its
+// own faster, user-adjustable revolution time.
+export const DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV = 30;
+export const CLIMB_ORBIT_SECONDS_PER_REV_MIN = 10;
+export const CLIMB_ORBIT_SECONDS_PER_REV_MAX = 90;
 
 // Red overview travel line drawn while the camera debug overlay is enabled.
 // Orbit draws the orbit eye ground track; Fly-by draws its fitted ellipse.
@@ -360,9 +375,22 @@ export const RIDER_DOT_ALTITUDE_METERS = 0.5;
 
 // --- Route line rendering -----------------------------------------------------------
 
+// Color the map route by the same grade buckets as the elevation profile.
+// Turning this off restores the single blue route trace.
+export const DEFAULT_ROUTE_GRADE_COLORS_ENABLED = true;
+
 // The route line floats this high above the terrain instead of being draped
 // onto it (draped strokes smear down steep slopes into wide blobs).
 export const ROUTE_LINE_ALTITUDE_METERS = 2.5;
+export const ROUTE_LINE_COLOR = "#0a84ff";
+export const ROUTE_LINE_WIDTH = 14;
+export const ROUTE_LINE_OUTER_COLOR = "rgba(255, 255, 255, 0.72)";
+export const ROUTE_LINE_OUTER_WIDTH = 0.35;
+// Selected climbs replace their normal route segments with this wider,
+// brighter-cased treatment. No second stacked line is used, avoiding z-fight.
+export const ROUTE_FOCUS_LINE_WIDTH = 19;
+export const ROUTE_FOCUS_OUTER_COLOR = "rgba(255, 255, 255, 0.96)";
+export const ROUTE_FOCUS_OUTER_WIDTH = 0.8;
 
 // The path is densified so elevated segments follow the ground between GPX
 // points; spacing grows on very long routes to cap the vertex count the map
@@ -394,8 +422,8 @@ export const SCREENSHOT_WIDTH_MAX = 3840;
 
 // --- Display & HUD defaults ------------------------------------------------------------
 
-// Satellite minimap overlay in the top-left corner of the 3D map.
-export const DEFAULT_SHOW_MINIMAP = true;
+// Satellite minimap overlay above the fullscreen data dock.
+export const DEFAULT_SHOW_MINIMAP = false;
 
 // Place labels (roads, towns, POIs) on the main 3D map. Off = clean
 // satellite imagery, on = Google's hybrid mode with labels.
@@ -422,26 +450,29 @@ export const HEART_RATE_REFRESH_MS = 1000;
 // for. The overlay refreshes on this interval while it's visible.
 export const DEFAULT_CAMERA_DEBUG_ENABLED = false;
 export const CAMERA_DEBUG_REFRESH_MS = 100;
+// Keep the gallery metadata camera readout live during animated overviews
+// without rebuilding its formatted JSON on every animation frame.
+export const GALLERY_METADATA_CAMERA_REFRESH_MS = 100;
 
 // Ordered fullscreen bottom-dock data fields. Keys must match the
 // data-hud="…" attributes in index.html. The visible count controls how many
 // fields are shown from the front of the order; users can still put every
 // field on-screen if they want a denser dock.
 export const DEFAULT_HUD_FIELD_ORDER = [
-  "power",
   "speed",
+  "ascentLeft",
+  "calories",
+  "remaining",
+  "power",
   "heartRate",
   "grade",
   "ridden",
-  "remaining",
-  "ascentLeft",
   "eta",
-  "calories",
   "altitude",
   "ascent",
   "elapsed",
 ];
-export const DEFAULT_HUD_VISIBLE_COUNT = 8;
+export const DEFAULT_HUD_VISIBLE_COUNT = 4;
 
 // The fullscreen ride HUD's bottom data dock can be collapsed to a compact
 // strip (key metrics + the two progress bars) or expanded to the full dock

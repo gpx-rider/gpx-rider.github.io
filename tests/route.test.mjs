@@ -11,6 +11,7 @@ import {
   routeTotalAscent,
   routeTotalDescent,
   routeTotalDistance,
+  sliceRoute,
 } from "../app/route.mjs";
 
 // A short straight route heading north; consecutive points ~111 m apart.
@@ -54,6 +55,18 @@ test("densifyRoute keeps originals and bounds the gap between points", () => {
 
   // Already-dense routes gain nothing.
   assert.equal(densifyRoute(route, 500).length, route.length);
+});
+
+test("sliceRoute interpolates exact endpoints and rebases distance", () => {
+  const route = enrichRoute(points);
+  const start = route[1].distance * 0.5;
+  const end = route[1].distance * 1.5;
+  const slice = sliceRoute(route, start, end);
+
+  assert.equal(slice[0].distance, 0);
+  assert.ok(Math.abs(routeTotalDistance(slice) - (end - start)) < 0.1);
+  assert.ok(Math.abs(slice[0].ele - interpolateRoutePoint(route, start).ele) < 1e-9);
+  assert.ok(Math.abs(slice.at(-1).ele - interpolateRoutePoint(route, end).ele) < 1e-9);
 });
 
 test("enrichRoute accumulates ascent and descent along the track", () => {

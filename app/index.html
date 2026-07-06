@@ -68,6 +68,19 @@
                   <button type="button" role="menuitemradio" data-map-overview-mode="satellite">Satellite</button>
                 </div>
               </div>
+              <div id="climbOverviewControl" class="map-overview-control map-climb-overview-control" hidden>
+                <button id="climbOverviewToggleBtn" type="button" class="map-action-btn map-overview-toggle" title="Return to route overview" aria-label="Return to route overview" aria-pressed="true">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 19 6.5-12 3.5 6 2-3 6 9H3Z"></path><path d="m8.2 9.4 1.3-2.4 1.4 2.4"></path></svg>
+                </button>
+                <button id="climbOverviewMenuBtn" type="button" class="map-action-btn map-overview-menu-btn" title="Choose climb overview style" aria-label="Choose climb overview style" aria-haspopup="menu" aria-expanded="false">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                </button>
+                <div id="climbOverviewModeMenu" class="map-overview-menu" role="menu" hidden>
+                  <button type="button" role="menuitemradio" data-map-climb-mode="static">Static</button>
+                  <button type="button" role="menuitemradio" data-map-climb-mode="orbit">Orbit</button>
+                  <button type="button" role="menuitemradio" data-map-climb-mode="satellite">Satellite</button>
+                </div>
+              </div>
               <button id="centerRiderBtn" type="button" class="map-action-btn" title="Keep rider centered" aria-label="Keep rider centered" aria-pressed="true">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><line x1="12" y1="1.5" x2="12" y2="4.5"></line><line x1="12" y1="19.5" x2="12" y2="22.5"></line><line x1="1.5" y1="12" x2="4.5" y2="12"></line><line x1="19.5" y1="12" x2="22.5" y2="12"></line><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"></circle></svg>
               </button>
@@ -94,7 +107,7 @@
             <!-- Ride HUD. These overlays are children of the map viewport, so
                  the same component is used in setup and fullscreen. -->
 
-            <!-- top-left: local time + elapsed + distance, above the minimap -->
+            <!-- top-left: local time + elapsed + distance -->
             <div id="fullscreenClock" class="fs-clock" hidden aria-live="polite">
               <span id="fsClockLocal" class="fs-clock-time" title="Local time">00:00:00</span>
               <span class="fs-clock-sep"></span>
@@ -477,7 +490,7 @@
             <span>Camera &amp; view</span>
           </button>
           <button type="button" class="settings-tab" data-settings-tab="rendering"
-            data-panel-title="Rendering" data-panel-subtitle="Rider beacon, terrain avoidance and map labels.">
+            data-panel-title="Rendering" data-panel-subtitle="Route styling, rider beacon, terrain avoidance and map labels.">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M2 12h4M18 12h4M12 2v4M12 18v4"></path></svg>
             <span>Rendering</span>
           </button>
@@ -542,6 +555,26 @@
               </select>
             </div>
             <div class="settings-divider"></div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Selected climb camera</span>
+                <span class="setting-row-hint">how a climb is framed after clicking it</span>
+              </div>
+              <select id="climbFocusModeSelect">
+                <option value="static">Static</option>
+                <option value="orbit">Orbit</option>
+                <option value="satellite">Satellite</option>
+              </select>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="climbOrbitSpeedInput">Climb orbit speed</label>
+                <output id="climbOrbitSpeedOutput" for="climbOrbitSpeedInput">30 s/lap</output>
+              </div>
+              <input id="climbOrbitSpeedInput" type="range" step="1">
+            </div>
+            <div class="settings-divider"></div>
             <div class="setting-slider">
               <div class="setting-slider-head">
                 <label for="cameraZoomInput">Zoom</label>
@@ -578,6 +611,17 @@
           </section>
 
           <section class="settings-panel" data-settings-panel="rendering" hidden>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Color route by grade</span>
+                <span class="setting-row-hint">green descents through amber climbs to red steep ramps</span>
+              </div>
+              <label class="switch">
+                <input id="routeGradeColorsInput" type="checkbox" checked>
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+            <div class="settings-divider"></div>
             <div class="setting-row">
               <div class="setting-row-text">
                 <span class="setting-row-label">Rider beacon</span>
@@ -669,10 +713,10 @@
             <div class="setting-row">
               <div class="setting-row-text">
                 <span class="setting-row-label">Minimap</span>
-                <span class="setting-row-hint">top-left overview</span>
+                <span class="setting-row-hint">bottom-right route overview</span>
               </div>
               <label class="switch">
-                <input id="minimapInput" type="checkbox" checked>
+                <input id="minimapInput" type="checkbox">
                 <span class="switch-track"><span class="switch-knob"></span></span>
               </label>
             </div>
