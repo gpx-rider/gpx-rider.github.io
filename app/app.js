@@ -940,12 +940,13 @@ function updateRouteOverview() {
       grade.className = "climb-grade";
       grade.textContent = `${climb.averageGradePercent.toFixed(1)}%`;
       item.append(line, grade);
-      // Click (or keyboard-activate) a climb to jump to its foot, frame that
-      // sub-route with the configured camera, and highlight it on the map.
+      // Click (or keyboard-activate) a climb to jump to its foot. From the
+      // overview surface this also drills into the configured climb camera and
+      // highlights that segment; during a ride it keeps the normal route style.
       item.classList.add("climb-seekable");
       item.tabIndex = 0;
       item.setAttribute("role", "button");
-      item.title = "Focus this climb";
+      item.title = "Jump to this climb";
       item.addEventListener("click", () => focusClimb(index));
       item.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -962,6 +963,7 @@ function updateRouteOverview() {
 function focusClimb(index) {
   const climb = state.climbs[index];
   if (!climb) return;
+  const shouldEnterClimbOverview = state.overviewActive && !isMoving();
   const climbRoute = sliceRoute(
     state.route,
     climb.startDistanceMeters,
@@ -970,14 +972,16 @@ function focusClimb(index) {
   if (climbRoute.length < 2) return;
 
   seekToMeters(climb.startDistanceMeters);
-  state.focusedClimbIndex = index;
+  state.focusedClimbIndex = shouldEnterClimbOverview ? index : null;
   syncFocusedClimbList();
   renderProfile();
   rebuildRouteStyle();
-  enterOverviewMode({
-    route: climbRoute,
-    mode: state.climbFocusMode,
-  });
+  if (shouldEnterClimbOverview) {
+    enterOverviewMode({
+      route: climbRoute,
+      mode: state.climbFocusMode,
+    });
+  }
 }
 
 function syncFocusedClimbList() {
@@ -1671,6 +1675,12 @@ function ensureMovementLoop() {
   // from the route overview when the rider starts pedaling.
   if (isMoving()) {
     state.overviewActive = false;
+    if (state.focusedClimbIndex !== null) {
+      state.focusedClimbIndex = null;
+      syncFocusedClimbList();
+      renderProfile();
+      rebuildRouteStyle();
+    }
     closeOverviewModeMenu();
     syncOverviewControls();
     // Drop any animated-overview driver so it stops owning the camera and the
