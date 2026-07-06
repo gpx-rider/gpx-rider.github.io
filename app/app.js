@@ -401,6 +401,10 @@ const els = {
   screenshotButtonInput: document.querySelector("#screenshotButtonInput"),
   screenshotAspectSelect: document.querySelector("#screenshotAspectSelect"),
   screenshotWidthSelect: document.querySelector("#screenshotWidthSelect"),
+  galleryTitleInput: document.querySelector("#galleryTitleInput"),
+  galleryDescriptionInput: document.querySelector("#galleryDescriptionInput"),
+  galleryMetadataOutput: document.querySelector("#galleryMetadataOutput"),
+  copyGalleryMetadataBtn: document.querySelector("#copyGalleryMetadataBtn"),
   fullscreenOverlayBottom: document.querySelector("#fullscreenOverlayBottom"),
   hudPowerStat: document.querySelector("#hudPowerStat"),
   hudSpeedStat: document.querySelector("#hudSpeedStat"),
@@ -526,6 +530,7 @@ async function startApp() {
   bindEvents();
   initializeMapHud();
   restoreSavedRide();
+  syncGalleryMetadataExportAvailability();
   void reconnectSavedTrainer();
   void reconnectSavedHeartRate();
   // First open with no saved ride: start on the first gallery route instead
@@ -535,6 +540,8 @@ async function startApp() {
     shouldAutoLoadFirst: () => state.route.length < 2 && Boolean(state.map),
     getCurrentRouteName: () => state.routeName,
     getDistanceUnits: () => state.distanceUnits,
+    getMaps3d: () => state.maps3d,
+    getMapLabelsEnabled: () => state.mapLabelsEnabled,
   });
 }
 
@@ -754,6 +761,9 @@ function bindEvents() {
   els.screenshotButtonInput.addEventListener("change", updateScreenshotSettingsFromControls);
   els.screenshotAspectSelect.addEventListener("change", updateScreenshotSettingsFromControls);
   els.screenshotWidthSelect.addEventListener("change", updateScreenshotSettingsFromControls);
+  els.galleryTitleInput.addEventListener("input", updateGalleryMetadataExport);
+  els.galleryDescriptionInput.addEventListener("input", updateGalleryMetadataExport);
+  els.copyGalleryMetadataBtn.addEventListener("click", copyGalleryMetadata);
   document.addEventListener("fullscreenchange", handleFullscreenChange);
   document.addEventListener("visibilitychange", handleVisibilityChange);
   document.addEventListener("keydown", (event) => {
@@ -818,6 +828,7 @@ function applyGpxText(text, { overrideName = null, fallbackName = null } = {}) {
   // A new route is a new ride: the ETA pace history starts over.
   state.rideEstimator = createRideEstimator();
   state.overviewActive = true;
+  resetGalleryMetadataExportForRoute();
   enterOverviewMode({ instant: true });
   updateStartButton();
   renderRoute();
@@ -1730,6 +1741,7 @@ function updateRideUi(options = {}) {
   renderProfile(progress);
   updateMinimapPosition(point);
   updateCameraSettingsLabels();
+  updateGalleryMetadataExport();
 
   els.hudGradeStat.textContent = `${grade.toFixed(1)}%`;
   els.hudRiddenStat.textContent = riddenText;
@@ -3582,6 +3594,82 @@ function syncCenterRiderButton() {
   els.centerRiderBtn.setAttribute("aria-pressed", String(state.centerRider));
 }
 
+// --- Gallery metadata export ------------------------------------------------------
+
+function resetGalleryMetadataExportForRoute() {
+  if (els.galleryTitleInput) els.galleryTitleInput.value = state.routeName || "";
+  if (els.galleryDescriptionInput) els.galleryDescriptionInput.value = "";
+  syncGalleryMetadataExportAvailability();
+}
+
+function syncGalleryMetadataExportAvailability() {
+  const enabled = Boolean(state.route.length && state.map);
+  for (const input of [els.galleryTitleInput, els.galleryDescriptionInput]) {
+    if (input) input.disabled = !enabled;
+  }
+  if (els.copyGalleryMetadataBtn) els.copyGalleryMetadataBtn.disabled = !enabled;
+  if (!enabled && els.galleryMetadataOutput) {
+    els.galleryMetadataOutput.value = state.route.length
+      ? "Photorealistic 3D Maps are not available."
+      : "Load a route, frame the map, then copy metadata.json.";
+  } else {
+    updateGalleryMetadataExport();
+  }
+}
+
+function updateGalleryMetadataExport() {
+  if (!els.galleryMetadataOutput || !state.route.length || !state.map) return;
+  const title = els.galleryTitleInput.value.trim() || state.routeName || "Untitled route";
+  const description = els.galleryDescriptionInput.value.trim();
+  const metadata = {
+    title,
+    description,
+    previewCamera: currentGalleryPreviewCamera(),
+  };
+  els.galleryMetadataOutput.value = JSON.stringify(metadata, null, 2) + "\n";
+}
+
+function currentGalleryPreviewCamera() {
+  const center = state.map?.center;
+  const camera = {
+    center: {
+      lat: roundCoordinate(Number(center?.lat)),
+      lng: roundCoordinate(Number(center?.lng)),
+      altitude: roundCameraNumber(Number(center?.altitude), 1),
+    },
+    heading: roundCameraNumber(Number(state.map?.heading), 2),
+    range: roundCameraNumber(Number(state.map?.range), 1),
+    tilt: roundCameraNumber(Number(state.map?.tilt), 2),
+    roll: roundCameraNumber(Number(state.map?.roll), 2),
+    fov: roundCameraNumber(Number(state.map?.fov), 2),
+  };
+  return camera;
+}
+
+function roundCameraNumber(value, digits = 0) {
+  if (!Number.isFinite(value)) return 0;
+  const scale = 10 ** digits;
+  return Math.round(value * scale) / scale;
+}
+
+async function copyGalleryMetadata() {
+  updateGalleryMetadataExport();
+  const text = els.galleryMetadataOutput.value;
+  if (!text.trim()) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    els.galleryMetadataOutput.focus();
+    els.galleryMetadataOutput.select();
+    document.execCommand?.("copy");
+  }
+  const previous = els.copyGalleryMetadataBtn.textContent;
+  els.copyGalleryMetadataBtn.textContent = "Copied";
+  window.setTimeout(() => {
+    els.copyGalleryMetadataBtn.textContent = previous;
+  }, 1200);
+}
+
 // --- Screenshots -----------------------------------------------------------------
 
 async function takeMapScreenshot() {
@@ -3948,6 +4036,7 @@ function restoreSavedRide() {
   state.lastTick = 0;
 
   state.overviewActive = true;
+  resetGalleryMetadataExportForRoute();
   enterOverviewMode({ instant: true });
   updateStartButton();
   renderRoute();

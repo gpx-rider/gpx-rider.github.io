@@ -1,5 +1,0 @@
-### Stelvio Pass
-
-A high-alpine ride from Stilfs over the legendary Stelvio Pass and down toward Bormio. Expect towering mountain views, dramatic switchbacks, exposed slopes, and one of the most recognizable roads in cycling.
-
-**30 km** · **1,495 m up** · **866 m down**

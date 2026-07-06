@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Generate app/gallery.json for the in-app ride gallery.
 
-For every route in gallery/*/ this parses the GPX and precomputes everything
-the gallery cards render — distance, noise-filtered ascent/descent, the
-distance/terrain/difficulty classification, and the ready-to-draw bars of the
-mini elevation profile — so the browser only has to lay them out. The numbers
+For every route in gallery/*/ this reads metadata.json, parses the GPX and
+precomputes everything the gallery cards render — distance, noise-filtered
+ascent/descent, the distance/terrain/difficulty classification, and the
+ready-to-draw bars of the mini elevation profile. The live 3D preview camera
+comes from metadata.json when present; the browser falls back to its normal
+route overview framing when a route has not been hand-framed yet. The numbers
 mirror app/route.mjs and app/difficulty.mjs; the thresholds below are kept in
 sync with app/tuning.mjs by hand (no build step to import them).
 """
@@ -157,12 +159,14 @@ def route_stats(points):
     return round(distance), round(ascent), round(descent), bars
 
 
-def parse_desc(path):
-    text = path.read_text().strip()
-    lines = text.split("\n")
-    title = lines[0].lstrip("#").strip()
-    body = "\n".join(lines[1:]).strip()
-    return title, body
+def parse_metadata(path):
+    data = json.loads(path.read_text())
+    title = str(data.get("title") or "").strip()
+    description = str(data.get("description") or "").strip()
+    preview_camera = data.get("previewCamera")
+    if not isinstance(preview_camera, dict):
+        preview_camera = None
+    return title, description, preview_camera
 
 
 def main():
@@ -172,20 +176,19 @@ def main():
 
     routes = []
     for entry in entries:
-        desc_file = entry / "desc.md"
+        metadata_file = entry / "metadata.json"
         gpx_file = entry / "export.gpx"
-        screenshot = next(entry.glob("screenshot.*"), None)
 
-        if not desc_file.exists() or not gpx_file.exists():
+        if not metadata_file.exists() or not gpx_file.exists():
             continue
 
-        title, body = parse_desc(desc_file)
+        title, body, preview_camera = parse_metadata(metadata_file)
 
         route = {
             "id": entry.name,
             "title": title,
             "description": body,
-            "screenshot": f"gallery/{entry.name}/{screenshot.name}" if screenshot else None,
+            "previewCamera": preview_camera,
             "gpx": f"gallery/{entry.name}/export.gpx",
         }
 
@@ -202,7 +205,8 @@ def main():
 
         routes.append(route)
 
-    # Copy gallery assets into app/gallery/ so they are served alongside the app
+    # Copy gallery GPX files into app/gallery/ so they are served alongside the app.
+    # Preview images are no longer copied: gallery cards render live 3D maps.
     if APP_GALLERY_DIR.exists():
         shutil.rmtree(APP_GALLERY_DIR)
     for entry in entries:
@@ -212,9 +216,6 @@ def main():
         dest = APP_GALLERY_DIR / entry.name
         dest.mkdir(parents=True, exist_ok=True)
         shutil.copy2(gpx_file, dest / "export.gpx")
-        screenshot = next(entry.glob("screenshot.*"), None)
-        if screenshot:
-            shutil.copy2(screenshot, dest / screenshot.name)
 
     OUTPUT_JSON.write_text(json.dumps({"routes": routes}, indent=2, ensure_ascii=False) + "\n")
     print(f"Gallery data generated: {len(routes)} route(s) → {OUTPUT_JSON}")

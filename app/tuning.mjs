@@ -370,6 +370,18 @@ export const ROUTE_LINE_ALTITUDE_METERS = 2.5;
 export const ROUTE_LINE_SPACING_METERS = 15;
 export const ROUTE_LINE_MAX_POINTS = 5000;
 
+// Gallery cards start with lightweight classic satellite maps. Padding keeps
+// each route clear of the thumbnail edges after fitting its bounds.
+export const GALLERY_PREVIEW_MAP_TYPE = "satellite";
+export const GALLERY_PREVIEW_FIT_PADDING_PIXELS = 20;
+
+// Route styling shared by the gallery's classic and opt-in 3D previews.
+export const GALLERY_PREVIEW_ROUTE_COLOR = "#0a84ff";
+export const GALLERY_PREVIEW_2D_ROUTE_WIDTH = 5;
+export const GALLERY_PREVIEW_3D_ROUTE_WIDTH = 14;
+export const GALLERY_PREVIEW_3D_ROUTE_OUTER_COLOR = "rgba(255, 255, 255, 0.72)";
+export const GALLERY_PREVIEW_3D_ROUTE_OUTER_WIDTH = 0.35;
+
 // --- Screenshots ---------------------------------------------------------------------
 
 // Ride screenshots come out at a constant size so gallery shots line up.

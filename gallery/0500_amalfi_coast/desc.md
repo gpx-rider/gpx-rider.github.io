@@ -1,5 +1,0 @@
-### Amalfi Coast
-
-A punchy coastal ride along the Amalfi Coast, where the road keeps climbing out of seaside towns and dropping back toward the Mediterranean. Expect cliffside views, tight bends, short hard efforts, and plenty of downhill breaks before finishing at Piazza Giacomo Matteotti.
-
-**32.3 km** · **1,176 m up** · **1,237 m down**
