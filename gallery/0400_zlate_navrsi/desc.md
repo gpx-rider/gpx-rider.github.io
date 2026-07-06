@@ -1,5 +1,0 @@
-### Zlaté návrší
-
-Climb from Semily deep into the Krkonoše mountains, taking on a 40 km ascent toward Zlaté návrší - often claimed to be the longest climb in the Czech Republic. After the main climb, the route crosses the high ridges past Labská bouda, the source of the Elbe, and Vosecká bouda - including a protected stretch that is much easier to enjoy when your bike is virtual.
-
-**54.6 km** · **1,164 m up** · **711 m down**

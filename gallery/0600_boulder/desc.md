@@ -1,5 +1,0 @@
-### Boulder Foothills
-
-A punchy ride through the Colorado foothills around Boulder, where the road keeps kicking up into short climbs before dropping into fast descents. Expect canyon roads, open mountain views, dry Rocky Mountain scenery, and a sawtooth profile that feels made for natural intervals.
-
-**48.2 km** · **1,473 m up** · **1,737 m down**
