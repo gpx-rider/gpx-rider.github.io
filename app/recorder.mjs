@@ -11,7 +11,7 @@ import { RIDE_PERSIST_INTERVAL_MS, RIDE_SAMPLE_INTERVAL_MS } from "./tuning.mjs"
 const RIDE_LOG_STORAGE_KEY = "gpx-rider:ride-log";
 
 // Samples are stored as compact arrays to keep the persisted log small:
-// [unixSeconds, lat, lng, ele, distanceMeters, speedKph, powerWatts, heartRateBpm, caloriesKcal]
+// [unixSeconds, lat, lng, ele, distanceMeters, speedKph, powerWatts, heartRateBpm, caloriesKcal, routeProgressMeters]
 const log = emptyLog();
 
 function emptyLog() {
@@ -36,7 +36,16 @@ export function restoreRideLog() {
   log.samples = saved.samples.filter(Array.isArray);
 }
 
-export function recordRideTick({ elapsedSeconds, metersAdvanced, point, speedKph, powerWatts, heartRateBpm, caloriesKcal }) {
+export function recordRideTick({
+  elapsedSeconds,
+  metersAdvanced,
+  point,
+  speedKph,
+  powerWatts,
+  heartRateBpm,
+  caloriesKcal,
+  routeProgressMeters,
+}) {
   const now = Date.now();
   if (log.startedAtMs === null) log.startedAtMs = now;
   log.timerSeconds += Math.max(0, elapsedSeconds);
@@ -55,6 +64,7 @@ export function recordRideTick({ elapsedSeconds, metersAdvanced, point, speedKph
     Number.isFinite(powerWatts) ? Math.round(powerWatts) : null,
     Number.isFinite(heartRateBpm) ? Math.round(heartRateBpm) : null,
     Number.isFinite(caloriesKcal) ? Math.round(caloriesKcal) : null,
+    Number.isFinite(routeProgressMeters) ? Math.round(routeProgressMeters * 10) / 10 : null,
   ]);
 
   if (now - log.lastPersistAtMs >= RIDE_PERSIST_INTERVAL_MS) persistRideLog();
@@ -109,8 +119,17 @@ function findLastCalories() {
 }
 
 export function rideLogSamples() {
-  return log.samples.map(([t, lat, lng, ele, distance, speedKph, powerWatts, heartRateBpm, caloriesKcal]) => ({
-    t, lat, lng, ele, distance, speedKph, powerWatts, heartRateBpm, caloriesKcal,
+  return log.samples.map(([t, lat, lng, ele, distance, speedKph, powerWatts, heartRateBpm, caloriesKcal, routeProgressMeters]) => ({
+    t,
+    lat,
+    lng,
+    ele,
+    distance,
+    speedKph,
+    powerWatts,
+    heartRateBpm,
+    caloriesKcal,
+    routeProgressMeters: Number.isFinite(routeProgressMeters) ? routeProgressMeters : distance,
   }));
 }
 

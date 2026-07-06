@@ -7,6 +7,7 @@ import { readJson, writeJson } from "./storage.mjs";
 const HEART_RATE_SERVICE = 0x180d;
 const HEART_RATE_MEASUREMENT = 0x2a37;
 const HEART_RATE_STORAGE_KEY = "gpx-rider:last-heart-rate";
+const GATT_RECONNECT_DELAY_MS = 350;
 
 const strap = {
   device: null,
@@ -44,7 +45,7 @@ export async function connectHeartRate() {
   } catch (error) {
     console.error(error);
     callbacks.onStatus("Failed");
-    callbacks.onMessage(error.message || "Could not connect to the heart rate sensor.");
+    callbacks.onMessage(connectionErrorMessage(error, "heart rate sensor"));
   }
 }
 
@@ -66,6 +67,8 @@ export async function reconnectSavedHeartRate() {
 }
 
 async function connectHeartRateDevice(device) {
+  strap.device = null;
+  strap.measurement = null;
   device.addEventListener("gattserverdisconnected", () => {
     strap.device = null;
     strap.measurement = null;
@@ -73,8 +76,7 @@ async function connectHeartRateDevice(device) {
     callbacks.onStatus("Disconnected");
   });
 
-  const server = await device.gatt.connect();
-  const service = await server.getPrimaryService(HEART_RATE_SERVICE);
+  const service = await getPrimaryServiceWithRetry(device, HEART_RATE_SERVICE, "heart rate sensor");
   strap.measurement = await service.getCharacteristic(HEART_RATE_MEASUREMENT);
   strap.measurement.addEventListener("characteristicvaluechanged", handleHeartRateMeasurement);
   await strap.measurement.startNotifications();
@@ -86,6 +88,47 @@ async function connectHeartRateDevice(device) {
     savedAt: new Date().toISOString(),
   });
   callbacks.onStatus(device.name || "Connected");
+}
+
+async function getPrimaryServiceWithRetry(device, serviceUuid, label) {
+  try {
+    const server = await connectGatt(device);
+    return await server.getPrimaryService(serviceUuid);
+  } catch (error) {
+    if (!isGattDisconnectedError(error)) throw error;
+
+    console.warn(`GATT disconnected while discovering ${label}; reconnecting once.`, error);
+    callbacks.onStatus("Reconnecting");
+    try {
+      device.gatt?.disconnect?.();
+    } catch {
+      // Some browsers throw if already disconnected; connecting below is enough.
+    }
+    await delay(GATT_RECONNECT_DELAY_MS);
+    const server = await connectGatt(device);
+    return await server.getPrimaryService(serviceUuid);
+  }
+}
+
+async function connectGatt(device) {
+  if (!device.gatt) throw new Error("This Bluetooth device does not expose a GATT server.");
+  if (device.gatt.connected) return device.gatt;
+  return device.gatt.connect();
+}
+
+function isGattDisconnectedError(error) {
+  return /GATT Server is disconnected|Cannot retrieve services|disconnected/i.test(error?.message || "");
+}
+
+function connectionErrorMessage(error, label) {
+  if (isGattDisconnectedError(error)) {
+    return `Could not keep the ${label} connected. Turn it awake, keep it nearby, then connect again.`;
+  }
+  return error?.message || `Could not connect to the ${label}.`;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function handleHeartRateMeasurement(event) {

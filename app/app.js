@@ -37,9 +37,18 @@ import { createRideEstimator, estimateRemainingSeconds, recordEstimatorTick } fr
 import { classifyRoute } from "./difficulty.mjs";
 import { detectClimbs } from "./climbs.mjs";
 import { distanceAtProfileX, drawEmptyProfile, drawProfile, gradeColor } from "./profile.mjs";
-import { formatAltitude, formatDistance, formatDuration, formatEnergy, formatLocalTime, formatSpeed } from "./units.mjs";
+import {
+  activeCaloriesFromPower,
+  formatAltitude,
+  formatDistance,
+  formatDuration,
+  formatEnergy,
+  formatLocalTime,
+  formatSpeed,
+} from "./units.mjs";
 import { initStorage, readJson, removeStored, writeJson } from "./storage.mjs";
 import {
+  APP_NAME,
   CAMERA_CENTER_ALTITUDE_LIMIT_METERS,
   CAMERA_PAN_LIMIT_METERS,
   CAMERA_TILT_MAX,
@@ -49,6 +58,7 @@ import {
   CLIMB_BANNER_APPROACH_METERS,
   CLIMB_BANNER_MINI_BAR_COUNT,
   CLIMB_CATEGORIES,
+  CYCLING_GROSS_EFFICIENCY,
   DEFAULT_BEACON_COLOR,
   DEFAULT_BEACON_DIAMETER_METERS,
   DEFAULT_BEACON_ENABLED,
@@ -58,8 +68,12 @@ import {
   DEFAULT_CAMERA_BEHIND_METERS,
   DEFAULT_CAMERA_ZOOM,
   DEFAULT_GRADE_INTERVAL_SECONDS,
+  DEFAULT_MAX_HEART_RATE_BPM,
+  DEFAULT_RESTING_HEART_RATE_BPM,
   DEFAULT_HUD_DOCK_COLLAPSED,
-  DEFAULT_HUD_ELEMENTS,
+  DEFAULT_DURATION_FORMAT,
+  DEFAULT_HUD_FIELD_ORDER,
+  DEFAULT_HUD_VISIBLE_COUNT,
   DEFAULT_CAMERA_DEBUG_ENABLED,
   CAMERA_DEBUG_REFRESH_MS,
   DEFAULT_MAP_FOV_DEGREES,
@@ -75,6 +89,9 @@ import {
   FULLSCREEN_CLOCK_REFRESH_MS,
   GRADE_INTERVAL_MAX_SECONDS,
   GRADE_INTERVAL_MIN_SECONDS,
+  HEART_RATE_MAX_AGE_FORMULA_BASE,
+  HEART_RATE_REFRESH_MS,
+  HEART_RATE_ZONE_DEFINITIONS,
   HEADING_SAMPLE_METERS,
   INTERACTION_SETTLE_MS,
   MAX_TICK_SECONDS,
@@ -97,10 +114,13 @@ import {
   SATELLITE_MARGIN_FACTOR,
   PEDALING_START_KPH,
   PEDALING_STOP_KPH,
+  POWER_ZONE_DEFINITIONS,
+  PROFILE_HISTORY_SAMPLE_LIMIT,
   RIDER_DOT_ALTITUDE_METERS,
   RIDER_DOT_DIAMETER_METERS,
   RIDER_DOT_MODEL_PATH,
   RIDER_DOT_ORIENTATION,
+  RIDER_DOT_OVERVIEW_SCALE_FACTOR,
   RIDER_DOT_SCALE,
   RIDE_SAVE_THROTTLE_MS,
   ROUTE_LINE_ALTITUDE_METERS,
@@ -126,7 +146,7 @@ import {
   sendTrainerCommand,
   sendTrainerGrade,
 } from "./trainer.mjs";
-import { connectHeartRate, initHeartRate, reconnectSavedHeartRate } from "./heartrate.mjs";
+import { connectHeartRate, initHeartRate, isHeartRateConnected, reconnectSavedHeartRate } from "./heartrate.mjs";
 import {
   clearRideLog,
   hasRideData,
@@ -195,9 +215,11 @@ const state = {
   trainerSpeedKph: null,
   trainerPowerWatts: null,
   trainerCaloriesKcal: null,
+  powerCaloriesKcal: 0,
   trainerHeartRateBpm: null,
   strapHeartRateBpm: null,
   heartRateStatusText: null,
+  heartRateRefreshTimer: null,
   gradeUpdateIntervalSeconds: DEFAULT_GRADE_INTERVAL_SECONDS,
   lastSlowUiAt: 0,
   lastRiderDot: null,
@@ -249,6 +271,11 @@ const state = {
   distanceUnits: "metric",
   energyUnits: "kcal",
   timeFormat: DEFAULT_TIME_FORMAT,
+  durationFormat: DEFAULT_DURATION_FORMAT,
+  restingHeartRateBpm: DEFAULT_RESTING_HEART_RATE_BPM,
+  maxHeartRateBpm: DEFAULT_MAX_HEART_RATE_BPM,
+  ftpWatts: null,
+  draggedHudField: null,
   fullscreenClockTimer: null,
   showMinimap: DEFAULT_SHOW_MINIMAP,
   mapLabelsEnabled: DEFAULT_MAP_LABELS_ENABLED,
@@ -258,8 +285,10 @@ const state = {
   overviewDebugLine: null,
   overviewDebugLineMode: null,
   overviewDebugLineSource: null,
-  hudElements: { ...DEFAULT_HUD_ELEMENTS },
+  hudFieldOrder: [...DEFAULT_HUD_FIELD_ORDER],
+  hudVisibleCount: DEFAULT_HUD_VISIBLE_COUNT,
   hudDockCollapsed: DEFAULT_HUD_DOCK_COLLAPSED,
+  profileSeries: { speed: true, power: true, heartRate: true },
   // startDistance of the climb whose mini-profile is currently drawn in the
   // banner, so it is only rebuilt when the upcoming climb changes.
   bannerClimbKey: null,
@@ -268,6 +297,7 @@ const state = {
 };
 
 const els = {
+  brandName: document.querySelector("#brandName"),
   settingsBtn: document.querySelector("#settingsBtn"),
   fullscreenSettingsBtn: document.querySelector("#fullscreenSettingsBtn"),
   settingsDialog: document.querySelector("#settingsDialog"),
@@ -312,6 +342,7 @@ const els = {
   distanceUnitSelect: document.querySelector("#distanceUnitSelect"),
   energyUnitSelect: document.querySelector("#energyUnitSelect"),
   timeFormatSelect: document.querySelector("#timeFormatSelect"),
+  durationFormatSelect: document.querySelector("#durationFormatSelect"),
   overviewModeSelect: document.querySelector("#overviewModeSelect"),
   cameraZoomInput: document.querySelector("#cameraZoomInput"),
   cameraZoomOutput: document.querySelector("#cameraZoomOutput"),
@@ -336,6 +367,11 @@ const els = {
   resetRenderingBtn: document.querySelector("#resetRenderingBtn"),
   connectBtn: document.querySelector("#connectBtn"),
   connectHrBtn: document.querySelector("#connectHrBtn"),
+  restingHeartRateInput: document.querySelector("#restingHeartRateInput"),
+  maxHeartRateInput: document.querySelector("#maxHeartRateInput"),
+  ftpInput: document.querySelector("#ftpInput"),
+  powerZoneSummary: document.querySelector("#powerZoneSummary"),
+  heartRateZoneSummary: document.querySelector("#heartRateZoneSummary"),
   startBtn: document.querySelector("#startBtn"),
   startBtnLabel: document.querySelector("#startBtnLabel"),
   resetBtn: document.querySelector("#resetBtn"),
@@ -371,14 +407,25 @@ const els = {
   hudRemainingStat: document.querySelector("#hudRemainingStat"),
   hudAscentLeftStat: document.querySelector("#hudAscentLeftStat"),
   hudEtaStat: document.querySelector("#hudEtaStat"),
+  hudCaloriesStat: document.querySelector("#hudCaloriesStat"),
+  hudAltitudeStat: document.querySelector("#hudAltitudeStat"),
+  hudAscentStat: document.querySelector("#hudAscentStat"),
+  hudElapsedStat: document.querySelector("#hudElapsedStat"),
   hudTiles: document.querySelectorAll("#fullscreenHud [data-hud]"),
-  hudToggles: document.querySelectorAll("#settingsDialog [data-hud-toggle]"),
+  hudOrderList: document.querySelector("#hudOrderList"),
+  hudVisibleCountOutput: document.querySelector("#hudVisibleCountOutput"),
+  hudLessBtn: document.querySelector("#hudLessBtn"),
+  hudMoreBtn: document.querySelector("#hudMoreBtn"),
+  hudSettingsBtn: document.querySelector("#hudSettingsBtn"),
+  hudVisibleLessBtn: document.querySelector("#hudVisibleLessBtn"),
+  hudVisibleMoreBtn: document.querySelector("#hudVisibleMoreBtn"),
   fullscreenHud: document.querySelector("#fullscreenHud"),
+  profileSeriesButtons: document.querySelectorAll("[data-profile-series]"),
   // Fullscreen HUD: data dock, top-left clock chip, and top-center climb banner
   dockToggleBtn: document.querySelector("#dockToggleBtn"),
   fsProfileMount: document.querySelector("#fsProfileMount"),
-  roadAscentLeft: document.querySelector("#roadAscentLeft"),
-  roadAltitude: document.querySelector("#roadAltitude"),
+  fsRoadRouteName: document.querySelector("#fsRoadRouteName"),
+  fsRoadRouteProps: document.querySelector("#fsRoadRouteProps"),
   fsDistLabel: document.querySelector("#fsDistLabel"),
   fsDistFill: document.querySelector("#fsDistFill"),
   fsClimbLabel: document.querySelector("#fsClimbLabel"),
@@ -387,6 +434,20 @@ const els = {
   fsClockLocal: document.querySelector("#fsClockLocal"),
   fsClockElapsed: document.querySelector("#fsClockElapsed"),
   fsClockDistance: document.querySelector("#fsClockDistance"),
+  fsClockAscent: document.querySelector("#fsClockAscent"),
+  fullscreenTrainingMeters: document.querySelector("#fullscreenTrainingMeters"),
+  powerMeter: document.querySelector("#powerMeter"),
+  heartRateMeter: document.querySelector("#heartRateMeter"),
+  gradeMeter: document.querySelector("#gradeMeter"),
+  zonePowerValue: document.querySelector("#zonePowerValue"),
+  zonePowerMeta: document.querySelector("#zonePowerMeta"),
+  zonePowerFill: document.querySelector("#zonePowerFill"),
+  zoneHeartRateValue: document.querySelector("#zoneHeartRateValue"),
+  zoneHeartRateMeta: document.querySelector("#zoneHeartRateMeta"),
+  zoneHeartRateFill: document.querySelector("#zoneHeartRateFill"),
+  zoneGradeValue: document.querySelector("#zoneGradeValue"),
+  zoneGradeMeta: document.querySelector("#zoneGradeMeta"),
+  zoneGradeFill: document.querySelector("#zoneGradeFill"),
   climbBanner: document.querySelector("#climbBanner"),
   climbBannerAhead: document.querySelector("#climbBannerAhead"),
   climbBannerOn: document.querySelector("#climbBannerOn"),
@@ -427,6 +488,8 @@ const els = {
 startApp();
 
 async function startApp() {
+  document.title = APP_NAME;
+  els.brandName.textContent = APP_NAME;
   // Everything below reads persisted state through storage.mjs, so the
   // IndexedDB-backed cache must be loaded before anything else runs.
   await initStorage();
@@ -450,6 +513,7 @@ async function startApp() {
 
   restoreSettings();
   restoreRideLog();
+  state.powerCaloriesKcal = rideLogSummary().caloriesKcal ?? 0;
   updateRecordingUi();
   els.mapsApiKeyInput.value = getStoredMapsApiKey();
   // A deployment with its own baked-in key has no need for visitors to see
@@ -634,11 +698,20 @@ function bindEvents() {
   els.distanceUnitSelect.addEventListener("change", updateUnitsFromControls);
   els.energyUnitSelect.addEventListener("change", updateUnitsFromControls);
   els.timeFormatSelect.addEventListener("change", updateUnitsFromControls);
+  els.durationFormatSelect.addEventListener("change", updateUnitsFromControls);
+  els.restingHeartRateInput.addEventListener("change", updateRiderProfileFromControls);
+  els.maxHeartRateInput.addEventListener("change", updateRiderProfileFromControls);
+  els.ftpInput.addEventListener("change", updateRiderProfileFromControls);
   els.minimapInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.mapLabelsInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.cameraDebugInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.cameraDebugCollapseBtn.addEventListener("click", toggleCameraDebugCollapsed);
-  els.hudToggles.forEach((input) => input.addEventListener("change", updateDisplaySettingsFromControls));
+  els.hudLessBtn.addEventListener("click", () => adjustHudVisibleCount(-1));
+  els.hudMoreBtn.addEventListener("click", () => adjustHudVisibleCount(1));
+  els.hudSettingsBtn.addEventListener("click", () => openSettings("hud"));
+  els.hudVisibleLessBtn.addEventListener("click", () => adjustHudVisibleCount(-1));
+  els.hudVisibleMoreBtn.addEventListener("click", () => adjustHudVisibleCount(1));
+  els.profileSeriesButtons.forEach((button) => button.addEventListener("click", toggleProfileSeries));
   els.overviewModeSelect.addEventListener("change", updateOverviewModeFromControl);
   els.cameraZoomInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
@@ -862,10 +935,11 @@ function updateClimbStatus(point) {
 
 // Top-left chip ride stats. The local wall clock has its own timer below so
 // seconds keep advancing while the rider is stationary.
-function updateFullscreenClock(riddenText) {
+function updateFullscreenClock(riddenText, ascentText = "--") {
   if (!state.mapFullscreen) return;
-  els.fsClockElapsed.textContent = formatDuration(rideLogSummary().timerSeconds);
+  els.fsClockElapsed.textContent = formatDuration(rideLogSummary().timerSeconds, state.durationFormat);
   els.fsClockDistance.textContent = riddenText;
+  els.fsClockAscent.textContent = ascentText;
 }
 
 function updateFullscreenLocalTime() {
@@ -882,6 +956,142 @@ function startFullscreenClock() {
 function stopFullscreenClock() {
   clearTimeout(state.fullscreenClockTimer);
   state.fullscreenClockTimer = null;
+}
+
+function updateTrainingMeters(grade) {
+  if (!state.mapFullscreen) return;
+  const power = state.trainerPowerWatts;
+  const heartRate = currentHeartRate();
+
+  updateZoneMeter({
+    meter: els.powerMeter,
+    valueEl: els.zonePowerValue,
+    metaEl: els.zonePowerMeta,
+    fillEl: els.zonePowerFill,
+    value: power,
+    zones: currentPowerZones(),
+    definitions: POWER_ZONE_DEFINITIONS,
+    max: state.ftpWatts ? state.ftpWatts * 1.6 : 500,
+    text: Number.isFinite(power) ? `${Math.round(power)} W` : "--",
+    fallbackMeta: state.ftpWatts ? `FTP ${state.ftpWatts} W` : "Zones not set",
+  });
+
+  updateZoneMeter({
+    meter: els.heartRateMeter,
+    valueEl: els.zoneHeartRateValue,
+    metaEl: els.zoneHeartRateMeta,
+    fillEl: els.zoneHeartRateFill,
+    value: heartRate,
+    zones: currentHeartRateZones(),
+    definitions: HEART_RATE_ZONE_DEFINITIONS,
+    max: state.maxHeartRateBpm,
+    text: Number.isFinite(heartRate) ? `${Math.round(heartRate)} bpm` : "--",
+    fallbackMeta: `Max ${state.maxHeartRateBpm} bpm`,
+  });
+
+  const gradeValue = Number.isFinite(grade) ? grade : null;
+  updateZoneMeter({
+    meter: els.gradeMeter,
+    valueEl: els.zoneGradeValue,
+    metaEl: els.zoneGradeMeta,
+    fillEl: els.zoneGradeFill,
+    value: gradeValue,
+    min: -15,
+    max: 20,
+    text: Number.isFinite(gradeValue) ? `${gradeValue.toFixed(1)}%` : "--",
+    fallbackMeta: "Live road",
+    zone: Number.isFinite(gradeValue)
+      ? (gradeValue < -0.6 ? 0 : gradeValue < 3.5 ? 2 : gradeValue < 7 ? 3 : 5)
+      : null,
+    color: Number.isFinite(gradeValue) ? gradeColor(gradeValue) : null,
+  });
+}
+
+function currentHeartRateZones() {
+  return calculateHeartRateZones(state.maxHeartRateBpm, state.restingHeartRateBpm);
+}
+
+function currentPowerZones() {
+  return state.ftpWatts ? calculatePowerZones(state.ftpWatts) : null;
+}
+
+function calculateHeartRateZones(maxHr, restingHr = DEFAULT_RESTING_HEART_RATE_BPM) {
+  if (!Number.isFinite(maxHr) || !Number.isFinite(restingHr) || maxHr <= restingHr) return null;
+  const reserve = maxHr - restingHr;
+  const t60 = Math.floor(restingHr + reserve * 0.6);
+  const t70 = Math.floor(restingHr + reserve * 0.7);
+  const t80 = Math.floor(restingHr + reserve * 0.8);
+  const t90 = Math.floor(restingHr + reserve * 0.9);
+  return [
+    { min: 0, max: t60 - 1, label: `<${t60} bpm` },
+    { min: t60, max: t70 - 1, label: `${t60}-${t70 - 1} bpm` },
+    { min: t70, max: t80 - 1, label: `${t70}-${t80 - 1} bpm` },
+    { min: t80, max: t90 - 1, label: `${t80}-${t90 - 1} bpm` },
+    { min: t90, max: null, label: `${t90}+ bpm` },
+  ];
+}
+
+function calculatePowerZones(ftp) {
+  if (!Number.isFinite(ftp) || ftp <= 0) return null;
+  const boundary = (ratio) => Math.floor(ftp * ratio);
+  const z1Max = boundary(0.55);
+  const z2Max = boundary(0.75);
+  const z3Max = boundary(0.9);
+  const z4Max = boundary(1.05);
+  const z5Max = boundary(1.2);
+  const z6Max = boundary(1.5);
+  return [
+    { min: 0, max: z1Max, label: `≤${z1Max}W` },
+    { min: z1Max + 1, max: z2Max, label: `≤${z2Max}W` },
+    { min: z2Max + 1, max: z3Max, label: `≤${z3Max}W` },
+    { min: z3Max + 1, max: z4Max, label: `≤${z4Max}W` },
+    { min: z4Max + 1, max: z5Max, label: `≤${z5Max}W` },
+    { min: z5Max + 1, max: z6Max, label: `≤${z6Max}W` },
+    { min: z6Max + 1, max: null, label: `>${z6Max}W` },
+  ];
+}
+
+function updateZoneMeter({
+  meter,
+  valueEl,
+  metaEl,
+  fillEl,
+  value,
+  min = 0,
+  max,
+  zones = null,
+  definitions = null,
+  text,
+  fallbackMeta,
+  zone,
+  color = null,
+}) {
+  valueEl.textContent = text;
+  const zoneIndex_ = Array.isArray(zones) && definitions
+    ? zoneIndexFromZones(value, zones)
+    : zone;
+  const zoneDef = Number.isInteger(zoneIndex_) && definitions?.[zoneIndex_] ? definitions[zoneIndex_] : null;
+  metaEl.textContent = zoneDef ? `Z${zoneIndex_ + 1} ${zoneDef.name}` : fallbackMeta;
+  const zoneMaxes = Array.isArray(zones) ? zones.map((item) => item.max).filter(Number.isFinite) : [];
+  const scaleMax = zoneMaxes.length
+    ? Math.max(...zoneMaxes, 1) * 1.1
+    : max;
+  const span = Math.max(1, scaleMax - min);
+  const fraction = Number.isFinite(value) ? clamp((value - min) / span, 0, 1) : 0;
+  fillEl.style.width = `${fraction * 100}%`;
+  meter.dataset.zone = Number.isInteger(zoneIndex_) ? String(zoneIndex_) : "";
+  fillEl.style.background = color || zoneDef?.color || "";
+}
+
+function zoneIndexFromZones(value, zones) {
+  if (!Number.isFinite(value) || !Array.isArray(zones) || !zones.length) return null;
+  for (let index = 0; index < zones.length; index += 1) {
+    const zone = zones[index];
+    if (value >= zone.min && (zone.max === null || value <= zone.max)) {
+      return index;
+    }
+  }
+  return null;
 }
 
 // Plain-language climb category from average grade alone (see CLIMB_CATEGORIES).
@@ -1125,7 +1335,7 @@ function renderRiderDot(point) {
       src: RIDER_DOT_MODEL_URL,
       altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
       orientation: RIDER_DOT_ORIENTATION,
-      scale: RIDER_DOT_SCALE,
+      scale: riderDotScale(),
     });
     state.map.append(state.riderDot);
     updateRiderDot(point);
@@ -1356,15 +1566,26 @@ function tick(now) {
     });
   }
 
-  recordRideTick({
-    elapsedSeconds,
-    metersAdvanced: state.progressMeters - previousProgress,
-    point: interpolateRoutePoint(state.route, state.progressMeters),
-    speedKph,
-    powerWatts: state.trainerPowerWatts,
-    heartRateBpm: currentHeartRate(),
-    caloriesKcal: state.trainerCaloriesKcal,
-  });
+  if (state.pedaling && Number.isFinite(state.trainerPowerWatts) && elapsedSeconds > 0) {
+    state.powerCaloriesKcal += activeCaloriesFromPower(
+      state.trainerPowerWatts,
+      elapsedSeconds,
+      CYCLING_GROSS_EFFICIENCY,
+    );
+  }
+
+  if (state.pedaling) {
+    recordRideTick({
+      elapsedSeconds,
+      metersAdvanced: state.progressMeters - previousProgress,
+      point: interpolateRoutePoint(state.route, state.progressMeters),
+      speedKph,
+      powerWatts: state.trainerPowerWatts,
+      heartRateBpm: currentHeartRate(),
+      caloriesKcal: currentCaloriesKcal(),
+      routeProgressMeters: state.progressMeters,
+    });
+  }
 
   updateRideUi();
   saveRideThrottled();
@@ -1411,7 +1632,10 @@ function updateRideUi(options = {}) {
   const remainingText = formatDistance(totalDistance - state.progressMeters, state.distanceUnits);
   const ascentLeftText = formatAltitude(ascentLeft, state.distanceUnits);
   const etaSeconds = currentEtaSeconds(totalDistance, totalAscent, totalDescent);
-  const etaText = etaSeconds === null ? "--" : formatDuration(etaSeconds);
+  const etaText = etaSeconds === null ? "--" : formatDuration(etaSeconds, state.durationFormat);
+  const ascentText = formatAltitude(ascentSoFar, state.distanceUnits);
+  const elapsedText = formatDuration(rideLogSummary().timerSeconds, state.durationFormat);
+  const caloriesText = formatEnergy(currentCaloriesKcal() ?? NaN, state.energyUnits);
 
   els.distanceStat.textContent = formatDistance(totalDistance, state.distanceUnits, 1);
   els.riddenStat.textContent = riddenText;
@@ -1437,19 +1661,26 @@ function updateRideUi(options = {}) {
   els.hudRemainingStat.textContent = remainingText;
   els.hudAscentLeftStat.textContent = ascentLeftText;
   els.hudEtaStat.textContent = etaText;
+  els.hudCaloriesStat.textContent = caloriesText;
+  els.hudAltitudeStat.textContent = formatAltitude(point.ele, state.distanceUnits);
+  els.hudAscentStat.textContent = ascentText;
+  els.hudElapsedStat.textContent = elapsedText;
 
   // Fullscreen dock extras: the road-ahead readouts and the two progress bars
   // that sit beside the profile, plus the clock chip and climb banner.
-  els.roadAscentLeft.textContent = ascentLeftText;
-  els.roadAltitude.textContent = formatAltitude(point.ele, state.distanceUnits);
+  els.fsRoadRouteName.textContent = state.routeName || "Route";
+  els.fsRoadRouteProps.textContent =
+    `${formatDistance(totalDistance, state.distanceUnits, 1)} · ` +
+    `${formatAltitude(totalAscent, state.distanceUnits)} ascent`;
   els.fsDistLabel.textContent =
     `${riddenText} / ${formatDistance(totalDistance, state.distanceUnits, 1)}`;
   els.fsDistFill.style.width = `${clamp(progress, 0, 1) * 100}%`;
   els.fsClimbLabel.textContent =
-    `${formatAltitude(ascentSoFar, state.distanceUnits)} / ${formatAltitude(totalAscent, state.distanceUnits)}`;
+    `${ascentText} / ${formatAltitude(totalAscent, state.distanceUnits)}`;
   els.fsClimbFill.style.width = `${(totalAscent ? clamp(ascentSoFar / totalAscent, 0, 1) : 0) * 100}%`;
-  updateFullscreenClock(riddenText);
+  updateFullscreenClock(riddenText, ascentText);
   updateFullscreenClimbBanner(point);
+  updateTrainingMeters(grade);
 
   updateRecordingUi();
   queueTrainerGradeSample(grade, {
@@ -1506,6 +1737,8 @@ function renderProfile(progress = currentRideProgress()) {
     hoverMeters: state.profileHoverMeters,
     dark: state.mapFullscreen,
     distanceUnits: state.distanceUnits,
+    historySamples: rideLogSamples().slice(-PROFILE_HISTORY_SAMPLE_LIMIT),
+    visibleSeries: state.profileSeries,
   });
 }
 
@@ -1575,17 +1808,62 @@ function handleTrainerStatus(text, { onlyClearError = false } = {}) {
 
 function handleStrapHeartRate(bpm) {
   state.strapHeartRateBpm = Number.isFinite(bpm) ? bpm : null;
-  updateTelemetryUi();
+  refreshHeartRateUi();
+  syncHeartRateRefreshLoop();
 }
 
 function handleHeartRateStatus(text) {
   state.heartRateStatusText = text;
-  updateTelemetryUi();
+  refreshHeartRateUi();
+  syncHeartRateRefreshLoop();
 }
 
 function currentHeartRate() {
-  // Prefer the dedicated strap; fall back to a trainer-relayed heart rate.
-  return state.strapHeartRateBpm ?? state.trainerHeartRateBpm ?? null;
+  // A connected strap is the HR source of truth. Only fall back to a
+  // trainer-relayed HR field when no dedicated strap is connected.
+  if (isHeartRateConnected()) return state.strapHeartRateBpm;
+  return state.trainerHeartRateBpm ?? null;
+}
+
+function refreshHeartRateUi() {
+  updateTelemetryUi();
+  if (state.mapFullscreen) {
+    updateTrainingMeters(state.route.length ? gradeAt(state.route, state.progressMeters) : NaN);
+  }
+}
+
+function syncHeartRateRefreshLoop() {
+  if (isHeartRateConnected()) {
+    startHeartRateRefreshLoop();
+  } else {
+    stopHeartRateRefreshLoop();
+  }
+}
+
+function startHeartRateRefreshLoop() {
+  if (state.heartRateRefreshTimer) return;
+  const step = () => {
+    if (!isHeartRateConnected()) {
+      state.heartRateRefreshTimer = null;
+      refreshHeartRateUi();
+      return;
+    }
+    refreshHeartRateUi();
+    state.heartRateRefreshTimer = window.setTimeout(step, HEART_RATE_REFRESH_MS);
+  };
+  step();
+}
+
+function stopHeartRateRefreshLoop() {
+  window.clearTimeout(state.heartRateRefreshTimer);
+  state.heartRateRefreshTimer = null;
+}
+
+function currentCaloriesKcal() {
+  if (state.powerCaloriesKcal > 0 || Number.isFinite(state.trainerPowerWatts)) {
+    return state.powerCaloriesKcal;
+  }
+  return Number.isFinite(state.trainerCaloriesKcal) ? state.trainerCaloriesKcal : null;
 }
 
 function updateTelemetryUi() {
@@ -1593,19 +1871,20 @@ function updateTelemetryUi() {
   const speedText = formatSpeed(state.trainerSpeedKph, state.distanceUnits);
   const heartRate = currentHeartRate();
   const heartRateText = Number.isFinite(heartRate) ? `${heartRate} bpm` : "--";
-  const caloriesText = formatEnergy(state.trainerCaloriesKcal ?? NaN, state.energyUnits);
+  const caloriesText = formatEnergy(currentCaloriesKcal() ?? NaN, state.energyUnits);
 
   els.powerStat.textContent = powerText;
   els.speedStat.textContent = speedText;
   els.heartRateStat.textContent = heartRateText;
-  els.hrConnectionStat.textContent = state.strapHeartRateBpm !== null
+  els.hrConnectionStat.textContent = isHeartRateConnected() && Number.isFinite(state.strapHeartRateBpm)
     ? `${state.strapHeartRateBpm} bpm`
-    : (state.heartRateStatusText || "Not connected");
-  els.hrDot.classList.toggle("connected", state.strapHeartRateBpm !== null);
+    : (state.heartRateStatusText || (isHeartRateConnected() ? "Connected" : "Not connected"));
+  els.hrDot.classList.toggle("connected", isHeartRateConnected());
   els.caloriesStat.textContent = caloriesText;
   els.hudPowerStat.textContent = powerText;
   els.hudSpeedStat.textContent = speedText;
   els.hudHeartRateStat.textContent = heartRateText;
+  els.hudCaloriesStat.textContent = caloriesText;
 }
 
 // --- Ride recording & FIT export ----------------------------------------------
@@ -1613,11 +1892,11 @@ function updateTelemetryUi() {
 function updateRecordingUi() {
   // The bucket only grows while the rider is actually moving — mirror that
   // with the pulsing RECORDING indicator on the FIT buffer card.
-  els.recIndicator.hidden = !isMoving();
+  els.recIndicator.hidden = !state.pedaling;
 
   const summary = rideLogSummary();
   els.recDistanceStat.textContent = formatDistance(summary.distanceMeters, state.distanceUnits);
-  els.recTimeStat.textContent = formatDuration(summary.timerSeconds);
+  els.recTimeStat.textContent = formatDuration(summary.timerSeconds, state.durationFormat);
   els.recPointsStat.textContent = String(summary.sampleCount);
   els.recHeartRateStat.textContent = summary.heartRateSampleCount > 0
     ? `${summary.heartRateSampleCount} samples`
@@ -1679,6 +1958,7 @@ function downloadFitFile() {
   window.setTimeout(() => {
     if (window.confirm("FIT file downloaded. Clear the collected ride data to start fresh?")) {
       clearRideLog();
+      state.powerCaloriesKcal = 0;
       updateRecordingUi();
       updateProgressLabel("Ride data cleared.");
     }
@@ -1688,9 +1968,10 @@ function downloadFitFile() {
 function confirmClearRideData() {
   if (!hasRideData()) return;
   const summary = rideLogSummary();
-  const description = `${formatDistance(summary.distanceMeters, state.distanceUnits)} / ${formatDuration(summary.timerSeconds)}`;
+  const description = `${formatDistance(summary.distanceMeters, state.distanceUnits)} / ${formatDuration(summary.timerSeconds, state.durationFormat)}`;
   if (!window.confirm(`Discard the collected ride data (${description}) without downloading?`)) return;
   clearRideLog();
+  state.powerCaloriesKcal = 0;
   updateRecordingUi();
   updateProgressLabel("Ride data cleared.");
 }
@@ -1719,11 +2000,12 @@ function updateRiderDot(position) {
     // Just moving the model's position, not rebuilding a mesh — cheap
     // enough to do every frame, no throttling needed.
     state.riderDot.position = { lat: position.lat, lng: position.lng, altitude: RIDER_DOT_ALTITUDE_METERS };
+    state.riderDot.scale = riderDotScale();
     return;
   }
 
   if (state.riderDot) {
-    const radius = RIDER_DOT_DIAMETER_METERS / 2;
+    const radius = (RIDER_DOT_DIAMETER_METERS * riderDotSizeFactor()) / 2;
     // Rebuilding the polygon re-tessellates it in the map engine, which is
     // far too expensive to do per frame. Skip updates smaller than a pixel
     // or two on screen; the camera still follows the rider every frame.
@@ -1732,6 +2014,14 @@ function updateRiderDot(position) {
     state.lastRiderDot = { lat: position.lat, lng: position.lng };
     state.riderDot.path = riderCircleCoordinates(position, radius, RIDER_DOT_ALTITUDE_METERS);
   }
+}
+
+function riderDotScale() {
+  return RIDER_DOT_SCALE * riderDotSizeFactor();
+}
+
+function riderDotSizeFactor() {
+  return state.overviewActive || state.cameraMode === "overview" ? RIDER_DOT_OVERVIEW_SCALE_FACTOR : 1;
 }
 
 function riderCircleCoordinates(center, radiusMeters, altitude = 0, stepDegrees = 6) {
@@ -2587,12 +2877,14 @@ function updateUnitsFromControls() {
   state.distanceUnits = els.distanceUnitSelect.value === "imperial" ? "imperial" : "metric";
   state.energyUnits = els.energyUnitSelect.value === "kj" ? "kj" : "kcal";
   state.timeFormat = els.timeFormatSelect.value === "12" ? "12" : DEFAULT_TIME_FORMAT;
+  state.durationFormat = els.durationFormatSelect.value === "clock" ? "clock" : DEFAULT_DURATION_FORMAT;
   saveSettings();
 
   updateFullscreenLocalTime();
   updateSpeedOutput();
   updateTelemetryUi();
   updateRecordingUi();
+  renderHudOrderControls();
   if (state.route.length) updateRideUi({ force: true });
   else renderProfile();
 }
@@ -2601,15 +2893,73 @@ function updateSpeedOutput() {
   els.speedOutput.value = formatSpeed(Number(els.speedInput.value), state.distanceUnits, 0);
 }
 
+function updateRiderProfileFromControls() {
+  const restingHeartRate = Number(els.restingHeartRateInput.value);
+  state.restingHeartRateBpm = Number.isFinite(restingHeartRate) && restingHeartRate >= 30 && restingHeartRate <= 140
+    ? Math.round(restingHeartRate)
+    : DEFAULT_RESTING_HEART_RATE_BPM;
+
+  const maxHeartRate = Number(els.maxHeartRateInput.value);
+  state.maxHeartRateBpm = Number.isFinite(maxHeartRate) && maxHeartRate >= 80 && maxHeartRate <= 240
+    ? Math.round(maxHeartRate)
+    : DEFAULT_MAX_HEART_RATE_BPM;
+  if (state.maxHeartRateBpm <= state.restingHeartRateBpm) {
+    state.maxHeartRateBpm = Math.min(240, state.restingHeartRateBpm + 1);
+  }
+
+  const ftpWatts = Number(els.ftpInput.value);
+  state.ftpWatts = Number.isFinite(ftpWatts) && ftpWatts > 0 && ftpWatts <= 1000
+    ? Math.round(ftpWatts)
+    : null;
+
+  syncRiderProfileControls();
+  renderZoneSummaries();
+  saveSettings();
+  updateTrainingMeters(state.route.length ? gradeAt(state.route, state.progressMeters) : NaN);
+}
+
+function syncRiderProfileControls() {
+  els.restingHeartRateInput.value = String(state.restingHeartRateBpm);
+  els.maxHeartRateInput.value = String(state.maxHeartRateBpm);
+  els.ftpInput.value = state.ftpWatts ?? "";
+}
+
+function renderZoneSummaries() {
+  renderZoneSummary(els.heartRateZoneSummary, "Heart-rate zones", currentHeartRateZones());
+  renderZoneSummary(els.powerZoneSummary, "Power zones", currentPowerZones());
+}
+
+function renderZoneSummary(container, label, zones) {
+  if (!container) return;
+  if (!Array.isArray(zones) || !zones.length) {
+    container.textContent = label === "Power zones" ? "Enter FTP to calculate zones." : "--";
+    return;
+  }
+  container.textContent = `${label}: ${zones.map((zone, index) => `Z${index + 1} ${zone.label}`).join(" · ")}`;
+}
+
+function toggleProfileSeries(event) {
+  const key = event.currentTarget.dataset.profileSeries;
+  if (!(key in state.profileSeries)) return;
+  state.profileSeries[key] = !state.profileSeries[key];
+  syncProfileSeriesButtons();
+  saveSettings();
+  renderProfile();
+}
+
+function syncProfileSeriesButtons() {
+  els.profileSeriesButtons.forEach((button) => {
+    const key = button.dataset.profileSeries;
+    button.setAttribute("aria-pressed", String(state.profileSeries[key] !== false));
+  });
+}
+
 // --- Display & HUD settings -----------------------------------------------------
 
 function updateDisplaySettingsFromControls() {
   state.showMinimap = els.minimapInput.checked;
   state.mapLabelsEnabled = els.mapLabelsInput.checked;
   state.cameraDebugEnabled = els.cameraDebugInput.checked;
-  els.hudToggles.forEach((input) => {
-    state.hudElements[input.dataset.hudToggle] = input.checked;
-  });
   saveSettings();
   applyDisplaySettings();
 }
@@ -2618,19 +2968,184 @@ function syncDisplayControls() {
   els.minimapInput.checked = state.showMinimap;
   els.mapLabelsInput.checked = state.mapLabelsEnabled;
   els.cameraDebugInput.checked = state.cameraDebugEnabled;
-  els.hudToggles.forEach((input) => {
-    input.checked = state.hudElements[input.dataset.hudToggle] !== false;
-  });
+  renderHudOrderControls();
 }
 
 function applyDisplaySettings() {
   els.minimap.classList.toggle("minimap-hidden", !state.showMinimap);
-  els.hudTiles.forEach((tile) => {
-    tile.hidden = state.hudElements[tile.dataset.hud] === false;
-  });
+  applyHudFieldOrder();
   layoutMetricTiles();
   applyMapMode();
   applyCameraDebug();
+}
+
+function applyHudFieldOrder() {
+  state.hudFieldOrder = normalizeHudOrder(state.hudFieldOrder);
+  state.hudVisibleCount = clamp(Math.round(state.hudVisibleCount), 1, state.hudFieldOrder.length);
+  const visibleKeys = new Set(state.hudFieldOrder.slice(0, state.hudVisibleCount));
+  const tileByKey = new Map([...els.hudTiles].map((tile) => [tile.dataset.hud, tile]));
+  state.hudFieldOrder.forEach((key) => {
+    const tile = tileByKey.get(key);
+    if (tile) {
+      tile.dataset.hudFieldKey = key;
+      tile.draggable = true;
+      bindHudDragTarget(tile);
+      els.fullscreenHud.append(tile);
+    }
+  });
+  els.hudTiles.forEach((tile) => {
+    tile.hidden = !visibleKeys.has(tile.dataset.hud);
+  });
+  syncHudVisibleControls();
+}
+
+function normalizeHudOrder(order) {
+  const known = new Set(DEFAULT_HUD_FIELD_ORDER);
+  const unique = [];
+  for (const key of Array.isArray(order) ? order : []) {
+    if (known.has(key) && !unique.includes(key)) unique.push(key);
+  }
+  for (const key of DEFAULT_HUD_FIELD_ORDER) {
+    if (!unique.includes(key)) unique.push(key);
+  }
+  return unique;
+}
+
+function renderHudOrderControls() {
+  if (!els.hudOrderList) return;
+  state.hudFieldOrder = normalizeHudOrder(state.hudFieldOrder);
+  els.hudOrderList.replaceChildren(
+    ...state.hudFieldOrder.map((key) => {
+      const row = document.createElement("div");
+      row.className = "hud-order-row";
+      row.draggable = true;
+      row.dataset.hudFieldKey = key;
+
+      const handle = document.createElement("span");
+      handle.className = "hud-order-handle";
+      handle.textContent = "Drag";
+      handle.setAttribute("aria-hidden", "true");
+
+      const label = document.createElement("span");
+      label.textContent = hudFieldLabel(key);
+
+      const unit = document.createElement("i");
+      unit.textContent = hudFieldUnit(key);
+
+      const text = document.createElement("div");
+      text.className = "hud-order-text";
+      text.append(label, unit);
+
+      bindHudDragTarget(row);
+      row.append(handle, text);
+      return row;
+    }),
+  );
+  syncHudVisibleControls();
+}
+
+function bindHudDragTarget(element) {
+  if (element.dataset.hudDragBound === "true") return;
+  element.dataset.hudDragBound = "true";
+  element.addEventListener("dragstart", handleHudDragStart);
+  element.addEventListener("dragover", handleHudDragOver);
+  element.addEventListener("dragleave", handleHudDragLeave);
+  element.addEventListener("drop", handleHudDrop);
+  element.addEventListener("dragend", handleHudDragEnd);
+}
+
+function handleHudDragStart(event) {
+  state.draggedHudField = event.currentTarget.dataset.hudFieldKey;
+  event.currentTarget.classList.add("dragging");
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", state.draggedHudField);
+  }
+}
+
+function handleHudDragOver(event) {
+  event.preventDefault();
+  if (!state.draggedHudField || event.currentTarget.dataset.hudFieldKey === state.draggedHudField) return;
+  event.currentTarget.classList.add("drag-over");
+}
+
+function handleHudDragLeave(event) {
+  event.currentTarget.classList.remove("drag-over");
+}
+
+function handleHudDrop(event) {
+  event.preventDefault();
+  const from = state.draggedHudField;
+  const to = event.currentTarget.dataset.hudFieldKey;
+  if (!from || !to || from === to) return;
+  const next = state.hudFieldOrder.filter((key) => key !== from);
+  const toIndex = next.indexOf(to);
+  if (toIndex === -1) return;
+  next.splice(toIndex, 0, from);
+  state.hudFieldOrder = normalizeHudOrder(next);
+  state.draggedHudField = null;
+  renderHudOrderControls();
+  applyDisplaySettings();
+  saveSettings();
+}
+
+function handleHudDragEnd() {
+  state.draggedHudField = null;
+  document.querySelectorAll(".dragging, .drag-over").forEach((row) => {
+    row.classList.remove("dragging", "drag-over");
+  });
+}
+
+function adjustHudVisibleCount(delta) {
+  state.hudVisibleCount = clamp(state.hudVisibleCount + delta, 1, state.hudFieldOrder.length);
+  applyDisplaySettings();
+  saveSettings();
+}
+
+function syncHudVisibleControls() {
+  if (!els.hudVisibleCountOutput) return;
+  const count = clamp(state.hudVisibleCount, 1, state.hudFieldOrder.length);
+  els.hudVisibleCountOutput.value = `${count} / ${state.hudFieldOrder.length}`;
+  for (const button of [els.hudLessBtn, els.hudVisibleLessBtn]) {
+    button.disabled = count <= 1;
+  }
+  for (const button of [els.hudMoreBtn, els.hudVisibleMoreBtn]) {
+    button.disabled = count >= state.hudFieldOrder.length;
+  }
+}
+
+function hudFieldLabel(key) {
+  return ({
+    power: "Power",
+    speed: "Speed",
+    heartRate: "Heart rate",
+    grade: "Grade",
+    ridden: "Ridden",
+    remaining: "Remaining",
+    ascentLeft: "Ascent left",
+    eta: "ETA",
+    calories: "Calories",
+    altitude: "Altitude",
+    ascent: "Ascent",
+    elapsed: "Elapsed",
+  })[key] ?? key;
+}
+
+function hudFieldUnit(key) {
+  return ({
+    power: "W",
+    speed: state.distanceUnits === "imperial" ? "mph" : "km/h",
+    heartRate: "bpm",
+    grade: "%",
+    ridden: state.distanceUnits === "imperial" ? "mi" : "km",
+    remaining: state.distanceUnits === "imperial" ? "mi" : "km",
+    ascentLeft: state.distanceUnits === "imperial" ? "ft" : "m",
+    eta: "time",
+    calories: state.energyUnits === "kj" ? "kJ" : "kcal",
+    altitude: state.distanceUnits === "imperial" ? "ft" : "m",
+    ascent: state.distanceUnits === "imperial" ? "ft" : "m",
+    elapsed: "time",
+  })[key] ?? "";
 }
 
 // --- Camera debug overlay -------------------------------------------------------
@@ -2822,7 +3337,11 @@ function renderCameraDebug() {
 // auto-flow, so only the tile width is set here.
 function layoutMetricTiles() {
   const visible = [...els.hudTiles].filter((tile) => !tile.hidden).length;
-  els.fullscreenHud.style.setProperty("--metric-tile-w", visible >= 7 ? "126px" : "150px");
+  let width = "150px";
+  if (visible >= 11) width = "98px";
+  else if (visible >= 9) width = "110px";
+  else if (visible >= 7) width = "126px";
+  els.fullscreenHud.style.setProperty("--metric-tile-w", width);
 }
 
 function applyMapMode() {
@@ -2992,6 +3511,7 @@ function enterMapFullscreen() {
   els.fullscreenBtn.title = "Exit fullscreen";
   els.fullscreenOverlayBottom.hidden = false;
   els.fullscreenClock.hidden = false;
+  els.fullscreenTrainingMeters.hidden = false;
   startFullscreenClock();
 
   // Move the elevation profile into the dock's "road ahead" slot — the same
@@ -3014,6 +3534,7 @@ function exitMapFullscreen() {
   els.fullscreenBtn.title = "Enter fullscreen";
   els.fullscreenOverlayBottom.hidden = true;
   els.fullscreenClock.hidden = true;
+  els.fullscreenTrainingMeters.hidden = true;
   stopFullscreenClock();
   els.climbBanner.hidden = true;
 
@@ -3112,6 +3633,35 @@ function restoreSettings() {
   if (settings?.distanceUnits === "imperial") state.distanceUnits = "imperial";
   if (settings?.energyUnits === "kj") state.energyUnits = "kj";
   if (settings?.timeFormat === "12") state.timeFormat = "12";
+  if (settings?.durationFormat === "clock") state.durationFormat = "clock";
+
+  const restingHeartRate = Number(settings?.restingHeartRateBpm);
+  if (Number.isFinite(restingHeartRate) && restingHeartRate >= 30 && restingHeartRate <= 140) {
+    state.restingHeartRateBpm = Math.round(restingHeartRate);
+  }
+
+  const maxHeartRate = Number(settings?.maxHeartRateBpm);
+  if (Number.isFinite(maxHeartRate) && maxHeartRate >= 80 && maxHeartRate <= 240) {
+    state.maxHeartRateBpm = Math.round(maxHeartRate);
+  } else {
+    const legacyBirthYear = Number(settings?.birthYear);
+    if (Number.isInteger(legacyBirthYear) && legacyBirthYear >= 1900 && legacyBirthYear <= 2100) {
+      state.maxHeartRateBpm = clamp(
+        HEART_RATE_MAX_AGE_FORMULA_BASE - (new Date().getFullYear() - legacyBirthYear),
+        80,
+        240,
+      );
+    }
+  }
+
+  if (state.maxHeartRateBpm <= state.restingHeartRateBpm) {
+    state.maxHeartRateBpm = Math.min(240, state.restingHeartRateBpm + 1);
+  }
+
+  const ftpWatts = Number(settings?.ftpWatts);
+  if (Number.isFinite(ftpWatts) && ftpWatts > 0 && ftpWatts <= 1000) {
+    state.ftpWatts = Math.round(ftpWatts);
+  }
 
   if (typeof settings?.beaconEnabled === "boolean") {
     state.beaconEnabled = settings.beaconEnabled;
@@ -3175,11 +3725,27 @@ function restoreSettings() {
     state.cameraDebugCollapsed = settings.cameraDebugCollapsed;
   }
 
-  if (settings?.hudElements && typeof settings.hudElements === "object") {
-    // Only known keys, only booleans — unknown junk in storage is ignored.
-    for (const key of Object.keys(state.hudElements)) {
-      if (typeof settings.hudElements[key] === "boolean") {
-        state.hudElements[key] = settings.hudElements[key];
+  if (Array.isArray(settings?.hudFieldOrder)) {
+    state.hudFieldOrder = normalizeHudOrder(settings.hudFieldOrder);
+  } else if (settings?.hudElements && typeof settings.hudElements === "object") {
+    const enabled = [];
+    const disabled = [];
+    for (const key of DEFAULT_HUD_FIELD_ORDER) {
+      (settings.hudElements[key] === false ? disabled : enabled).push(key);
+    }
+    state.hudFieldOrder = [...enabled, ...disabled];
+    state.hudVisibleCount = Math.max(1, enabled.length);
+  }
+
+  const hudVisibleCount = Number(settings?.hudVisibleCount);
+  if (Number.isFinite(hudVisibleCount)) {
+    state.hudVisibleCount = clamp(Math.round(hudVisibleCount), 1, DEFAULT_HUD_FIELD_ORDER.length);
+  }
+
+  if (settings?.profileSeries && typeof settings.profileSeries === "object") {
+    for (const key of Object.keys(state.profileSeries)) {
+      if (typeof settings.profileSeries[key] === "boolean") {
+        state.profileSeries[key] = settings.profileSeries[key];
       }
     }
   }
@@ -3195,6 +3761,10 @@ function restoreSettings() {
   els.distanceUnitSelect.value = state.distanceUnits;
   els.energyUnitSelect.value = state.energyUnits;
   els.timeFormatSelect.value = state.timeFormat;
+  els.durationFormatSelect.value = state.durationFormat;
+  syncRiderProfileControls();
+  renderZoneSummaries();
+  syncProfileSeriesButtons();
   updateSpeedOutput();
   syncCameraControls();
   updateCameraSettingsLabels();
@@ -3233,12 +3803,18 @@ function saveSettings() {
     distanceUnits: state.distanceUnits,
     energyUnits: state.energyUnits,
     timeFormat: state.timeFormat,
+    durationFormat: state.durationFormat,
+    restingHeartRateBpm: state.restingHeartRateBpm,
+    maxHeartRateBpm: state.maxHeartRateBpm,
+    ftpWatts: state.ftpWatts,
     showMinimap: state.showMinimap,
     mapLabelsEnabled: state.mapLabelsEnabled,
     cameraDebugEnabled: state.cameraDebugEnabled,
     cameraDebugCollapsed: state.cameraDebugCollapsed,
-    hudElements: { ...state.hudElements },
+    hudFieldOrder: [...state.hudFieldOrder],
+    hudVisibleCount: state.hudVisibleCount,
     hudDockCollapsed: state.hudDockCollapsed,
+    profileSeries: { ...state.profileSeries },
   });
 }
 
