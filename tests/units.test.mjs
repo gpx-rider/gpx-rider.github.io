@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  activeCaloriesFromPower,
   formatAltitude,
   formatDistance,
   formatDuration,
@@ -32,10 +33,25 @@ test("energy formatting converts kcal to kJ", () => {
   assert.equal(formatEnergy(NaN, "kcal"), "--");
 });
 
+test("power calories convert mechanical work through human efficiency", () => {
+  // 200 W for one hour is 720 kJ at the pedals. At 24% gross efficiency,
+  // active human energy is 720 / (4.184 * 0.24) = ~717 kcal.
+  assert.equal(Math.round(activeCaloriesFromPower(200, 3600, 0.24)), 717);
+  assert.equal(activeCaloriesFromPower(200, 0, 0.24), 0);
+  assert.equal(activeCaloriesFromPower(200, 3600, 0), 0);
+});
+
 test("durations format as m:ss and h:mm:ss", () => {
   assert.equal(formatDuration(65), "1:05");
   assert.equal(formatDuration(3600), "1:00:00");
   assert.equal(formatDuration(3725), "1:02:05");
+});
+
+test("compact durations show seconds until the hour mark", () => {
+  assert.equal(formatDuration(65, "compact"), "1:05");
+  assert.equal(formatDuration(3600, "compact"), "1h");
+  assert.equal(formatDuration(5400, "compact"), "1h30m");
+  assert.equal(formatDuration(12, "compact"), "0:12");
 });
 
 test("local time includes seconds in 24-hour and 12-hour formats", () => {

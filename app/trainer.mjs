@@ -10,6 +10,7 @@ const FTMS_SERVICE = 0x1826;
 const FTMS_INDOOR_BIKE_DATA = 0x2ad2;
 const FTMS_CONTROL_POINT = 0x2ad9;
 const FTMS_STATUS = 0x2ada;
+const GATT_RECONNECT_DELAY_MS = 350;
 
 export const OP_REQUEST_CONTROL = 0x00;
 export const OP_RESET = 0x01;
@@ -83,7 +84,7 @@ export async function connectTrainer() {
   } catch (error) {
     console.error(error);
     callbacks.onStatus("Failed");
-    callbacks.onMessage(error.message || "Could not connect to the trainer.");
+    callbacks.onMessage(connectionErrorMessage(error, "trainer"));
   }
 }
 
@@ -113,6 +114,10 @@ export async function reconnectSavedTrainer() {
 }
 
 async function connectTrainerDevice(device) {
+  trainer.device = null;
+  trainer.controlPoint = null;
+  trainer.bikeData = null;
+  trainer.writeQueue = Promise.resolve();
   device.addEventListener("gattserverdisconnected", () => {
     trainer.device = null;
     trainer.controlPoint = null;
@@ -122,8 +127,7 @@ async function connectTrainerDevice(device) {
     callbacks.onStatus("Disconnected");
   });
 
-  const server = await device.gatt.connect();
-  const service = await server.getPrimaryService(FTMS_SERVICE);
+  const service = await getPrimaryServiceWithRetry(device, FTMS_SERVICE, "trainer");
   trainer.controlPoint = await service.getCharacteristic(FTMS_CONTROL_POINT);
   await subscribeToControlPointResponses();
   await subscribeToBikeData(service);
@@ -149,6 +153,47 @@ async function connectTrainerDevice(device) {
   await sendTrainerCommand(OP_RESET);
 
   callbacks.onStatus(device.name || "Connected");
+}
+
+async function getPrimaryServiceWithRetry(device, serviceUuid, label) {
+  try {
+    const server = await connectGatt(device);
+    return await server.getPrimaryService(serviceUuid);
+  } catch (error) {
+    if (!isGattDisconnectedError(error)) throw error;
+
+    console.warn(`GATT disconnected while discovering ${label}; reconnecting once.`, error);
+    callbacks.onStatus("Reconnecting");
+    try {
+      device.gatt?.disconnect?.();
+    } catch {
+      // Some browsers throw if already disconnected; connecting below is enough.
+    }
+    await delay(GATT_RECONNECT_DELAY_MS);
+    const server = await connectGatt(device);
+    return await server.getPrimaryService(serviceUuid);
+  }
+}
+
+async function connectGatt(device) {
+  if (!device.gatt) throw new Error("This Bluetooth device does not expose a GATT server.");
+  if (device.gatt.connected) return device.gatt;
+  return device.gatt.connect();
+}
+
+function isGattDisconnectedError(error) {
+  return /GATT Server is disconnected|Cannot retrieve services|disconnected/i.test(error?.message || "");
+}
+
+function connectionErrorMessage(error, label) {
+  if (isGattDisconnectedError(error)) {
+    return `Could not keep the ${label} connected. Turn it awake, keep it nearby, then connect again.`;
+  }
+  return error?.message || `Could not connect to the ${label}.`;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function subscribeToControlPointResponses() {

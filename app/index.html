@@ -15,7 +15,7 @@
         <div class="top-bar-group">
           <div class="brand">
             <span class="brand-dot"></span>
-            <span class="brand-name">GPX Rider</span>
+            <span id="brandName" class="brand-name">GPX Rider</span>
           </div>
           <span class="top-bar-divider"></span>
           <div id="gpxChip" class="gpx-chip" hidden>
@@ -102,6 +102,29 @@
               <span id="fsClockElapsed" class="fs-clock-elapsed" title="Ride time">0:00</span>
               <span class="fs-clock-sep"></span>
               <span id="fsClockDistance" class="fs-clock-dist" title="Ridden distance">--</span>
+              <span class="fs-clock-sep"></span>
+              <span id="fsClockAscent" class="fs-clock-ascent" title="Current ascent">--</span>
+            </div>
+
+            <div id="fullscreenTrainingMeters" class="fs-training-meters" hidden aria-live="polite">
+              <div id="powerMeter" class="fs-zone-meter" data-zone-meter="power">
+                <span class="fs-zone-label">Power</span>
+                <strong id="zonePowerValue">--</strong>
+                <span id="zonePowerMeta" class="fs-zone-meta">FTP --</span>
+                <div class="fs-zone-track"><div id="zonePowerFill" class="fs-zone-fill"></div></div>
+              </div>
+              <div id="heartRateMeter" class="fs-zone-meter" data-zone-meter="heartRate">
+                <span class="fs-zone-label">Heart rate</span>
+                <strong id="zoneHeartRateValue">--</strong>
+                <span id="zoneHeartRateMeta" class="fs-zone-meta">Max --</span>
+                <div class="fs-zone-track"><div id="zoneHeartRateFill" class="fs-zone-fill"></div></div>
+              </div>
+              <div id="gradeMeter" class="fs-zone-meter" data-zone-meter="grade">
+                <span class="fs-zone-label">Grade</span>
+                <strong id="zoneGradeValue">--</strong>
+                <span id="zoneGradeMeta" class="fs-zone-meta">Live road</span>
+                <div class="fs-zone-track"><div id="zoneGradeFill" class="fs-zone-fill"></div></div>
+              </div>
             </div>
 
             <!-- top-center: climb banner (on a climb, or approaching one) -->
@@ -152,19 +175,39 @@
 
             <!-- bottom data dock: metric tiles + the road-ahead profile -->
             <div id="fullscreenOverlayBottom" class="fs-dock" hidden>
-              <button id="dockToggleBtn" type="button" class="fs-dock-toggle" title="Collapse / expand" aria-label="Collapse or expand the data dock" aria-expanded="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </button>
+              <div class="fs-dock-top-tools">
+                <div class="profile-series-toggle fs-dock-series-toggle" role="group" aria-label="Profile history series">
+                  <button type="button" data-profile-series="speed" aria-pressed="true">Speed</button>
+                  <button type="button" data-profile-series="power" aria-pressed="true">Power</button>
+                  <button type="button" data-profile-series="heartRate" aria-pressed="true">HR</button>
+                </div>
+                <button id="dockToggleBtn" type="button" class="fs-dock-toggle" title="Collapse / expand" aria-label="Collapse or expand the data dock" aria-expanded="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
               <div class="fs-dock-body">
-                <div id="fullscreenHud" class="fs-dock-metrics" aria-live="polite">
-                  <div class="fs-tile" data-hud="power"><span class="fs-tile-label">Power</span><strong id="hudPowerStat" class="fs-tile-value">--</strong></div>
-                  <div class="fs-tile" data-hud="speed"><span class="fs-tile-label">Speed</span><strong id="hudSpeedStat" class="fs-tile-value">--</strong></div>
-                  <div class="fs-tile" data-hud="heartRate"><span class="fs-tile-label">Heart rate</span><strong id="hudHeartRateStat" class="fs-tile-value">--</strong></div>
-                  <div class="fs-tile" data-hud="grade"><span class="fs-tile-label">Grade</span><strong id="hudGradeStat" class="fs-tile-value">--</strong></div>
-                  <div class="fs-tile" data-hud="ridden"><span class="fs-tile-label">Ridden</span><strong id="hudRiddenStat" class="fs-tile-value">--</strong></div>
-                  <div class="fs-tile" data-hud="remaining"><span class="fs-tile-label">Remaining</span><strong id="hudRemainingStat" class="fs-tile-value">--</strong></div>
-                  <div class="fs-tile" data-hud="ascentLeft"><span class="fs-tile-label">Ascent left</span><strong id="hudAscentLeftStat" class="fs-tile-value">--</strong></div>
-                  <div class="fs-tile" data-hud="eta"><span class="fs-tile-label">ETA</span><strong id="hudEtaStat" class="fs-tile-value">--</strong></div>
+                <div class="fs-dock-metric-wrap">
+                  <div id="fullscreenHud" class="fs-dock-metrics" aria-live="polite">
+                    <div class="fs-tile" data-hud="power"><span class="fs-tile-label">Power</span><strong id="hudPowerStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="speed"><span class="fs-tile-label">Speed</span><strong id="hudSpeedStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="heartRate"><span class="fs-tile-label">Heart rate</span><strong id="hudHeartRateStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="grade"><span class="fs-tile-label">Grade</span><strong id="hudGradeStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="ridden"><span class="fs-tile-label">Ridden</span><strong id="hudRiddenStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="remaining"><span class="fs-tile-label">Remaining</span><strong id="hudRemainingStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="ascentLeft"><span class="fs-tile-label">Ascent left</span><strong id="hudAscentLeftStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="eta"><span class="fs-tile-label">ETA</span><strong id="hudEtaStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="calories"><span class="fs-tile-label">Calories</span><strong id="hudCaloriesStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="altitude"><span class="fs-tile-label">Altitude</span><strong id="hudAltitudeStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="ascent"><span class="fs-tile-label">Ascent</span><strong id="hudAscentStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="elapsed"><span class="fs-tile-label">Elapsed</span><strong id="hudElapsedStat" class="fs-tile-value">--</strong></div>
+                  </div>
+                  <div class="fs-dock-field-controls" aria-label="Fullscreen data fields">
+                    <button id="hudLessBtn" type="button" class="fs-dock-field-btn" title="Show fewer fields" aria-label="Show fewer fields">-</button>
+                    <button id="hudMoreBtn" type="button" class="fs-dock-field-btn" title="Show more fields" aria-label="Show more fields">+</button>
+                    <button id="hudSettingsBtn" type="button" class="fs-dock-field-btn" title="HUD settings" aria-label="Open HUD settings">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    </button>
+                  </div>
                 </div>
 
                 <div class="fs-dock-sep"></div>
@@ -172,12 +215,8 @@
                 <div class="fs-dock-right">
                   <div class="fs-road-head">
                     <div class="fs-road-title">
-                      <span class="fs-road-eyebrow">The road ahead</span>
-                      <span class="fs-road-note">grade-coloured · steep climbs red, descents green</span>
-                    </div>
-                    <div class="fs-road-stats">
-                      <div class="fs-road-stat"><span>ASCENT LEFT</span><strong id="roadAscentLeft" class="fs-road-stat-accent">--</strong></div>
-                      <div class="fs-road-stat"><span>ALTITUDE</span><strong id="roadAltitude">--</strong></div>
+                      <span id="fsRoadRouteName" class="fs-road-eyebrow">Route</span>
+                      <span id="fsRoadRouteProps" class="fs-road-note">--</span>
                     </div>
                   </div>
                   <div id="fsProfileMount" class="fs-road-plot"></div>
@@ -221,10 +260,17 @@
           <div class="panel-card">
             <div class="panel-card-head">
               <span class="panel-card-title">Elevation · detected climbs</span>
-              <div class="profile-legend">
-                <span><i style="background:#57b877"></i>descent</span>
-                <span><i style="background:#e8b74e"></i>climb</span>
-                <span><i style="background:#d9542f"></i>steep</span>
+              <div class="profile-head-tools">
+                <div class="profile-series-toggle" role="group" aria-label="Profile history series">
+                  <button type="button" data-profile-series="speed" aria-pressed="true">Speed</button>
+                  <button type="button" data-profile-series="power" aria-pressed="true">Power</button>
+                  <button type="button" data-profile-series="heartRate" aria-pressed="true">HR</button>
+                </div>
+                <div class="profile-legend">
+                  <span><i style="background:#57b877"></i>descent</span>
+                  <span><i style="background:#e8b74e"></i>climb</span>
+                  <span><i style="background:#d9542f"></i>steep</span>
+                </div>
               </div>
             </div>
             <canvas id="profile" aria-label="Elevation profile"></canvas>
@@ -314,6 +360,41 @@
                 </div>
               </div>
               <button id="connectHrBtn" type="button" class="btn btn-outline-blue btn-sm">Connect</button>
+            </div>
+            <div class="rider-zone-form">
+              <label>
+                <span>Resting HR</span>
+                <input id="restingHeartRateInput" type="number" inputmode="numeric" min="30" max="140" value="60">
+              </label>
+              <label>
+                <span>Max HR</span>
+                <input id="maxHeartRateInput" type="number" inputmode="numeric" min="80" max="240" value="180">
+              </label>
+              <label>
+                <span>FTP</span>
+                <input id="ftpInput" type="number" inputmode="numeric" min="1" max="1000" placeholder="W">
+              </label>
+            </div>
+            <div class="zone-editor">
+              <p class="zone-editor-note">Heart-rate zones use Heart Rate Reserve from resting and max HR. FTP calculates power zones.</p>
+              <div class="zone-editor-section">
+                <div class="zone-editor-title">Heart-rate zones <button id="heartRateZoneHelpBtn" type="button" class="zone-help-btn" aria-label="Heart-rate zone help" title="Z1 Recovery: Easy effort. Good for warmups, cooldowns, and very light rides.
+Z2 Endurance: Comfortable aerobic effort. You should be able to talk in full sentences.
+Z3 Tempo: Moderately hard. Sustainable, but talking becomes shorter.
+Z4 Threshold: Hard effort near your limit for longer intervals.
+Z5 Max: Very hard effort for short intervals.">?</button></div>
+                <div id="heartRateZoneSummary" class="zone-summary">--</div>
+              </div>
+              <div class="zone-editor-section">
+                <div class="zone-editor-title">Power zones <button id="powerZoneHelpBtn" type="button" class="zone-help-btn" aria-label="Power zone help" title="Z1 Active Recovery: &lt; 55% FTP
+Z2 Endurance: 56% - 75% FTP
+Z3 Tempo: 76% - 90% FTP
+Z4 Lactate Threshold: 91% - 105% FTP
+Z5 VO2max: 106% - 120% FTP
+Z6 Anaerobic Capacity: 121% - 150% FTP
+Z7 Neuromuscular Power: &gt; 150% FTP">?</button></div>
+                <div id="powerZoneSummary" class="zone-summary">--</div>
+              </div>
             </div>
           </div>
 
@@ -550,39 +631,17 @@
           </section>
 
           <section class="settings-panel" data-settings-panel="hud" hidden>
-            <div class="settings-section-label">Data fields on HUD</div>
-            <div class="field-toggle-grid">
-              <div class="field-toggle">
-                <div class="field-toggle-text"><span>Power</span><i>W</i></div>
-                <label class="switch"><input type="checkbox" data-hud-toggle="power" checked><span class="switch-track"><span class="switch-knob"></span></span></label>
+            <div class="settings-section-label">Bottom dock order</div>
+            <div id="hudOrderList" class="hud-order-list"></div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Fields shown</span>
+                <span class="setting-row-hint">uses the first fields in the order above</span>
               </div>
-              <div class="field-toggle">
-                <div class="field-toggle-text"><span>Speed</span><i>km/h</i></div>
-                <label class="switch"><input type="checkbox" data-hud-toggle="speed" checked><span class="switch-track"><span class="switch-knob"></span></span></label>
-              </div>
-              <div class="field-toggle">
-                <div class="field-toggle-text"><span>Heart rate</span><i>bpm</i></div>
-                <label class="switch"><input type="checkbox" data-hud-toggle="heartRate" checked><span class="switch-track"><span class="switch-knob"></span></span></label>
-              </div>
-              <div class="field-toggle">
-                <div class="field-toggle-text"><span>Grade</span><i>%</i></div>
-                <label class="switch"><input type="checkbox" data-hud-toggle="grade" checked><span class="switch-track"><span class="switch-knob"></span></span></label>
-              </div>
-              <div class="field-toggle">
-                <div class="field-toggle-text"><span>Ridden</span><i>km</i></div>
-                <label class="switch"><input type="checkbox" data-hud-toggle="ridden" checked><span class="switch-track"><span class="switch-knob"></span></span></label>
-              </div>
-              <div class="field-toggle">
-                <div class="field-toggle-text"><span>Remaining</span><i>km</i></div>
-                <label class="switch"><input type="checkbox" data-hud-toggle="remaining" checked><span class="switch-track"><span class="switch-knob"></span></span></label>
-              </div>
-              <div class="field-toggle">
-                <div class="field-toggle-text"><span>Ascent left</span><i>m</i></div>
-                <label class="switch"><input type="checkbox" data-hud-toggle="ascentLeft" checked><span class="switch-track"><span class="switch-knob"></span></span></label>
-              </div>
-              <div class="field-toggle">
-                <div class="field-toggle-text"><span>ETA</span><i>clock</i></div>
-                <label class="switch"><input type="checkbox" data-hud-toggle="eta" checked><span class="switch-track"><span class="switch-knob"></span></span></label>
+              <div class="hud-count-control">
+                <button id="hudVisibleLessBtn" type="button" class="icon-btn" title="Show fewer fields" aria-label="Show fewer fields">-</button>
+                <output id="hudVisibleCountOutput">8</output>
+                <button id="hudVisibleMoreBtn" type="button" class="icon-btn" title="Show more fields" aria-label="Show more fields">+</button>
               </div>
             </div>
             <p class="settings-note">
@@ -629,6 +688,16 @@
               <select id="timeFormatSelect">
                 <option value="24">24-hour</option>
                 <option value="12">12-hour</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Duration format</span>
+                <span class="setting-row-hint">ride time and ETA</span>
+              </div>
+              <select id="durationFormatSelect">
+                <option value="compact">1h30m</option>
+                <option value="clock">1:30:00</option>
               </select>
             </div>
           </section>
