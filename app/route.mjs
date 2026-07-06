@@ -114,6 +114,7 @@ export function interpolateRoutePoint(route, distance) {
     lat: lerp(previous.lat, next.lat, ratio),
     lng: lerp(previous.lng, next.lng, ratio),
     ele: lerp(previous.ele, next.ele, ratio),
+    distance,
   };
 }
 

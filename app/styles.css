@@ -311,8 +311,8 @@ body {
 
 #minimap {
   position: absolute;
-  left: 16px;
-  top: 16px;
+  right: 16px;
+  bottom: calc(36px + var(--fs-dock-height, 210px) + 12px);
   width: 150px;
   height: 150px;
   overflow: hidden;
@@ -608,8 +608,8 @@ body {
 }
 
 #minimap {
-  left: 24px;
-  top: 78px;
+  right: 24px;
+  bottom: calc(36px + var(--fs-dock-height, 210px) + 12px);
 }
 
 .map-actions {
@@ -621,7 +621,7 @@ body {
   display: flex;
 }
 
-/* top-left: local time + elapsed + ridden distance, above the minimap */
+/* top-left: local time + elapsed + ridden distance */
 .fs-clock {
   position: absolute;
   top: 24px;
@@ -971,6 +971,12 @@ body {
   display: flex;
   align-items: stretch;
   gap: var(--fs-dock-gap);
+}
+
+/* Give the expanded road-ahead view a little more breathing room without
+   changing the compact collapsed strip. */
+.fs-dock:not(.collapsed) .fs-dock-body {
+  min-height: 186px;
 }
 
 /* Two rows of tiles; the column count and tile width are set from JS to fit
@@ -2701,8 +2707,8 @@ input[type="color"] {
    into a compact, always-fits column. */
 @media (max-width: 860px) {
   #minimap {
-    left: 14px;
-    top: 62px;
+    right: 14px;
+    bottom: calc(36px + var(--fs-dock-height, 290px) + 10px);
   }
 
   .map-actions {

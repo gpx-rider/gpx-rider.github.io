@@ -344,50 +344,79 @@ function drawProfileHover(
   ctx.fill();
 
   // Route properties at the hovered point: distance from start, distance to
-  // the end, elevation and grade — all in the user's units.
+  // the end, elevation and grade — all in the user's units. Present them as a
+  // segmented glass readout so each value remains scannable over the bars.
   const unit = distanceUnitLabel(distanceUnits);
   const fromStart = kmToDisplay(distance / 1000, distanceUnits).toFixed(2);
   const toEnd = kmToDisplay((totalDistance - distance) / 1000, distanceUnits).toFixed(2);
   const elevation = distanceUnits === "imperial"
     ? `${Math.round(point.ele * FEET_PER_METER)} ft`
     : `${Math.round(point.ele)} m`;
-  const label =
-    `${fromStart} ${unit} in · ${toEnd} ${unit} to end · ` +
-    `${elevation} · ${grade >= 0 ? "+" : ""}${grade.toFixed(1)}%`;
+  const metrics = [
+    { label: "From start", value: `${fromStart} ${unit}` },
+    { label: "To end", value: `${toEnd} ${unit}` },
+    { label: "Elev", value: elevation },
+    {
+      label: "Grade",
+      value: `${grade >= 0 ? "+" : ""}${grade.toFixed(1)}%`,
+      color: gradeColor(grade),
+    },
+  ];
   const history = historyAtDistance(historySamples, distance);
-  const historyLabels = [];
   if (visibleSeries.speed !== false && Number.isFinite(history?.speedKph)) {
-    historyLabels.push(`${history.speedKph.toFixed(1)} km/h`);
+    metrics.push({ label: "Speed", value: `${history.speedKph.toFixed(1)} km/h` });
   }
   if (visibleSeries.power !== false && Number.isFinite(history?.powerWatts)) {
-    historyLabels.push(`${Math.round(history.powerWatts)} W`);
+    metrics.push({ label: "Power", value: `${Math.round(history.powerWatts)} W` });
   }
   if (visibleSeries.heartRate !== false && Number.isFinite(history?.heartRateBpm)) {
-    historyLabels.push(`${Math.round(history.heartRateBpm)} bpm`);
+    metrics.push({ label: "HR", value: `${Math.round(history.heartRateBpm)} bpm` });
   }
-  const fullLabel = historyLabels.length ? `${label} · ${historyLabels.join(" · ")}` : label;
-  ctx.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
-  const textWidth = ctx.measureText(fullLabel).width;
-  const boxWidth = Math.min(chartRight - chartLeft, textWidth + 16);
-  const boxHeight = 22;
+
+  const availableWidth = chartRight - chartLeft;
+  ctx.font = "600 9px 'Space Grotesk', system-ui, sans-serif";
+  const labelWidths = metrics.map((metric) => ctx.measureText(metric.label.toUpperCase()).width);
+  ctx.font = "600 15px 'IBM Plex Mono', ui-monospace, monospace";
+  const valueWidths = metrics.map((metric) => ctx.measureText(metric.value).width);
+  const baseWidths = metrics.map((_, index) => Math.max(labelWidths[index], valueWidths[index]) + 16);
+  const baseWidth = baseWidths.reduce((sum, width) => sum + width, 0);
+  const scale = Math.min(1, availableWidth / baseWidth);
+  const widths = baseWidths.map((width) => width * scale);
+  const boxWidth = Math.min(availableWidth, baseWidth);
+  const boxHeight = Math.max(40, 50 * scale);
   let boxX = x - boxWidth / 2;
   boxX = clamp(boxX, chartLeft, chartRight - boxWidth);
-  const boxY = chartTop + 4;
+  // Keep the described part of the elevation line exposed: low points put
+  // the readout at the top, high points put it at the bottom.
+  const boxY = y > (chartTop + chartBottom) / 2
+    ? chartTop + 2
+    : chartBottom - boxHeight - 2;
 
-  ctx.fillStyle = "rgba(13, 16, 21, 0.66)";
+  ctx.fillStyle = "rgba(13, 16, 21, 0.78)";
   ctx.beginPath();
-  ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 5);
+  ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 12);
   ctx.fill();
-
-  ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.save();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.24)";
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.rect(boxX + 8, boxY, Math.max(1, boxWidth - 16), boxHeight);
-  ctx.clip();
-  ctx.fillText(fullLabel, boxX + boxWidth / 2, boxY + boxHeight / 2 + 0.5);
-  ctx.restore();
+  ctx.roundRect(boxX + 0.5, boxY + 0.5, boxWidth - 1, boxHeight - 1, 11.5);
+  ctx.stroke();
+
+  let metricX = boxX;
+  metrics.forEach((metric, index) => {
+    const metricWidth = widths[index];
+    const centerX = metricX + metricWidth / 2;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `600 ${Math.max(7.5, 9 * scale)}px 'Space Grotesk', system-ui, sans-serif`;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.fillText(metric.label.toUpperCase(), centerX, boxY + boxHeight * 0.34);
+    ctx.font = `600 ${Math.max(11, 15 * scale)}px 'IBM Plex Mono', ui-monospace, monospace`;
+    ctx.fillStyle = metric.color || "rgba(255, 255, 255, 0.96)";
+    ctx.fillText(metric.value, centerX, boxY + boxHeight * 0.68);
+    metricX += metricWidth;
+  });
+
 }
 
 function historyAtDistance(samples, distance) {
@@ -424,14 +453,26 @@ export const GRADE_PROFILE_COLORS = [
   "#e8823c",
   "#d9542f",
 ];
+export const GRADE_PROFILE_THRESHOLDS = [-3, -0.6, 0.8, 3.5, 7];
 
 export function gradeColor(grade) {
-  if (grade <= -3) return GRADE_PROFILE_COLORS[0];
-  if (grade <= -0.6) return GRADE_PROFILE_COLORS[1];
-  if (grade < 0.8) return GRADE_PROFILE_COLORS[2];
-  if (grade < 3.5) return GRADE_PROFILE_COLORS[3];
-  if (grade < 7) return GRADE_PROFILE_COLORS[4];
+  if (grade <= GRADE_PROFILE_THRESHOLDS[0]) return GRADE_PROFILE_COLORS[0];
+  if (grade <= GRADE_PROFILE_THRESHOLDS[1]) return GRADE_PROFILE_COLORS[1];
+  if (grade < GRADE_PROFILE_THRESHOLDS[2]) return GRADE_PROFILE_COLORS[2];
+  if (grade < GRADE_PROFILE_THRESHOLDS[3]) return GRADE_PROFILE_COLORS[3];
+  if (grade < GRADE_PROFILE_THRESHOLDS[4]) return GRADE_PROFILE_COLORS[4];
   return GRADE_PROFILE_COLORS[5];
+}
+
+// The same buckets expressed as continuous meter zones. This keeps HUD
+// gradients aligned with gradeColor instead of evenly dividing the full
+// display scale (which made gray incorrectly span 0–10%).
+export function gradeColorZones(min, max) {
+  return GRADE_PROFILE_COLORS.map((color, index) => ({
+    min: index === 0 ? min : GRADE_PROFILE_THRESHOLDS[index - 1],
+    max: index === GRADE_PROFILE_COLORS.length - 1 ? max : GRADE_PROFILE_THRESHOLDS[index],
+    color,
+  }));
 }
 
 function configureCanvas(canvas) {

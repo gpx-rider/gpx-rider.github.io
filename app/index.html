@@ -94,7 +94,7 @@
             <!-- Ride HUD. These overlays are children of the map viewport, so
                  the same component is used in setup and fullscreen. -->
 
-            <!-- top-left: local time + elapsed + distance, above the minimap -->
+            <!-- top-left: local time + elapsed + distance -->
             <div id="fullscreenClock" class="fs-clock" hidden aria-live="polite">
               <span id="fsClockLocal" class="fs-clock-time" title="Local time">00:00:00</span>
               <span class="fs-clock-sep"></span>
@@ -477,7 +477,7 @@
             <span>Camera &amp; view</span>
           </button>
           <button type="button" class="settings-tab" data-settings-tab="rendering"
-            data-panel-title="Rendering" data-panel-subtitle="Rider beacon, terrain avoidance and map labels.">
+            data-panel-title="Rendering" data-panel-subtitle="Route styling, rider beacon, terrain avoidance and map labels.">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M2 12h4M18 12h4M12 2v4M12 18v4"></path></svg>
             <span>Rendering</span>
           </button>
@@ -580,6 +580,17 @@
           <section class="settings-panel" data-settings-panel="rendering" hidden>
             <div class="setting-row">
               <div class="setting-row-text">
+                <span class="setting-row-label">Color route by grade</span>
+                <span class="setting-row-hint">green descents through amber climbs to red steep ramps</span>
+              </div>
+              <label class="switch">
+                <input id="routeGradeColorsInput" type="checkbox" checked>
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="setting-row">
+              <div class="setting-row-text">
                 <span class="setting-row-label">Rider beacon</span>
                 <span class="setting-row-hint">visible above trees</span>
               </div>
@@ -669,10 +680,10 @@
             <div class="setting-row">
               <div class="setting-row-text">
                 <span class="setting-row-label">Minimap</span>
-                <span class="setting-row-hint">top-left overview</span>
+                <span class="setting-row-hint">bottom-right route overview</span>
               </div>
               <label class="switch">
-                <input id="minimapInput" type="checkbox" checked>
+                <input id="minimapInput" type="checkbox">
                 <span class="switch-track"><span class="switch-knob"></span></span>
               </label>
             </div>

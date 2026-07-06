@@ -33,10 +33,11 @@ import {
   routeTotalDescent,
   routeTotalDistance,
 } from "./route.mjs";
+import { gradeColoredRouteSegments } from "./route-style.mjs";
 import { createRideEstimator, estimateRemainingSeconds, recordEstimatorTick } from "./eta.mjs";
 import { classifyRoute } from "./difficulty.mjs";
 import { detectClimbs } from "./climbs.mjs";
-import { GRADE_PROFILE_COLORS, distanceAtProfileX, drawEmptyProfile, drawProfile, gradeColor } from "./profile.mjs";
+import { distanceAtProfileX, drawEmptyProfile, drawProfile, gradeColor, gradeColorZones } from "./profile.mjs";
 import {
   activeCaloriesFromPower,
   formatAltitude,
@@ -70,6 +71,7 @@ import {
   DEFAULT_GRADE_INTERVAL_SECONDS,
   DEFAULT_MAX_HEART_RATE_BPM,
   DEFAULT_RESTING_HEART_RATE_BPM,
+  DEFAULT_ROUTE_GRADE_COLORS_ENABLED,
   DEFAULT_HUD_DOCK_COLLAPSED,
   DEFAULT_DURATION_FORMAT,
   DEFAULT_HUD_FIELD_ORDER,
@@ -87,9 +89,12 @@ import {
   DEFAULT_TERRAIN_CLEARANCE_METERS,
   DEFAULT_TIME_FORMAT,
   FULLSCREEN_CLOCK_REFRESH_MS,
+  GALLERY_METADATA_CAMERA_REFRESH_MS,
   GRADE_INTERVAL_MAX_SECONDS,
   GRADE_INTERVAL_MIN_SECONDS,
   GRADE_MAX_PERCENT,
+  GRADE_METER_MAX_PERCENT,
+  GRADE_METER_MIN_PERCENT,
   GRADE_MIN_PERCENT,
   HEART_RATE_MAX_AGE_FORMULA_BASE,
   HEART_RATE_REFRESH_MS,
@@ -126,8 +131,12 @@ import {
   RIDER_DOT_SCALE,
   RIDE_SAVE_THROTTLE_MS,
   ROUTE_LINE_ALTITUDE_METERS,
+  ROUTE_LINE_COLOR,
   ROUTE_LINE_MAX_POINTS,
+  ROUTE_LINE_OUTER_COLOR,
+  ROUTE_LINE_OUTER_WIDTH,
   ROUTE_LINE_SPACING_METERS,
+  ROUTE_LINE_WIDTH,
   SCREENSHOT_WIDTH_MAX,
   SCREENSHOT_WIDTH_MIN,
   SIMULATION_SPEED_MAX_KPH,
@@ -194,6 +203,9 @@ const state = {
   // Display name shown above the route classification: a gallery ride's
   // curated title, else the GPX's own <name>, else the uploaded filename.
   routeName: null,
+  // Source metadata for a library route. Gallery export keeps this content
+  // intact and replaces only its preview camera with the live map camera.
+  galleryMetadata: null,
   // Detected climbs for the loaded route (see climbs.mjs), recomputed once
   // per route load in updateRouteOverview and read every ride tick to drive
   // the live "current climb" / "next climb" status.
@@ -205,14 +217,14 @@ const state = {
   tickRaf: null,
   tickTimeout: null,
   lastTick: 0,
-  line: null,
+  routeLines: [],
   riderDot: null,
   riderBeacon: null,
   map: null,
   mapProvider: null,
   maps3d: null,
   minimapMap: null,
-  minimapPath: null,
+  minimapPaths: [],
   minimapMarker: null,
   trainerSpeedKph: null,
   trainerPowerWatts: null,
@@ -227,6 +239,7 @@ const state = {
   lastRiderDot: null,
   lastRiderBeacon: null,
   lastRideSavedAt: 0,
+  lastGalleryMetadataRefreshMs: 0,
   profileHoverMeters: null,
   userInteracting: false,
   interactionSettleTimer: null,
@@ -265,6 +278,7 @@ const state = {
   beaconColor: DEFAULT_BEACON_COLOR,
   terrainAvoidEnabled: DEFAULT_TERRAIN_AVOID_ENABLED,
   terrainClearanceMeters: DEFAULT_TERRAIN_CLEARANCE_METERS,
+  routeGradeColorsEnabled: DEFAULT_ROUTE_GRADE_COLORS_ENABLED,
   cameraLiftMeters: 0,
   cameraLiftTargetMeters: 0,
   lastLiftComputeMs: 0,
@@ -366,6 +380,7 @@ const els = {
   terrainAvoidInput: document.querySelector("#terrainAvoidInput"),
   terrainClearanceInput: document.querySelector("#terrainClearanceInput"),
   terrainClearanceOutput: document.querySelector("#terrainClearanceOutput"),
+  routeGradeColorsInput: document.querySelector("#routeGradeColorsInput"),
   resetRenderingBtn: document.querySelector("#resetRenderingBtn"),
   connectBtn: document.querySelector("#connectBtn"),
   connectHrBtn: document.querySelector("#connectHrBtn"),
@@ -741,6 +756,7 @@ function bindEvents() {
   els.beaconColorInput.addEventListener("input", updateRenderingSettingsFromControls);
   els.terrainAvoidInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.terrainClearanceInput.addEventListener("input", updateRenderingSettingsFromControls);
+  els.routeGradeColorsInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.resetRenderingBtn.addEventListener("click", resetRenderingToDefaults);
   els.connectBtn.addEventListener("click", connectTrainer);
   els.connectHrBtn.addEventListener("click", connectHeartRate);
@@ -801,17 +817,17 @@ async function loadGpxFile(event) {
 // Gallery rides pass their curated title as `overrideName`, which wins over
 // whatever technical name the GPX export itself carries (e.g. a
 // map-tool-generated "Route from A to B").
-async function loadGpxFromUrl(url, overrideName) {
+async function loadGpxFromUrl(url, overrideName, galleryMetadata = null) {
   const response = await fetch(url);
   const text = await response.text();
-  applyGpxText(text, { overrideName });
+  applyGpxText(text, { overrideName, galleryMetadata });
 }
 
 function filenameToRouteName(filename) {
   return filename.replace(/\.[^./\\]+$/, "").trim() || null;
 }
 
-function applyGpxText(text, { overrideName = null, fallbackName = null } = {}) {
+function applyGpxText(text, { overrideName = null, fallbackName = null, galleryMetadata = null } = {}) {
   const { points: route, name: gpxName } = parseGpx(text);
 
   if (route.length < 2) {
@@ -821,6 +837,10 @@ function applyGpxText(text, { overrideName = null, fallbackName = null } = {}) {
 
   state.route = enrichRoute(route);
   state.routeName = overrideName || gpxName || fallbackName;
+  state.galleryMetadata = galleryMetadata && typeof galleryMetadata === "object"
+    ? structuredClone(galleryMetadata)
+    : null;
+  state.lastGalleryMetadataRefreshMs = 0;
   state.progressMeters = 0;
   state.simulating = false;
   state.lastTick = 0;
@@ -1025,12 +1045,12 @@ function updateTrainingMeters(grade) {
     metaEl: els.zoneGradeMeta,
     fillEl: els.zoneGradeFill,
     value: gradeValue,
-    min: GRADE_MIN_PERCENT,
-    max: GRADE_MAX_PERCENT,
+    min: GRADE_METER_MIN_PERCENT,
+    max: GRADE_METER_MAX_PERCENT,
     zones: gradeZones,
     text: Number.isFinite(gradeValue) ? `${gradeValue.toFixed(1)}%` : "--",
     fallbackMeta: "Live road",
-    zone: zoneIndexFromZones(gradeValue, gradeZones),
+    zone: gradeZones.findIndex((zone) => zone.color === gradeColor(gradeValue)),
     color: Number.isFinite(gradeValue) ? gradeColor(gradeValue) : null,
   });
 }
@@ -1080,15 +1100,7 @@ function calculatePowerZones(ftp) {
 }
 
 function gradeMeterZones() {
-  const span = GRADE_MAX_PERCENT - GRADE_MIN_PERCENT;
-  const step = span / GRADE_PROFILE_COLORS.length;
-  return GRADE_PROFILE_COLORS.map((color, index) => ({
-    min: GRADE_MIN_PERCENT + step * index,
-    max: index === GRADE_PROFILE_COLORS.length - 1
-      ? GRADE_MAX_PERCENT
-      : GRADE_MIN_PERCENT + step * (index + 1),
-    color,
-  }));
+  return gradeColorZones(GRADE_METER_MIN_PERCENT, GRADE_METER_MAX_PERCENT);
 }
 
 function zoneDisplayBounds(zones, fallbackMin, fallbackMax) {
@@ -1322,16 +1334,20 @@ function renderRoute() {
 function renderMinimapRoute() {
   if (!state.minimapMap || !state.route.length) return;
 
-  if (state.minimapPath) state.minimapPath.setMap(null);
+  state.minimapPaths.forEach((line) => line.setMap(null));
+  state.minimapPaths = [];
 
   const path = state.route.map((point) => ({ lat: point.lat, lng: point.lng }));
-  state.minimapPath = new google.maps.Polyline({
-    path,
+  const styledSegments = state.routeGradeColorsEnabled
+    ? gradeColoredRouteSegments(state.route, state.route, gradeColor)
+    : [{ color: ROUTE_LINE_COLOR, path: state.route }];
+  state.minimapPaths = styledSegments.map((segment) => new google.maps.Polyline({
+    path: segment.path.map((point) => ({ lat: point.lat, lng: point.lng })),
     map: state.minimapMap,
-    strokeColor: "#0a84ff",
+    strokeColor: segment.color,
     strokeOpacity: 0.95,
     strokeWeight: 3,
-  });
+  }));
 
   const bounds = new google.maps.LatLngBounds();
   path.forEach((point) => bounds.extend(point));
@@ -1365,8 +1381,6 @@ function updateMinimapPosition(point) {
 }
 
 function renderGoogle3DRoute(currentPoint) {
-  const { AltitudeMode, Polyline3DElement } = state.maps3d;
-
   // CLAMP_TO_GROUND drapes the stroke onto the terrain mesh like a decal, so
   // on steep slopes the line smears down the hillside into wide blobs. A line
   // held a couple of meters above the ground renders with a constant
@@ -1374,31 +1388,41 @@ function renderGoogle3DRoute(currentPoint) {
   // stay short enough to follow the terrain between GPX points.
   const spacing = Math.max(ROUTE_LINE_SPACING_METERS, routeTotalDistance(state.route) / ROUTE_LINE_MAX_POINTS);
   const linePoints = densifyRoute(state.route, spacing);
-  const pathAt = (altitude) => linePoints.map((point) => ({
-    lat: point.lat,
-    lng: point.lng,
-    altitude,
-  }));
-
-  if (Polyline3DElement) {
-    // One polyline with the built-in casing (outerColor/outerWidth), never a
-    // second stacked line for the outline: separate geometries a fraction of
-    // a meter apart z-fight once the camera is far enough that their altitude
-    // gap falls below depth precision, leaving only the outline visible.
-    state.line = new Polyline3DElement({
-      altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
-      path: pathAt(ROUTE_LINE_ALTITUDE_METERS),
-      strokeColor: "#0a84ff",
-      strokeWidth: 14,
-      outerColor: "rgba(255, 255, 255, 0.72)",
-      outerWidth: 0.35,
-    });
-    state.map.append(state.line);
-  }
+  renderRouteLines(linePoints);
 
   renderRiderDot(currentPoint);
   updateMapCamera();
   updateOverviewDebugLine();
+}
+
+function renderRouteLines(linePoints) {
+  const { AltitudeMode, Polyline3DElement } = state.maps3d;
+  if (!Polyline3DElement) return;
+  state.routeLines.forEach((line) => line.remove());
+  state.routeLines = [];
+
+  const styledSegments = state.routeGradeColorsEnabled
+    ? gradeColoredRouteSegments(state.route, linePoints, gradeColor)
+    : [{ color: ROUTE_LINE_COLOR, path: linePoints }];
+
+  // Use each polyline's built-in casing, never a second stacked line for the
+  // outline: stacked geometries z-fight at overview distances.
+  state.routeLines = styledSegments.map((segment) => {
+    const line = new Polyline3DElement({
+      altitudeMode: AltitudeMode?.RELATIVE_TO_GROUND,
+      path: segment.path.map((point) => ({
+        lat: point.lat,
+        lng: point.lng,
+        altitude: ROUTE_LINE_ALTITUDE_METERS,
+      })),
+      strokeColor: segment.color,
+      strokeWidth: ROUTE_LINE_WIDTH,
+      outerColor: ROUTE_LINE_OUTER_COLOR,
+      outerWidth: ROUTE_LINE_OUTER_WIDTH,
+    });
+    state.map.append(line);
+    return line;
+  });
 }
 
 function renderRiderDot(point) {
@@ -1466,12 +1490,12 @@ function beaconFillColor() {
 }
 
 function clearRouteFromMap() {
-  if (state.line) state.line.remove();
+  state.routeLines.forEach((line) => line.remove());
   if (state.riderDot) state.riderDot.remove();
   if (state.riderBeacon) state.riderBeacon.remove();
   clearOverviewDebugLine();
 
-  state.line = null;
+  state.routeLines = [];
   state.riderDot = null;
   state.riderBeacon = null;
   state.lastRiderDot = null;
@@ -2235,6 +2259,7 @@ function stepCameraFlight(now) {
   state.map.tilt = camera.tilt;
   state.map.roll = 0;
   state.map.fov = DEFAULT_MAP_FOV_DEGREES;
+  updateGalleryMetadataExport();
   return settled;
 }
 
@@ -2548,6 +2573,7 @@ function stepOverviewAnimation(now) {
   state.map.tilt = camera.tilt;
   state.map.roll = pose.roll ?? 0;
   state.map.fov = pose.fov ?? DEFAULT_MAP_FOV_DEGREES;
+  updateGalleryMetadataExport();
 }
 
 function lerpGeoPoint(a, b, t) {
@@ -2587,6 +2613,7 @@ function applyCameraNow(camera) {
       lastStepMs: performance.now(),
     }
     : null;
+  updateGalleryMetadataExport();
 }
 
 // --- Terrain avoidance ---------------------------------------------------------
@@ -2726,6 +2753,7 @@ function endUserInteraction() {
   state.cameraLiftTargetMeters = 0;
 
   updateRideUi();
+  updateGalleryMetadataExport(true);
 }
 
 function captureManualCameraSettings() {
@@ -2928,7 +2956,7 @@ function normalizeOverviewMode(mode) {
   if (mode === "satellite-north") return "satellite"; // satellite is now north-up only
   return ["static", "orbit", "flyby", "flyover", "satellite"].includes(mode)
     ? mode
-    : "static";
+    : DEFAULT_OVERVIEW_MODE;
 }
 
 function updateCameraSettingsLabels() {
@@ -3505,6 +3533,8 @@ function resetCameraView() {
 }
 
 function updateRenderingSettingsFromControls() {
+  const routeGradeColorsChanged = state.routeGradeColorsEnabled !== els.routeGradeColorsInput.checked;
+  state.routeGradeColorsEnabled = els.routeGradeColorsInput.checked;
   state.beaconEnabled = els.beaconEnabledInput.checked;
   state.beaconDiameterMeters = Number(els.beaconDiameterInput.value);
   state.beaconHeightMeters = Number(els.beaconHeightInput.value);
@@ -3515,10 +3545,13 @@ function updateRenderingSettingsFromControls() {
   updateRenderingSettingsLabels();
   saveSettings();
   rebuildRiderBeacon();
+  if (routeGradeColorsChanged) rebuildRouteStyle();
   updateRideUi();
 }
 
 function resetRenderingToDefaults() {
+  const routeGradeColorsChanged = state.routeGradeColorsEnabled !== DEFAULT_ROUTE_GRADE_COLORS_ENABLED;
+  state.routeGradeColorsEnabled = DEFAULT_ROUTE_GRADE_COLORS_ENABLED;
   state.beaconEnabled = DEFAULT_BEACON_ENABLED;
   state.beaconDiameterMeters = DEFAULT_BEACON_DIAMETER_METERS;
   state.beaconHeightMeters = DEFAULT_BEACON_HEIGHT_METERS;
@@ -3530,7 +3563,19 @@ function resetRenderingToDefaults() {
   updateRenderingSettingsLabels();
   saveSettings();
   rebuildRiderBeacon();
+  if (routeGradeColorsChanged) rebuildRouteStyle();
   updateRideUi();
+}
+
+function rebuildRouteStyle() {
+  if (!state.route.length) return;
+  renderMinimapRoute();
+  if (!state.map || !state.maps3d) return;
+  const spacing = Math.max(
+    ROUTE_LINE_SPACING_METERS,
+    routeTotalDistance(state.route) / ROUTE_LINE_MAX_POINTS,
+  );
+  renderRouteLines(densifyRoute(state.route, spacing));
 }
 
 function rebuildRiderBeacon() {
@@ -3541,6 +3586,7 @@ function rebuildRiderBeacon() {
 }
 
 function syncRenderingControls() {
+  els.routeGradeColorsInput.checked = state.routeGradeColorsEnabled;
   els.beaconEnabledInput.checked = state.beaconEnabled;
   els.beaconDiameterInput.value = String(state.beaconDiameterMeters);
   els.beaconHeightInput.value = String(state.beaconHeightMeters);
@@ -3597,8 +3643,12 @@ function syncCenterRiderButton() {
 // --- Gallery metadata export ------------------------------------------------------
 
 function resetGalleryMetadataExportForRoute() {
-  if (els.galleryTitleInput) els.galleryTitleInput.value = state.routeName || "";
-  if (els.galleryDescriptionInput) els.galleryDescriptionInput.value = "";
+  if (els.galleryTitleInput) {
+    els.galleryTitleInput.value = state.galleryMetadata?.title || state.routeName || "";
+  }
+  if (els.galleryDescriptionInput) {
+    els.galleryDescriptionInput.value = state.galleryMetadata?.description || "";
+  }
   syncGalleryMetadataExportAvailability();
 }
 
@@ -3617,11 +3667,15 @@ function syncGalleryMetadataExportAvailability() {
   }
 }
 
-function updateGalleryMetadataExport() {
+function updateGalleryMetadataExport(force = false) {
   if (!els.galleryMetadataOutput || !state.route.length || !state.map) return;
+  const now = performance.now();
+  if (!force && now - state.lastGalleryMetadataRefreshMs < GALLERY_METADATA_CAMERA_REFRESH_MS) return;
+  state.lastGalleryMetadataRefreshMs = now;
   const title = els.galleryTitleInput.value.trim() || state.routeName || "Untitled route";
   const description = els.galleryDescriptionInput.value.trim();
   const metadata = {
+    ...(state.galleryMetadata ?? {}),
     title,
     description,
     previewCamera: currentGalleryPreviewCamera(),
@@ -3653,7 +3707,7 @@ function roundCameraNumber(value, digits = 0) {
 }
 
 async function copyGalleryMetadata() {
-  updateGalleryMetadataExport();
+  updateGalleryMetadataExport(true);
   const text = els.galleryMetadataOutput.value;
   if (!text.trim()) return;
   try {
@@ -3706,6 +3760,14 @@ function initializeMapHud() {
   startFullscreenClock();
   renderProfile();
   updateTrainingMeters(state.route.length ? gradeAt(state.route, state.progressMeters) : NaN);
+  if (window.ResizeObserver) {
+    new ResizeObserver(([entry]) => {
+      const height = entry?.borderBoxSize?.[0]?.blockSize ?? entry?.contentRect?.height;
+      if (Number.isFinite(height)) {
+        els.mapViewport.style.setProperty("--fs-dock-height", `${Math.ceil(height)}px`);
+      }
+    }).observe(els.fullscreenOverlayBottom);
+  }
 }
 
 function enterMapFullscreen() {
@@ -3874,6 +3936,10 @@ function restoreSettings() {
     state.terrainAvoidEnabled = settings.terrainAvoidEnabled;
   }
 
+  if (typeof settings?.routeGradeColorsEnabled === "boolean") {
+    state.routeGradeColorsEnabled = settings.routeGradeColorsEnabled;
+  }
+
   const terrainClearance = Number(settings?.terrainClearanceMeters);
   if (Number.isFinite(terrainClearance)) {
     state.terrainClearanceMeters = clamp(terrainClearance, Number(els.terrainClearanceInput.min), Number(els.terrainClearanceInput.max));
@@ -3973,6 +4039,7 @@ function saveSettings() {
     cameraOffsetRightMeters: state.cameraOffsetRightMeters,
     cameraCenterAltitudeOffsetMeters: state.cameraCenterAltitudeOffsetMeters,
     centerRider: state.centerRider,
+    routeGradeColorsEnabled: state.routeGradeColorsEnabled,
     beaconEnabled: state.beaconEnabled,
     beaconDiameterMeters: state.beaconDiameterMeters,
     beaconHeightMeters: state.beaconHeightMeters,
@@ -4031,6 +4098,10 @@ function restoreSavedRide() {
 
   state.route = enrichRoute(route);
   state.routeName = typeof savedRide.name === "string" ? savedRide.name : null;
+  state.galleryMetadata = savedRide.galleryMetadata && typeof savedRide.galleryMetadata === "object"
+    ? structuredClone(savedRide.galleryMetadata)
+    : null;
+  state.lastGalleryMetadataRefreshMs = 0;
   state.progressMeters = clamp(Number(savedRide.progressMeters) || 0, 0, routeTotalDistance(state.route));
   state.simulating = false;
   state.lastTick = 0;
@@ -4070,6 +4141,7 @@ function saveRide() {
   const saved = writeJson(RIDE_STORAGE_KEY, {
     route,
     name: state.routeName,
+    galleryMetadata: state.galleryMetadata,
     progressMeters: Math.round(state.progressMeters),
     speedKph: Number(els.speedInput.value),
     savedAt: new Date().toISOString(),
