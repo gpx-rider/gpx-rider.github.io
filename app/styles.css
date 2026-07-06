@@ -594,11 +594,10 @@ body {
   display: inline;
 }
 
-/* ---- fullscreen ride HUD (design 3a) --------------------------------------
-   The clock chip, climb banner and data dock are children of .map-viewport so
-   they follow it into fullscreen. They stay hidden in the normal map pane and
-   only paint once .map-viewport is in .fullscreen-mode. A shared glass surface
-   (--fs-glass*) ties them together. */
+/* ---- ride HUD --------------------------------------------------------------
+   The clock chip, climb banner, training meters and data dock are children of
+   .map-viewport, so the same component renders in the setup map and follows it
+   into fullscreen. A shared glass surface (--fs-glass*) ties them together. */
 
 :root {
   --fs-glass-bg: rgba(13, 16, 21, 0.3);
@@ -606,36 +605,22 @@ body {
   --fs-label: rgba(255, 255, 255, 0.5);
 }
 
-.fs-clock,
-.climb-banner,
-.fs-dock {
-  display: none;
-}
-
-/* In fullscreen the whole map breathes to the edges — nudge the corner
-   overlays a little further in than the windowed map's 16px. */
-.map-viewport.fullscreen-mode #minimap {
+#minimap {
   left: 24px;
   top: 78px;
 }
 
-.map-viewport.fullscreen-mode .map-actions {
+.map-actions {
   top: 24px;
   right: 24px;
 }
 
-/* The Settings shortcut in the map-action cluster only makes sense in
-   fullscreen, where the top bar (and its Settings button) is hidden. */
 .map-action-btn-fs-only {
-  display: none;
-}
-
-.map-viewport.fullscreen-mode .map-action-btn-fs-only {
   display: flex;
 }
 
 /* top-left: local time + elapsed + ridden distance, above the minimap */
-.map-viewport.fullscreen-mode .fs-clock {
+.fs-clock {
   position: absolute;
   top: 24px;
   left: 24px;
@@ -676,7 +661,7 @@ body {
   color: var(--accent);
 }
 
-.map-viewport.fullscreen-mode .fs-training-meters {
+.fs-training-meters {
   position: absolute;
   top: 92px;
   left: 24px;
@@ -710,30 +695,35 @@ body {
 }
 
 .fs-zone-track {
+  position: relative;
   height: 5px;
-  overflow: hidden;
+  overflow: visible;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.14);
 }
 
 .fs-zone-fill {
-  height: 100%;
-  width: 0;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.42);
-  transition: width 0.18s ease, background 0.18s ease;
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 8px rgba(255, 255, 255, 0.9),
+    0 0 14px rgba(255, 255, 255, 0.55);
+  transform: translateX(-50%);
+  transition: left 0.18s ease, opacity 0.18s ease;
 }
 
-.fs-zone-meter[data-zone="0"] .fs-zone-fill { background: #57b877; }
-.fs-zone-meter[data-zone="1"] .fs-zone-fill { background: #8fca5d; }
-.fs-zone-meter[data-zone="2"] .fs-zone-fill { background: #e8b74e; }
-.fs-zone-meter[data-zone="3"] .fs-zone-fill { background: #e8823c; }
-.fs-zone-meter[data-zone="4"] .fs-zone-fill { background: #d96a3f; }
-.fs-zone-meter[data-zone="5"] .fs-zone-fill { background: #d9542f; }
-.fs-zone-meter[data-zone="6"] .fs-zone-fill { background: #d9542f; }
+.fs-zone-fill.is-empty {
+  opacity: 0;
+}
 
 /* top-center: climb banner */
-.map-viewport.fullscreen-mode .climb-banner {
+.climb-banner {
   position: absolute;
   top: 24px;
   left: 50%;
@@ -889,7 +879,7 @@ body {
 }
 
 /* bottom data dock */
-.map-viewport.fullscreen-mode .fs-dock {
+.fs-dock {
   position: absolute;
   left: 24px;
   right: 24px;
@@ -1328,6 +1318,10 @@ body {
   overflow: hidden;
 }
 
+.panel-card-zone-help {
+  overflow: visible;
+}
+
 .panel-card-head {
   display: flex;
   align-items: flex-start;
@@ -1421,6 +1415,7 @@ body {
 }
 
 .zone-editor-section {
+  position: relative;
   display: grid;
   gap: 7px;
 }
@@ -1447,7 +1442,39 @@ body {
   color: var(--faint);
   background: rgba(255, 255, 255, 0.04);
   font: 700 10px/1 var(--font-ui);
-  cursor: help;
+  cursor: pointer;
+}
+
+.zone-help-btn[aria-expanded="true"] {
+  color: var(--accent);
+  border-color: rgba(246, 165, 44, 0.55);
+  background: rgba(246, 165, 44, 0.12);
+}
+
+.zone-help-popover {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 7px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--ink);
+  background: rgba(18, 22, 29, 0.96);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.38);
+}
+
+.zone-help-popover[hidden] {
+  display: none;
+}
+
+.zone-help-popover strong {
+  font: 700 10px/1.25 var(--font-ui);
+  color: var(--ink-bright);
+}
+
+.zone-help-popover span {
+  font: 500 10px/1.35 var(--font-ui);
+  color: var(--muted);
 }
 
 .zone-summary {
@@ -2519,24 +2546,24 @@ input[type="color"] {
   }
 }
 
-/* ---- fullscreen HUD on phones ---------------------------------------------
-   The fullscreen dock is laid out for a wide screen: its body is a horizontal
-   row (fixed-width metric grid + separator + road-ahead profile) and the
-   collapsed strip lays every metric tile inline. Neither fits a phone, so on
-   narrow viewports the corner overlays pull in from the edges and the dock
-   stacks into a compact, always-fits column. */
+/* ---- map HUD on phones -----------------------------------------------------
+   The dock is laid out for a wide screen: its body is a horizontal row
+   (fixed-width metric grid + separator + road-ahead profile) and the collapsed
+   strip lays every metric tile inline. Neither fits a phone, so on narrow
+   viewports the corner overlays pull in from the edges and the dock stacks
+   into a compact, always-fits column. */
 @media (max-width: 860px) {
-  .map-viewport.fullscreen-mode #minimap {
+  #minimap {
     left: 14px;
     top: 62px;
   }
 
-  .map-viewport.fullscreen-mode .map-actions {
+  .map-actions {
     top: 14px;
     right: 14px;
   }
 
-  .map-viewport.fullscreen-mode .fs-clock {
+  .fs-clock {
     top: 14px;
     left: 14px;
     gap: 8px;
@@ -2556,7 +2583,7 @@ input[type="color"] {
     font-size: 13px;
   }
 
-  .map-viewport.fullscreen-mode .fs-training-meters {
+  .fs-training-meters {
     top: 112px;
     left: 14px;
     width: 150px;
@@ -2573,7 +2600,7 @@ input[type="color"] {
 
   /* The banner's desktop min-width (420px) overflows a phone; let it span the
      viewport width instead and drop the centring transform. */
-  .map-viewport.fullscreen-mode .climb-banner {
+  .climb-banner {
     left: 14px;
     right: 14px;
     min-width: 0;
@@ -2581,7 +2608,7 @@ input[type="color"] {
     transform: none;
   }
 
-  .map-viewport.fullscreen-mode .fs-dock {
+  .fs-dock {
     left: 10px;
     right: 10px;
     bottom: 12px;

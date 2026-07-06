@@ -91,9 +91,8 @@
               <dl id="cameraDebugBody" class="camera-debug-body"></dl>
             </div>
 
-            <!-- Fullscreen ride HUD (design 3a). These overlays are children of
-                 the map viewport so they ride along when it goes fullscreen; CSS
-                 keeps them out of the normal (non-fullscreen) map pane. -->
+            <!-- Ride HUD. These overlays are children of the map viewport, so
+                 the same component is used in setup and fullscreen. -->
 
             <!-- top-left: local time + elapsed + distance, above the minimap -->
             <div id="fullscreenClock" class="fs-clock" hidden aria-live="polite">
@@ -201,7 +200,7 @@
                     <div class="fs-tile" data-hud="ascent"><span class="fs-tile-label">Ascent</span><strong id="hudAscentStat" class="fs-tile-value">--</strong></div>
                     <div class="fs-tile" data-hud="elapsed"><span class="fs-tile-label">Elapsed</span><strong id="hudElapsedStat" class="fs-tile-value">--</strong></div>
                   </div>
-                  <div class="fs-dock-field-controls" aria-label="Fullscreen data fields">
+                  <div class="fs-dock-field-controls" aria-label="Map data fields">
                     <button id="hudLessBtn" type="button" class="fs-dock-field-btn" title="Show fewer fields" aria-label="Show fewer fields">-</button>
                     <button id="hudMoreBtn" type="button" class="fs-dock-field-btn" title="Show more fields" aria-label="Show more fields">+</button>
                     <button id="hudSettingsBtn" type="button" class="fs-dock-field-btn" title="HUD settings" aria-label="Open HUD settings">
@@ -259,19 +258,7 @@
 
           <div class="panel-card">
             <div class="panel-card-head">
-              <span class="panel-card-title">Elevation · detected climbs</span>
-              <div class="profile-head-tools">
-                <div class="profile-series-toggle" role="group" aria-label="Profile history series">
-                  <button type="button" data-profile-series="speed" aria-pressed="true">Speed</button>
-                  <button type="button" data-profile-series="power" aria-pressed="true">Power</button>
-                  <button type="button" data-profile-series="heartRate" aria-pressed="true">HR</button>
-                </div>
-                <div class="profile-legend">
-                  <span><i style="background:#57b877"></i>descent</span>
-                  <span><i style="background:#e8b74e"></i>climb</span>
-                  <span><i style="background:#d9542f"></i>steep</span>
-                </div>
-              </div>
+              <span class="panel-card-title">Detected climbs</span>
             </div>
             <canvas id="profile" aria-label="Elevation profile"></canvas>
             <div id="climbsSection" class="climbs-section" hidden>
@@ -340,7 +327,7 @@
             </div>
           </div>
 
-          <div class="panel-card panel-card-flush">
+          <div class="panel-card panel-card-flush panel-card-zone-help">
             <div class="connection-row">
               <div class="connection-info">
                 <span id="trainerDot" class="status-dot"></span>
@@ -378,22 +365,28 @@
             <div class="zone-editor">
               <p class="zone-editor-note">Heart-rate zones use Heart Rate Reserve from resting and max HR. FTP calculates power zones.</p>
               <div class="zone-editor-section">
-                <div class="zone-editor-title">Heart-rate zones <button id="heartRateZoneHelpBtn" type="button" class="zone-help-btn" aria-label="Heart-rate zone help" title="Z1 Recovery: Easy effort. Good for warmups, cooldowns, and very light rides.
-Z2 Endurance: Comfortable aerobic effort. You should be able to talk in full sentences.
-Z3 Tempo: Moderately hard. Sustainable, but talking becomes shorter.
-Z4 Threshold: Hard effort near your limit for longer intervals.
-Z5 Max: Very hard effort for short intervals.">?</button></div>
+                <div class="zone-editor-title">Heart-rate zones <button id="heartRateZoneHelpBtn" type="button" class="zone-help-btn" aria-label="Heart-rate zone help" aria-expanded="false" aria-controls="heartRateZoneHelp" data-zone-help-trigger>?</button></div>
                 <div id="heartRateZoneSummary" class="zone-summary">--</div>
+                <div id="heartRateZoneHelp" class="zone-help-popover" hidden>
+                  <strong>Z1 Recovery</strong><span>Easy effort. Good for warmups, cooldowns, and very light rides.</span>
+                  <strong>Z2 Endurance</strong><span>Comfortable aerobic effort. You should be able to talk in full sentences.</span>
+                  <strong>Z3 Tempo</strong><span>Moderately hard. Sustainable, but talking becomes shorter.</span>
+                  <strong>Z4 Threshold</strong><span>Hard effort near your limit for longer intervals.</span>
+                  <strong>Z5 Max</strong><span>Very hard effort for short intervals.</span>
+                </div>
               </div>
               <div class="zone-editor-section">
-                <div class="zone-editor-title">Power zones <button id="powerZoneHelpBtn" type="button" class="zone-help-btn" aria-label="Power zone help" title="Z1 Active Recovery: &lt; 55% FTP
-Z2 Endurance: 56% - 75% FTP
-Z3 Tempo: 76% - 90% FTP
-Z4 Lactate Threshold: 91% - 105% FTP
-Z5 VO2max: 106% - 120% FTP
-Z6 Anaerobic Capacity: 121% - 150% FTP
-Z7 Neuromuscular Power: &gt; 150% FTP">?</button></div>
+                <div class="zone-editor-title">Power zones <button id="powerZoneHelpBtn" type="button" class="zone-help-btn" aria-label="Power zone help" aria-expanded="false" aria-controls="powerZoneHelp" data-zone-help-trigger>?</button></div>
                 <div id="powerZoneSummary" class="zone-summary">--</div>
+                <div id="powerZoneHelp" class="zone-help-popover" hidden>
+                  <strong>Z1 Active Recovery</strong><span>&lt; 55% FTP</span>
+                  <strong>Z2 Endurance</strong><span>56% - 75% FTP</span>
+                  <strong>Z3 Tempo</strong><span>76% - 90% FTP</span>
+                  <strong>Z4 Lactate Threshold</strong><span>91% - 105% FTP</span>
+                  <strong>Z5 VO2max</strong><span>106% - 120% FTP</span>
+                  <strong>Z6 Anaerobic Capacity</strong><span>121% - 150% FTP</span>
+                  <strong>Z7 Neuromuscular Power</strong><span>&gt; 150% FTP</span>
+                </div>
               </div>
             </div>
           </div>

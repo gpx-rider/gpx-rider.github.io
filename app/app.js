@@ -372,6 +372,7 @@ const els = {
   ftpInput: document.querySelector("#ftpInput"),
   powerZoneSummary: document.querySelector("#powerZoneSummary"),
   heartRateZoneSummary: document.querySelector("#heartRateZoneSummary"),
+  zoneHelpButtons: document.querySelectorAll("[data-zone-help-trigger]"),
   startBtn: document.querySelector("#startBtn"),
   startBtnLabel: document.querySelector("#startBtnLabel"),
   resetBtn: document.querySelector("#resetBtn"),
@@ -521,6 +522,7 @@ async function startApp() {
   els.apiKeySection.hidden = Boolean(deployedMapsApiKey());
   await initMap();
   bindEvents();
+  initializeMapHud();
   restoreSavedRide();
   void reconnectSavedTrainer();
   void reconnectSavedHeartRate();
@@ -702,6 +704,7 @@ function bindEvents() {
   els.restingHeartRateInput.addEventListener("change", updateRiderProfileFromControls);
   els.maxHeartRateInput.addEventListener("change", updateRiderProfileFromControls);
   els.ftpInput.addEventListener("change", updateRiderProfileFromControls);
+  els.zoneHelpButtons.forEach((button) => button.addEventListener("click", toggleZoneHelp));
   els.minimapInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.mapLabelsInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.cameraDebugInput.addEventListener("change", updateDisplaySettingsFromControls);
@@ -752,6 +755,10 @@ function bindEvents() {
   document.addEventListener("fullscreenchange", handleFullscreenChange);
   document.addEventListener("visibilitychange", handleVisibilityChange);
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && closeZoneHelpPopovers()) {
+      event.stopPropagation();
+      return;
+    }
     if (event.key === "Escape" && state.overviewMenuOpen) {
       closeOverviewModeMenu();
       return;
@@ -764,6 +771,7 @@ function bindEvents() {
     ) exitMapFullscreen();
   });
   document.addEventListener("click", closeOverviewModeMenuOnOutsideClick);
+  document.addEventListener("click", closeZoneHelpOnOutsideClick);
   window.addEventListener("beforeunload", () => {
     saveRide();
     persistRideLog();
@@ -936,14 +944,12 @@ function updateClimbStatus(point) {
 // Top-left chip ride stats. The local wall clock has its own timer below so
 // seconds keep advancing while the rider is stationary.
 function updateFullscreenClock(riddenText, ascentText = "--") {
-  if (!state.mapFullscreen) return;
   els.fsClockElapsed.textContent = formatDuration(rideLogSummary().timerSeconds, state.durationFormat);
   els.fsClockDistance.textContent = riddenText;
   els.fsClockAscent.textContent = ascentText;
 }
 
 function updateFullscreenLocalTime() {
-  if (!state.mapFullscreen) return;
   els.fsClockLocal.textContent = formatLocalTime(new Date(), state.timeFormat);
 }
 
@@ -953,15 +959,13 @@ function startFullscreenClock() {
   state.fullscreenClockTimer = setTimeout(startFullscreenClock, FULLSCREEN_CLOCK_REFRESH_MS);
 }
 
-function stopFullscreenClock() {
-  clearTimeout(state.fullscreenClockTimer);
-  state.fullscreenClockTimer = null;
-}
-
 function updateTrainingMeters(grade) {
-  if (!state.mapFullscreen) return;
   const power = state.trainerPowerWatts;
   const heartRate = currentHeartRate();
+  const powerZones = currentPowerZones();
+  const heartRateZones = currentHeartRateZones();
+  const powerScale = zoneDisplayBounds(powerZones, 0, state.ftpWatts ? state.ftpWatts * 1.6 : 500);
+  const heartRateScale = zoneDisplayBounds(heartRateZones, 0, state.maxHeartRateBpm);
 
   updateZoneMeter({
     meter: els.powerMeter,
@@ -969,9 +973,10 @@ function updateTrainingMeters(grade) {
     metaEl: els.zonePowerMeta,
     fillEl: els.zonePowerFill,
     value: power,
-    zones: currentPowerZones(),
+    min: powerScale.min,
+    max: powerScale.max,
+    zones: powerZones,
     definitions: POWER_ZONE_DEFINITIONS,
-    max: state.ftpWatts ? state.ftpWatts * 1.6 : 500,
     text: Number.isFinite(power) ? `${Math.round(power)} W` : "--",
     fallbackMeta: state.ftpWatts ? `FTP ${state.ftpWatts} W` : "Zones not set",
   });
@@ -982,26 +987,30 @@ function updateTrainingMeters(grade) {
     metaEl: els.zoneHeartRateMeta,
     fillEl: els.zoneHeartRateFill,
     value: heartRate,
-    zones: currentHeartRateZones(),
+    min: heartRateScale.min,
+    max: heartRateScale.max,
+    zones: heartRateZones,
     definitions: HEART_RATE_ZONE_DEFINITIONS,
-    max: state.maxHeartRateBpm,
     text: Number.isFinite(heartRate) ? `${Math.round(heartRate)} bpm` : "--",
     fallbackMeta: `Max ${state.maxHeartRateBpm} bpm`,
   });
 
   const gradeValue = Number.isFinite(grade) ? grade : null;
+  const gradeZones = gradeMeterZones();
+  const gradeScale = zoneDisplayBounds(gradeZones, -15, 20);
   updateZoneMeter({
     meter: els.gradeMeter,
     valueEl: els.zoneGradeValue,
     metaEl: els.zoneGradeMeta,
     fillEl: els.zoneGradeFill,
     value: gradeValue,
-    min: -15,
-    max: 20,
+    min: gradeScale.min,
+    max: gradeScale.max,
+    zones: gradeZones,
     text: Number.isFinite(gradeValue) ? `${gradeValue.toFixed(1)}%` : "--",
     fallbackMeta: "Live road",
     zone: Number.isFinite(gradeValue)
-      ? (gradeValue < -0.6 ? 0 : gradeValue < 3.5 ? 2 : gradeValue < 7 ? 3 : 5)
+      ? (gradeValue <= 0 ? 0 : gradeValue < 3.5 ? 2 : gradeValue < 7 ? 3 : 5)
       : null,
     color: Number.isFinite(gradeValue) ? gradeColor(gradeValue) : null,
   });
@@ -1051,6 +1060,34 @@ function calculatePowerZones(ftp) {
   ];
 }
 
+function gradeMeterZones() {
+  return [
+    { min: -15, max: 0, color: gradeColor(-4) },
+    { min: 0.1, max: 3.4, color: gradeColor(1) },
+    { min: 3.5, max: 6.9, color: gradeColor(5) },
+    { min: 7, max: 11.9, color: gradeColor(9) },
+    { min: 12, max: 20, color: gradeColor(14) },
+  ];
+}
+
+function zoneDisplayBounds(zones, fallbackMin, fallbackMax) {
+  if (!Array.isArray(zones) || zones.length < 3) {
+    return { min: fallbackMin, max: fallbackMax };
+  }
+  const innerWidths = zones
+    .slice(1, -1)
+    .map((zone) => Number.isFinite(zone.max) ? zone.max - zone.min + 1 : NaN)
+    .filter((width) => Number.isFinite(width) && width > 0)
+    .sort((a, b) => a - b);
+  if (!innerWidths.length || !Number.isFinite(zones[1]?.min) || !Number.isFinite(zones.at(-1)?.min)) {
+    return { min: fallbackMin, max: fallbackMax };
+  }
+  const typicalWidth = innerWidths[Math.floor(innerWidths.length / 2)];
+  const min = Math.max(0, zones[1].min - typicalWidth);
+  const max = zones.at(-1).min + typicalWidth;
+  return max > min ? { min, max } : { min: fallbackMin, max: fallbackMax };
+}
+
 function updateZoneMeter({
   meter,
   valueEl,
@@ -1073,14 +1110,42 @@ function updateZoneMeter({
   const zoneDef = Number.isInteger(zoneIndex_) && definitions?.[zoneIndex_] ? definitions[zoneIndex_] : null;
   metaEl.textContent = zoneDef ? `Z${zoneIndex_ + 1} ${zoneDef.name}` : fallbackMeta;
   const zoneMaxes = Array.isArray(zones) ? zones.map((item) => item.max).filter(Number.isFinite) : [];
-  const scaleMax = zoneMaxes.length
-    ? Math.max(...zoneMaxes, 1) * 1.1
-    : max;
+  const scaleMax = Number.isFinite(max)
+    ? max
+    : (zoneMaxes.length ? Math.max(...zoneMaxes, 1) * 1.1 : 1);
   const span = Math.max(1, scaleMax - min);
   const fraction = Number.isFinite(value) ? clamp((value - min) / span, 0, 1) : 0;
-  fillEl.style.width = `${fraction * 100}%`;
+  const trackEl = fillEl.parentElement;
+  if (trackEl) {
+    trackEl.style.background = zoneTrackGradient({
+      zones,
+      definitions,
+      min,
+      max: scaleMax,
+      fallbackColor: color,
+    });
+  }
+  fillEl.style.left = `${fraction * 100}%`;
+  fillEl.classList.toggle("is-empty", !Number.isFinite(value));
   meter.dataset.zone = Number.isInteger(zoneIndex_) ? String(zoneIndex_) : "";
-  fillEl.style.background = color || zoneDef?.color || "";
+}
+
+function zoneTrackGradient({ zones, definitions = null, min, max, fallbackColor = null }) {
+  const base = "rgba(255, 255, 255, 0.14)";
+  if (!Array.isArray(zones) || !zones.length || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+    return fallbackColor || base;
+  }
+  const span = max - min;
+  const stops = [];
+  zones.forEach((zone, index) => {
+    const color = zone.color || definitions?.[index]?.color;
+    if (!color) return;
+    const start = clamp((zone.min - min) / span, 0, 1) * 100;
+    const end = clamp(((zone.max ?? max) - min) / span, 0, 1) * 100;
+    if (end < start) return;
+    stops.push(`${color} ${start.toFixed(2)}%`, `${color} ${end.toFixed(2)}%`);
+  });
+  return stops.length ? `linear-gradient(90deg, ${stops.join(", ")})` : (fallbackColor || base);
 }
 
 function zoneIndexFromZones(value, zones) {
@@ -1135,9 +1200,9 @@ function buildClimbMiniBars(climb) {
 }
 
 // Top-center banner: shown on a detected climb, or while approaching the next
-// one within CLIMB_BANNER_APPROACH_METERS; hidden otherwise and off fullscreen.
+// one within CLIMB_BANNER_APPROACH_METERS; hidden otherwise.
 function updateFullscreenClimbBanner(point) {
-  if (!state.mapFullscreen || !state.climbs.length) {
+  if (!state.climbs.length) {
     els.climbBanner.hidden = true;
     return;
   }
@@ -1728,14 +1793,14 @@ function currentEtaSeconds(totalDistance, totalAscent, totalDescent) {
 
 function renderProfile(progress = currentRideProgress()) {
   if (!state.route.length) {
-    drawEmptyProfile(els.profile, { dark: state.mapFullscreen });
+    drawEmptyProfile(els.profile, { dark: true });
     return;
   }
   drawProfile(els.profile, {
     route: state.route,
     progress,
     hoverMeters: state.profileHoverMeters,
-    dark: state.mapFullscreen,
+    dark: true,
     distanceUnits: state.distanceUnits,
     historySamples: rideLogSamples().slice(-PROFILE_HISTORY_SAMPLE_LIMIT),
     visibleSeries: state.profileSeries,
@@ -1827,9 +1892,7 @@ function currentHeartRate() {
 
 function refreshHeartRateUi() {
   updateTelemetryUi();
-  if (state.mapFullscreen) {
-    updateTrainingMeters(state.route.length ? gradeAt(state.route, state.progressMeters) : NaN);
-  }
+  updateTrainingMeters(state.route.length ? gradeAt(state.route, state.progressMeters) : NaN);
 }
 
 function syncHeartRateRefreshLoop() {
@@ -2938,6 +3001,35 @@ function renderZoneSummary(container, label, zones) {
   container.textContent = `${label}: ${zones.map((zone, index) => `Z${index + 1} ${zone.label}`).join(" · ")}`;
 }
 
+function toggleZoneHelp(event) {
+  event.stopPropagation();
+  const button = event.currentTarget;
+  const popover = document.getElementById(button.getAttribute("aria-controls"));
+  if (!popover) return;
+  const shouldOpen = popover.hidden;
+  closeZoneHelpPopovers();
+  popover.hidden = !shouldOpen;
+  button.setAttribute("aria-expanded", String(shouldOpen));
+}
+
+function closeZoneHelpOnOutsideClick(event) {
+  if (event.target.closest("[data-zone-help-trigger], .zone-help-popover")) return;
+  closeZoneHelpPopovers();
+}
+
+function closeZoneHelpPopovers() {
+  let closedAny = false;
+  els.zoneHelpButtons.forEach((button) => {
+    const popover = document.getElementById(button.getAttribute("aria-controls"));
+    if (popover && !popover.hidden) {
+      popover.hidden = true;
+      closedAny = true;
+    }
+    button.setAttribute("aria-expanded", "false");
+  });
+  return closedAny;
+}
+
 function toggleProfileSeries(event) {
   const key = event.currentTarget.dataset.profileSeries;
   if (!(key in state.profileSeries)) return;
@@ -3504,21 +3596,23 @@ function toggleMapFullscreen() {
   else enterMapFullscreen();
 }
 
+function initializeMapHud() {
+  els.fullscreenOverlayBottom.hidden = false;
+  els.fullscreenClock.hidden = false;
+  els.fullscreenTrainingMeters.hidden = false;
+  els.fsProfileMount.append(els.profile);
+  els.profile.classList.add("profile-translucent");
+  applyHudDock();
+  startFullscreenClock();
+  renderProfile();
+  updateTrainingMeters(state.route.length ? gradeAt(state.route, state.progressMeters) : NaN);
+}
+
 function enterMapFullscreen() {
   state.mapFullscreen = true;
   // The button's enter/exit icons swap on this class (see styles.css).
   els.mapViewport.classList.add("fullscreen-mode");
   els.fullscreenBtn.title = "Exit fullscreen";
-  els.fullscreenOverlayBottom.hidden = false;
-  els.fullscreenClock.hidden = false;
-  els.fullscreenTrainingMeters.hidden = false;
-  startFullscreenClock();
-
-  // Move the elevation profile into the dock's "road ahead" slot — the same
-  // grade-coloured canvas the control panel uses, now filling that panel.
-  els.fsProfileMount.append(els.profile);
-  els.profile.classList.add("profile-translucent");
-  applyHudDock();
 
   // The Fullscreen API also hides the browser chrome, but it can fail (no
   // user gesture in the event tick, unsupported platform); the CSS class
@@ -3532,16 +3626,6 @@ function exitMapFullscreen() {
   state.mapFullscreen = false;
   els.mapViewport.classList.remove("fullscreen-mode");
   els.fullscreenBtn.title = "Enter fullscreen";
-  els.fullscreenOverlayBottom.hidden = true;
-  els.fullscreenClock.hidden = true;
-  els.fullscreenTrainingMeters.hidden = true;
-  stopFullscreenClock();
-  els.climbBanner.hidden = true;
-
-  // The profile canvas lives in the panel's elevation card, right above the
-  // climbs section it was pulled out from when fullscreen started.
-  els.climbsSection.before(els.profile);
-  els.profile.classList.remove("profile-translucent");
 
   if (document.fullscreenElement === els.mapViewport) document.exitFullscreen?.().catch(() => {});
 
