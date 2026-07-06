@@ -59,7 +59,7 @@ Contributions are very welcome. See [Contributing](#contributing) below.
 - **Bluetooth FTMS trainer control** — connect Wahoo KICKR and other FTMS-compatible trainers over Web Bluetooth. Start pedaling and the map advances from your real trainer speed; stop pedaling and the ride stops.
 - **Heart-rate sensors** — pair a standard Bluetooth heart-rate strap and see live BPM in the stats and ride HUD.
 - **Route difficulty and climbs** — GPX Rider classifies the route, detects sustained climbs, lists each climb with distance/elevation/grade, and tracks live progress to the top while riding.
-- **Fullscreen ride HUD** — a full-bleed map for TVs, tablets, and handlebar screens, with configurable metric tiles, distance progress, climbing progress, road-ahead elevation, minimap, and climb banner.
+- **Map ride HUD** — the setup map and fullscreen map share the same configurable metric tiles, distance progress, climbing progress, road-ahead elevation, minimap, and climb/segment banner; fullscreen just expands the map to fill the screen.
 - **FIT export** — rides are recorded locally in the browser and can be downloaded as `.fit` files tagged as virtual rides.
 - **Simulation mode** — preview any route at a chosen speed without pedaling; real trainer input automatically takes over when you start riding.
 - **Screenshot capture** — an optional map screenshot button saves consistent JPG captures including the HUD, minimap, elevation profile, and required Google attribution.
@@ -105,7 +105,7 @@ Not on the bike? Use the Simulation card's `Start` button to preview the route a
 
 ## Route Intelligence
 
-When a route loads, GPX Rider shows the route name, distance, terrain type, and difficulty classification. The elevation panel lists detected sustained climbs with length, gain, and average grade, and each climb is clickable so you can jump to its start.
+When a route loads, GPX Rider shows the route name, distance, terrain type, and difficulty classification. The elevation panel lists detected sustained climbs with length, gain, and average grade, and each climb is clickable so you can jump to its start. You can also drag across any interval on the elevation profile to select a custom route segment. The normal hover readout becomes a segment readout with start, stop, length, ascent, and descent; clicking the profile clears the selection. While parked in overview this drills into the same focused segment camera used for climbs, and while riding it keeps the rider camera and shows the same segment stats in the map HUD.
 
 During the ride, the same panel switches from planning to live context. On a climb, it shows remaining distance, remaining ascent, and remaining average grade to the top. Between climbs, it shows the next climb and the distance until it begins.
 
@@ -128,7 +128,7 @@ Once you start pedaling or simulation begins, the camera flies down behind the r
 
 The map reset-camera button restores the currently chosen camera surface after a manual drag. It does not turn the rider camera back into the route overview unless the overview button is active.
 
-The fullscreen HUD is designed for riding, not just watching. It keeps the map full bleed while showing configurable metric tiles, the road-ahead elevation profile, distance progress, climbing progress, elapsed time, minimap, and climb banner. You can collapse the data dock when you want maximum map.
+The ride HUD is part of the map viewport in both setup and fullscreen: metric tiles, the road-ahead elevation profile, distance progress, climbing progress, elapsed time, minimap, and climb/segment banner are intentionally the same overlays before and after fullscreen. Fullscreen only expands the map viewport to fill the screen and hides surrounding page chrome; it does not switch to a different HUD mode. You can collapse the data dock when you want maximum map.
 
 Settings are grouped into practical categories: camera and view, rendering, HUD and data fields, units, trainer and sensors, screenshots, data storage, and debug. Preferences are remembered locally.
 

@@ -38,7 +38,7 @@ module:
 | `app/eta.mjs` | Smart ETA: flat-equivalent pace model estimating remaining ride time (tested) |
 | `app/difficulty.mjs` | Route classification from distance + total elevation gain alone: distance/terrain classes and overall difficulty (tested) |
 | `app/climbs.mjs` | Detects sustained climbing segments in a route for the setup-page climbs overview (tested) |
-| `app/profile.mjs` | Elevation profile canvas drawing + hover/seek hit-testing |
+| `app/profile.mjs` | Elevation profile canvas drawing + hover/seek/drag-select hit-testing |
 | `app/trainer.mjs` | FTMS trainer over Web Bluetooth: pairing, reconnect, control-point writes, Indoor Bike Data parsing (speed, power, calories, HR) |
 | `app/heartrate.mjs` | BLE heart-rate strap (standard Heart Rate service 0x180D) |
 | `app/recorder.mjs` | Ride "bucket": accumulates samples while moving, persists via `storage.mjs` |
@@ -153,19 +153,20 @@ in place).
   the user is dragging the camera at rest nothing else steps it. Wired through
   the same `updateDisplaySettingsFromControls`/`syncDisplayControls`/
   `applyDisplaySettings` trio as the other display toggles.
-- **Fullscreen ride HUD (design 3a).** Entering fullscreen adds
-  `.fullscreen-mode` to `#mapViewport` (a fixed, full-bleed container); the
-  HUD overlays live inside it as children so they ride along, and CSS keeps
-  them out of the normal windowed map pane (their base rule is
-  `display:none`, only painted under `.map-viewport.fullscreen-mode`). Three
-  overlays, all fed on the slow-UI cadence from `updateRideUi`:
+- **Map ride HUD (design 3a).** The ride HUD is part of `#mapViewport` in
+  both setup/windowed mode and fullscreen. Entering fullscreen only adds
+  `.fullscreen-mode` to `#mapViewport` (making it a fixed, full-bleed
+  container); it must not change which HUD overlays are visible. The setup map
+  and fullscreen map are intentionally the same map surface with the same HUD
+  content, just at different sizes. Do not add CSS that hides `.fs-*` overlays
+  outside `.fullscreen-mode`. Three overlays, all fed on the slow-UI cadence
+  from `updateRideUi`:
   - **Bottom data dock** (`#fullscreenOverlayBottom` / `.fs-dock`): the metric
     tiles plus the *road-ahead* elevation profile and the distance/climbing
-    progress bars. `enterMapFullscreen` **moves the shared `#profile` canvas**
-    into `#fsProfileMount` (the same grade-coloured canvas the control panel
-    uses — it already draws the grade bars, axes, ride marker, and the
-    hover-tooltip/click-to-seek), and `exitMapFullscreen` moves it back above
-    the climbs section. The dock collapses to a compact strip via
+    progress bars. `initializeMapHud` mounts the shared `#profile` canvas into
+    `#fsProfileMount` once; the same grade-coloured canvas draws the grade bars,
+    axes, ride marker, hover tooltip, click-to-seek, and drag-to-select segment
+    highlight in setup and fullscreen. The dock collapses to a compact strip via
     `#dockToggleBtn` (`toggleHudDock` → `.collapsed` class, persisted as
     `hudDockCollapsed`); collapsed hides the road-ahead profile and stacks the
     two progress bars, expanded shows the profile with the bars side-by-side.
@@ -183,13 +184,10 @@ in place).
   - **Top-left clock chip** (`#fullscreenClock`): elapsed time (from
     `rideLogSummary().timerSeconds`) + ridden distance, sitting above the
     minimap (which is repositioned in fullscreen).
-  - **Top-right controls**: the existing `.map-actions` cluster, plus a
-    fullscreen-only Settings shortcut (`#fullscreenSettingsBtn`, class
-    `.map-action-btn-fs-only`, shown only under `.fullscreen-mode`) — the top
-    bar's Settings button is off-screen in fullscreen, so this reopens the
-    same dialog via `openSettings()` (a modal `<dialog>` renders in the top
-    layer, above the fullscreen element).
-  - **Top-centre climb banner** (`#climbBanner`, `updateFullscreenClimbBanner`):
+  - **Top-right controls**: the existing `.map-actions` cluster, plus the
+    Settings shortcut (`#mapSettingsShortcutBtn`, class `.map-action-btn-settings`)
+    so the same controls are available when fullscreen hides the top bar.
+  - **Top-centre climb/segment banner** (`#climbBanner`, `updateFullscreenClimbBanner`):
     reuses `state.climbs`. Shows the *ahead* variant (category chip from
     `CLIMB_CATEGORIES`, countdown, a mini grade-profile built with
     `profile.mjs`'s exported `gradeColor`, length/gain/avg/max) when the next
@@ -200,7 +198,9 @@ in place).
     `findIndex` position + `state.climbs.length`), mirroring the setup page's
     live climb status. Max grade and the mini-profile bars are cached on the climb
     object (climbs are re-detected each route load, so the cache can't
-    go stale).
+    go stale). If the user drag-selects a custom profile segment while riding,
+    this same banner surface switches to the selected segment stats (start, end,
+    length, ascent, descent) instead of forcing a camera overview.
 
   HUD tiles are matched to settings toggles by `data-hud="…"` /
   `data-hud-toggle="…"` keys, which must also exist in `DEFAULT_HUD_ELEMENTS`
@@ -242,6 +242,20 @@ in place).
   distance to it. It never re-detects climbs itself — the tolerance already
   baked into `detectClimbs`'s boundaries is what keeps this from flickering
   on GPX noise.
+- **Custom profile segments.** A click on the elevation profile still seeks the
+  rider. A horizontal drag across the profile selects an arbitrary route
+  segment, using `PROFILE_SEGMENT_SELECTION_*` thresholds in `tuning.mjs` to
+  avoid accidental tiny selections. While a custom segment is selected, the
+  normal profile hover readout is disabled and that same canvas readout style is
+  reused for segment stats: start, stop, length, ascent, and descent. A normal
+  click on the profile clears the custom selection and then seeks as usual.
+  While stationary in overview, selecting a segment seeks to its start,
+  highlights it on the profile and 3D route, and enters the same focused camera
+  stack used by detected climbs (`static`, `orbit`, or `satellite`, controlled
+  by `climbFocusMode`). While moving, it does not change camera mode; it keeps
+  the rider camera/follow behavior and shows only the segment stats in the map
+  HUD banner. A selected custom segment is not added to `state.climbs` and must
+  not affect climb detection/status.
 - **First-open auto-load**: with no saved ride and a working map,
   `initGallery` loads the first gallery route automatically
   (`shouldAutoLoadFirst` in `app.js`); it is skipped when the map/API key

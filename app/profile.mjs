@@ -57,6 +57,7 @@ export function drawProfile(
     progress = 0,
     hoverMeters = null,
     focusRange = null,
+    selectionStats = null,
     dark = false,
     distanceUnits = "metric",
     historySamples = [],
@@ -113,7 +114,19 @@ export function drawProfile(
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  if (hoverMeters !== null) {
+  if (selectionStats) {
+    drawProfileSelectionStats(ctx, {
+      selectionStats,
+      totalDistance,
+      chartLeft,
+      chartRight,
+      chartTop,
+      chartBottom,
+      xFor,
+      theme,
+      distanceUnits,
+    });
+  } else if (hoverMeters !== null) {
     drawProfileHover(ctx, {
       route,
       hoverMeters,
@@ -130,6 +143,47 @@ export function drawProfile(
       visibleSeries,
     });
   }
+}
+
+function drawProfileSelectionStats(
+  ctx,
+  {
+    selectionStats,
+    totalDistance,
+    chartLeft,
+    chartRight,
+    chartTop,
+    chartBottom,
+    xFor,
+    theme,
+    distanceUnits,
+  },
+) {
+  const start = clamp(Number(selectionStats.startDistanceMeters), 0, totalDistance);
+  const end = clamp(Number(selectionStats.endDistanceMeters), start, totalDistance);
+  if (end <= start) return;
+
+  const startX = clamp(xFor(start), chartLeft, chartRight);
+  const endX = clamp(xFor(end), chartLeft, chartRight);
+  const centerX = (startX + endX) / 2;
+
+  const metrics = [
+    { label: "Start", value: formatProfileDistance(start, distanceUnits) },
+    { label: "Stop", value: formatProfileDistance(end, distanceUnits) },
+    { label: "Length", value: formatProfileDistance(selectionStats.lengthMeters, distanceUnits) },
+    { label: "Ascent", value: formatProfileAltitude(selectionStats.ascentMeters, distanceUnits), color: theme.focusMarker },
+    { label: "Descent", value: formatProfileAltitude(selectionStats.descentMeters, distanceUnits) },
+  ];
+
+  drawProfileMetricReadout(ctx, {
+    metrics,
+    anchorX: centerX,
+    preferTop: true,
+    chartLeft,
+    chartRight,
+    chartTop,
+    chartBottom,
+  });
 }
 
 function drawProfileFocus(
@@ -403,6 +457,30 @@ function drawProfileHover(
     metrics.push({ label: "HR", value: `${Math.round(history.heartRateBpm)} bpm` });
   }
 
+  drawProfileMetricReadout(ctx, {
+    metrics,
+    anchorX: x,
+    preferTop: y > (chartTop + chartBottom) / 2,
+    chartLeft,
+    chartRight,
+    chartTop,
+    chartBottom,
+  });
+}
+
+function drawProfileMetricReadout(
+  ctx,
+  {
+    metrics,
+    anchorX,
+    preferTop,
+    chartLeft,
+    chartRight,
+    chartTop,
+    chartBottom,
+  },
+) {
+  if (!metrics.length) return;
   const availableWidth = chartRight - chartLeft;
   ctx.font = "600 9px 'Space Grotesk', system-ui, sans-serif";
   const labelWidths = metrics.map((metric) => ctx.measureText(metric.label.toUpperCase()).width);
@@ -414,11 +492,9 @@ function drawProfileHover(
   const widths = baseWidths.map((width) => width * scale);
   const boxWidth = Math.min(availableWidth, baseWidth);
   const boxHeight = Math.max(40, 50 * scale);
-  let boxX = x - boxWidth / 2;
+  let boxX = anchorX - boxWidth / 2;
   boxX = clamp(boxX, chartLeft, chartRight - boxWidth);
-  // Keep the described part of the elevation line exposed: low points put
-  // the readout at the top, high points put it at the bottom.
-  const boxY = y > (chartTop + chartBottom) / 2
+  const boxY = preferTop
     ? chartTop + 2
     : chartBottom - boxHeight - 2;
 
@@ -446,7 +522,19 @@ function drawProfileHover(
     ctx.fillText(metric.value, centerX, boxY + boxHeight * 0.68);
     metricX += metricWidth;
   });
+}
 
+function formatProfileDistance(meters, distanceUnits) {
+  const unit = distanceUnitLabel(distanceUnits);
+  const value = kmToDisplay((Number(meters) || 0) / 1000, distanceUnits);
+  return `${value.toFixed(2)} ${unit}`;
+}
+
+function formatProfileAltitude(meters, distanceUnits) {
+  const value = Number(meters) || 0;
+  return distanceUnits === "imperial"
+    ? `${Math.round(value * FEET_PER_METER)} ft`
+    : `${Math.round(value)} m`;
 }
 
 function historyAtDistance(samples, distance) {
