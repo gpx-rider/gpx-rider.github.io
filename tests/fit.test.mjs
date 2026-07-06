@@ -72,6 +72,12 @@ test("encoded activity is tagged as a virtual cycling ride", () => {
   assert.ok(hex.includes("02 3a"), "sport=cycling followed by sub_sport=virtual_activity");
 });
 
+test("encoded activity carries the app product name", () => {
+  const bytes = encodeFitActivity(sampleRide());
+  const text = new TextDecoder().decode(bytes);
+  assert.ok(text.includes("GPX Rider"));
+});
+
 test("encoding refuses an empty ride", () => {
   assert.throws(() => encodeFitActivity({ samples: [], summary: {} }));
 });

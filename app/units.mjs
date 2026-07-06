@@ -36,12 +36,23 @@ export function formatEnergy(kcal, energyUnits) {
   return `${Math.round(kcal)} kcal`;
 }
 
-export function formatDuration(totalSeconds) {
+export function activeCaloriesFromPower(powerWatts, seconds, grossEfficiency) {
+  if (!Number.isFinite(powerWatts) || !Number.isFinite(seconds) || !Number.isFinite(grossEfficiency)) return 0;
+  if (powerWatts <= 0 || seconds <= 0 || grossEfficiency <= 0) return 0;
+  const mechanicalKilojoules = powerWatts * seconds / 1000;
+  return mechanicalKilojoules / (KJ_PER_KCAL * grossEfficiency);
+}
+
+export function formatDuration(totalSeconds, style = "clock") {
   const seconds = Math.max(0, Math.round(totalSeconds));
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
   const pad = (value) => String(value).padStart(2, "0");
+  if (style === "compact") {
+    if (h > 0) return `${h}h${m > 0 ? `${m}m` : ""}`;
+    return `${m}:${pad(s)}`;
+  }
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 

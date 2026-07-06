@@ -13,6 +13,9 @@
 //   a hardware-safety concern, tuned against real trainers; read the
 //   comments there before touching them.
 
+// The product name shown in the UI and written into exported files.
+export const APP_NAME = "GPX Rider";
+
 // --- Movement & pedaling -----------------------------------------------------
 
 // Pedaling detection with hysteresis: the rider counts as "pedaling" once the
@@ -328,6 +331,10 @@ export const RIDER_DOT_ORIENTATION = { heading: 0, tilt: 90, roll: 0 };
 // object should, and a map-pin shape doesn't read as a location dot anyway).
 // A different model baked to a different base size will need this retuned.
 export const RIDER_DOT_SCALE = 5;
+// Extra size multiplier while the whole-route overview is active. The camera
+// is much farther away there, so the normal ride-scale dot can become hard to
+// spot.
+export const RIDER_DOT_OVERVIEW_SCALE_FACTOR = 2.4;
 
 // Only used by the Polyline3DElement fallback for browsers without
 // Model3DElement (see renderRiderDot) — an outlined ring instead of a filled
@@ -385,8 +392,16 @@ export const DEFAULT_MAP_LABELS_ENABLED = false;
 // Local clock format used by the fullscreen top-left stats chip. The user's
 // choice is persisted with the other display settings.
 export const DEFAULT_TIME_FORMAT = "24";
+// Duration readouts default to explicit hour/minute labels (1h30m) so ETAs
+// cannot be mistaken for minute/second clocks. "clock" keeps the old 1:30:00
+// style for users who prefer stopwatch formatting.
+export const DEFAULT_DURATION_FORMAT = "compact";
 // Wall-clock refresh cadence while the fullscreen HUD is visible.
 export const FULLSCREEN_CLOCK_REFRESH_MS = 1000;
+// Heart-rate UI refresh cadence while a dedicated strap is connected. Strap
+// notifications remain the data source; this loop republishes the current
+// strap truth to every display even while the ride/map UI is otherwise idle.
+export const HEART_RATE_REFRESH_MS = 1000;
 
 // Developer overlay: a small translucent box on the map showing the live
 // camera values the 3D map actually applies (tilt/range/heading/center),
@@ -396,25 +411,60 @@ export const FULLSCREEN_CLOCK_REFRESH_MS = 1000;
 export const DEFAULT_CAMERA_DEBUG_ENABLED = false;
 export const CAMERA_DEBUG_REFRESH_MS = 100;
 
-// Which tiles the fullscreen ride HUD shows. Keys must match the
-// data-hud="…" attributes in index.html (HUD tiles) and the
-// data-hud-toggle="…" checkboxes in the settings dialog.
-export const DEFAULT_HUD_ELEMENTS = {
-  power: true,
-  speed: true,
-  heartRate: true,
-  grade: true,
-  ridden: true,
-  remaining: true,
-  ascentLeft: true,
-  eta: true,
-};
+// Ordered fullscreen bottom-dock data fields. Keys must match the
+// data-hud="…" attributes in index.html. The visible count controls how many
+// fields are shown from the front of the order; users can still put every
+// field on-screen if they want a denser dock.
+export const DEFAULT_HUD_FIELD_ORDER = [
+  "power",
+  "speed",
+  "heartRate",
+  "grade",
+  "ridden",
+  "remaining",
+  "ascentLeft",
+  "eta",
+  "calories",
+  "altitude",
+  "ascent",
+  "elapsed",
+];
+export const DEFAULT_HUD_VISIBLE_COUNT = 8;
 
 // The fullscreen ride HUD's bottom data dock can be collapsed to a compact
 // strip (key metrics + the two progress bars) or expanded to the full dock
 // (metric tiles + the road-ahead elevation profile). This is its initial
 // state; the user's choice is persisted with the other display settings.
 export const DEFAULT_HUD_DOCK_COLLAPSED = false;
+
+// Training zones for the fullscreen left-side meters. Heart rate uses
+// Heart Rate Reserve (Karvonen) from resting/max HR; power uses FTP.
+export const DEFAULT_RESTING_HEART_RATE_BPM = 60;
+export const DEFAULT_MAX_HEART_RATE_BPM = 180;
+export const POWER_ZONE_DEFINITIONS = [
+  { name: "Active Recovery", color: "#8b949e" },
+  { name: "Endurance", color: "#4f9bff" },
+  { name: "Tempo", color: "#57b877" },
+  { name: "Threshold", color: "#e8b74e" },
+  { name: "VO2 Max", color: "#e8823c" },
+  { name: "Anaerobic", color: "#d96a3f" },
+  { name: "Neuromuscular", color: "#d9542f" },
+];
+export const HEART_RATE_ZONE_DEFINITIONS = [
+  { name: "Recovery", color: "#8b949e" },
+  { name: "Endurance", color: "#4f9bff" },
+  { name: "Tempo", color: "#57b877" },
+  { name: "Threshold", color: "#e8823c" },
+  { name: "Max", color: "#d9542f" },
+];
+export const HEART_RATE_MAX_AGE_FORMULA_BASE = 220;
+export const PROFILE_HISTORY_SAMPLE_LIMIT = 1800;
+
+// Gross metabolic efficiency for converting measured cycling work into active
+// human calories. Power meters report mechanical work at the pedals; humans
+// spend more chemical energy than that to produce it. 0.24 means 24% of the
+// rider's active energy becomes measured mechanical work.
+export const CYCLING_GROSS_EFFICIENCY = 0.24;
 
 // Fullscreen climb banner (top-center of the ride HUD). It appears while the
 // rider is on a detected climb, or while approaching the next one within this

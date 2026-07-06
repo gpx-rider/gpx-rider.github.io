@@ -5,12 +5,20 @@ import { clamp } from "./geo.mjs";
 import { gradeAt, interpolateRoutePoint, routeTotalDistance } from "./route.mjs";
 import { FEET_PER_METER, KM_PER_MILE, distanceUnitLabel, kmToDisplay } from "./units.mjs";
 
-const PROFILE_PADDING_LEFT = 44;
-const PROFILE_PADDING_RIGHT = 14;
+const PROFILE_CHART_EDGE_PADDING = 14;
+const PROFILE_Y_AXIS_GUTTER = 60;
+const PROFILE_Y_LABEL_GAP = 8;
+const PROFILE_PADDING_LEFT = PROFILE_Y_AXIS_GUTTER;
+const PROFILE_PADDING_RIGHT = PROFILE_CHART_EDGE_PADDING;
 const PROFILE_PADDING_TOP = 10;
 const PROFILE_PADDING_BOTTOM = 22;
 const PROFILE_GRADE_STEEP_PERCENT = 12;
 const PROFILE_BAR_SAMPLE_PX = 4;
+const HISTORY_COLORS = {
+  speed: "#5aa9ff",
+  power: "#f6a52c",
+  heartRate: "#e4574c",
+};
 const ELEVATION_STEP_CANDIDATES = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000];
 const DISTANCE_STEP_METERS_CANDIDATES = [50, 100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000];
 const DISTANCE_STEP_KM_CANDIDATES = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000];
@@ -40,7 +48,18 @@ export function drawEmptyProfile(canvas, { dark = false } = {}) {
   fillProfileBackground(ctx, theme, width, height, dark);
 }
 
-export function drawProfile(canvas, { route, progress = 0, hoverMeters = null, dark = false, distanceUnits = "metric" }) {
+export function drawProfile(
+  canvas,
+  {
+    route,
+    progress = 0,
+    hoverMeters = null,
+    dark = false,
+    distanceUnits = "metric",
+    historySamples = [],
+    visibleSeries = {},
+  },
+) {
   const ctx = configureCanvas(canvas);
   const { width, height } = canvas.getBoundingClientRect();
   const theme = dark ? PROFILE_THEME_DARK : PROFILE_THEME_PANEL;
@@ -70,6 +89,16 @@ export function drawProfile(canvas, { route, progress = 0, hoverMeters = null, d
   drawElevationGridlines(ctx, { min, max, chartLeft, chartRight, chartTop, yFor, theme, distanceUnits });
   drawGradeBars(ctx, { route, totalDistance, chartLeft, chartRight, chartBottom, xFor, yFor });
   drawElevationLine(ctx, { route, xFor, yFor, theme });
+  drawHistorySeries(ctx, {
+    samples: historySamples,
+    visibleSeries,
+    totalDistance,
+    chartLeft,
+    chartRight,
+    chartTop,
+    chartBottom,
+    xFor,
+  });
   drawDistanceAxis(ctx, { totalDistance, chartLeft, chartRight, chartBottom, xFor, theme, distanceUnits });
 
   const markerX = chartLeft + progress * chartWidth;
@@ -81,7 +110,21 @@ export function drawProfile(canvas, { route, progress = 0, hoverMeters = null, d
   ctx.stroke();
 
   if (hoverMeters !== null) {
-    drawProfileHover(ctx, { route, hoverMeters, totalDistance, chartLeft, chartRight, chartTop, chartBottom, xFor, yFor, theme, distanceUnits });
+    drawProfileHover(ctx, {
+      route,
+      hoverMeters,
+      totalDistance,
+      chartLeft,
+      chartRight,
+      chartTop,
+      chartBottom,
+      xFor,
+      yFor,
+      theme,
+      distanceUnits,
+      historySamples,
+      visibleSeries,
+    });
   }
 }
 
@@ -136,7 +179,7 @@ function drawElevationGridlines(ctx, { min, max, chartLeft, chartRight, chartTop
     ctx.stroke();
 
     ctx.fillStyle = theme.label;
-    ctx.fillText(`${Math.round(value)} ${unit}`, chartLeft - 6, y);
+    ctx.fillText(`${Math.round(value)} ${unit}`, chartLeft - PROFILE_Y_LABEL_GAP, y);
   }
 }
 
@@ -184,6 +227,43 @@ function drawElevationLine(ctx, { route, xFor, yFor, theme }) {
   ctx.stroke();
 }
 
+function drawHistorySeries(ctx, { samples, visibleSeries, totalDistance, chartLeft, chartRight, chartTop, chartBottom, xFor }) {
+  const chartHeight = Math.max(1, chartBottom - chartTop);
+  const series = [
+    { key: "speed", value: "speedKph", max: 80 },
+    { key: "power", value: "powerWatts", max: 500 },
+    { key: "heartRate", value: "heartRateBpm", max: 210 },
+  ];
+  const validSamples = samples
+    .map((sample) => ({
+      ...sample,
+      routeProgressMeters: Number.isFinite(sample.routeProgressMeters) ? sample.routeProgressMeters : sample.distance,
+    }))
+    .filter((sample) => Number.isFinite(sample.routeProgressMeters));
+
+  for (const { key, value, max } of series) {
+    if (visibleSeries[key] === false) continue;
+    const points = validSamples
+      .filter((sample) => Number.isFinite(sample[value]))
+      .map((sample) => ({
+        x: clamp(xFor(sample.routeProgressMeters), chartLeft, chartRight),
+        y: chartBottom - clamp(sample[value] / max, 0, 1) * chartHeight,
+      }));
+    if (points.length < 2) continue;
+
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.strokeStyle = HISTORY_COLORS[key];
+    ctx.globalAlpha = 0.72;
+    ctx.lineWidth = 1.7;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
 function drawDistanceAxis(ctx, { totalDistance, chartLeft, chartRight, chartBottom, xFor, theme, distanceUnits }) {
   ctx.beginPath();
   ctx.moveTo(chartLeft, chartBottom);
@@ -225,7 +305,24 @@ function drawDistanceAxis(ctx, { totalDistance, chartLeft, chartRight, chartBott
   }
 }
 
-function drawProfileHover(ctx, { route, hoverMeters, totalDistance, chartLeft, chartRight, chartTop, chartBottom, xFor, yFor, theme, distanceUnits }) {
+function drawProfileHover(
+  ctx,
+  {
+    route,
+    hoverMeters,
+    totalDistance,
+    chartLeft,
+    chartRight,
+    chartTop,
+    chartBottom,
+    xFor,
+    yFor,
+    theme,
+    distanceUnits,
+    historySamples,
+    visibleSeries,
+  },
+) {
   const distance = clamp(hoverMeters, 0, totalDistance);
   const point = interpolateRoutePoint(route, distance);
   const grade = gradeAt(route, distance);
@@ -257,23 +354,55 @@ function drawProfileHover(ctx, { route, hoverMeters, totalDistance, chartLeft, c
   const label =
     `${fromStart} ${unit} in · ${toEnd} ${unit} to end · ` +
     `${elevation} · ${grade >= 0 ? "+" : ""}${grade.toFixed(1)}%`;
+  const history = historyAtDistance(historySamples, distance);
+  const historyLabels = [];
+  if (visibleSeries.speed !== false && Number.isFinite(history?.speedKph)) {
+    historyLabels.push(`${history.speedKph.toFixed(1)} km/h`);
+  }
+  if (visibleSeries.power !== false && Number.isFinite(history?.powerWatts)) {
+    historyLabels.push(`${Math.round(history.powerWatts)} W`);
+  }
+  if (visibleSeries.heartRate !== false && Number.isFinite(history?.heartRateBpm)) {
+    historyLabels.push(`${Math.round(history.heartRateBpm)} bpm`);
+  }
+  const fullLabel = historyLabels.length ? `${label} · ${historyLabels.join(" · ")}` : label;
   ctx.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
-  const textWidth = ctx.measureText(label).width;
-  const boxWidth = textWidth + 16;
+  const textWidth = ctx.measureText(fullLabel).width;
+  const boxWidth = Math.min(chartRight - chartLeft, textWidth + 16);
   const boxHeight = 22;
   let boxX = x - boxWidth / 2;
   boxX = clamp(boxX, chartLeft, chartRight - boxWidth);
   const boxY = chartTop + 4;
 
-  ctx.fillStyle = "rgba(13, 16, 21, 0.92)";
+  ctx.fillStyle = "rgba(13, 16, 21, 0.66)";
   ctx.beginPath();
   ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 5);
   ctx.fill();
 
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(label, boxX + boxWidth / 2, boxY + boxHeight / 2 + 0.5);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(boxX + 8, boxY, Math.max(1, boxWidth - 16), boxHeight);
+  ctx.clip();
+  ctx.fillText(fullLabel, boxX + boxWidth / 2, boxY + boxHeight / 2 + 0.5);
+  ctx.restore();
+}
+
+function historyAtDistance(samples, distance) {
+  let nearest = null;
+  let nearestDelta = Infinity;
+  for (const sample of samples) {
+    const sampleDistance = Number.isFinite(sample.routeProgressMeters) ? sample.routeProgressMeters : sample.distance;
+    if (!Number.isFinite(sampleDistance)) continue;
+    const delta = Math.abs(sampleDistance - distance);
+    if (delta < nearestDelta) {
+      nearest = sample;
+      nearestDelta = delta;
+    }
+  }
+  return nearestDelta <= 200 ? nearest : null;
 }
 
 function niceStep(range, candidates) {
@@ -284,16 +413,25 @@ function niceStep(range, candidates) {
 }
 
 // Stepped grade palette shared with the panel legend and the gallery's mini
-// profiles: green for descents, gray for flat, amber → orange → red as the
-// climb steepens. Exported so the fullscreen climb banner's mini-profile
-// (app.js) colors its bars from the same palette instead of a fourth copy.
+// profiles: green for descents, gray for flat, amber -> orange -> red as the
+// climb steepens. Exported so the map HUD and fullscreen climb banner color
+// from the same palette instead of copying it again.
+export const GRADE_PROFILE_COLORS = [
+  "#3fae6a",
+  "#57b877",
+  "rgba(125, 138, 134, 0.55)",
+  "#e8b74e",
+  "#e8823c",
+  "#d9542f",
+];
+
 export function gradeColor(grade) {
-  if (grade <= -3) return "#3fae6a";
-  if (grade <= -0.6) return "#57b877";
-  if (grade < 0.8) return "rgba(125, 138, 134, 0.55)";
-  if (grade < 3.5) return "#e8b74e";
-  if (grade < 7) return "#e8823c";
-  return "#d9542f";
+  if (grade <= -3) return GRADE_PROFILE_COLORS[0];
+  if (grade <= -0.6) return GRADE_PROFILE_COLORS[1];
+  if (grade < 0.8) return GRADE_PROFILE_COLORS[2];
+  if (grade < 3.5) return GRADE_PROFILE_COLORS[3];
+  if (grade < 7) return GRADE_PROFILE_COLORS[4];
+  return GRADE_PROFILE_COLORS[5];
 }
 
 function configureCanvas(canvas) {

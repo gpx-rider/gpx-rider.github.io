@@ -594,48 +594,35 @@ body {
   display: inline;
 }
 
-/* ---- fullscreen ride HUD (design 3a) --------------------------------------
-   The clock chip, climb banner and data dock are children of .map-viewport so
-   they follow it into fullscreen. They stay hidden in the normal map pane and
-   only paint once .map-viewport is in .fullscreen-mode. A shared glass surface
-   (--fs-glass*) ties them together. */
+/* ---- ride HUD --------------------------------------------------------------
+   The clock chip, climb banner, training meters and data dock are children of
+   .map-viewport, so the same component renders in the setup map and follows it
+   into fullscreen. A shared glass surface (--fs-glass*) ties them together. */
 
 :root {
   --fs-glass-bg: rgba(13, 16, 21, 0.3);
   --fs-glass-border: rgba(255, 255, 255, 0.14);
   --fs-label: rgba(255, 255, 255, 0.5);
+  --fs-dock-inset: 12px;
+  --fs-dock-gap: 10px;
 }
 
-.fs-clock,
-.climb-banner,
-.fs-dock {
-  display: none;
-}
-
-/* In fullscreen the whole map breathes to the edges — nudge the corner
-   overlays a little further in than the windowed map's 16px. */
-.map-viewport.fullscreen-mode #minimap {
+#minimap {
   left: 24px;
   top: 78px;
 }
 
-.map-viewport.fullscreen-mode .map-actions {
+.map-actions {
   top: 24px;
   right: 24px;
 }
 
-/* The Settings shortcut in the map-action cluster only makes sense in
-   fullscreen, where the top bar (and its Settings button) is hidden. */
 .map-action-btn-fs-only {
-  display: none;
-}
-
-.map-viewport.fullscreen-mode .map-action-btn-fs-only {
   display: flex;
 }
 
 /* top-left: local time + elapsed + ridden distance, above the minimap */
-.map-viewport.fullscreen-mode .fs-clock {
+.fs-clock {
   position: absolute;
   top: 24px;
   left: 24px;
@@ -671,8 +658,74 @@ body {
   color: var(--blue-soft);
 }
 
+.fs-clock-ascent {
+  font: 600 15px/1 var(--font-num);
+  color: var(--accent);
+}
+
+.fs-training-meters {
+  position: absolute;
+  top: 92px;
+  left: 24px;
+  display: grid;
+  width: 184px;
+  gap: 8px;
+}
+
+.fs-zone-meter {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--fs-glass-border);
+  border-radius: 10px;
+  background: var(--fs-glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.fs-zone-label,
+.fs-zone-meta {
+  font: 600 9px/1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fs-label);
+}
+
+.fs-zone-meter strong {
+  font: 600 20px/1 var(--font-num);
+  color: #fff;
+}
+
+.fs-zone-track {
+  position: relative;
+  height: 5px;
+  overflow: visible;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.fs-zone-fill {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 8px rgba(255, 255, 255, 0.9),
+    0 0 14px rgba(255, 255, 255, 0.55);
+  transform: translateX(-50%);
+  transition: left 0.18s ease, opacity 0.18s ease;
+}
+
+.fs-zone-fill.is-empty {
+  opacity: 0;
+}
+
 /* top-center: climb banner */
-.map-viewport.fullscreen-mode .climb-banner {
+.climb-banner {
   position: absolute;
   top: 24px;
   left: 50%;
@@ -828,7 +881,7 @@ body {
 }
 
 /* bottom data dock */
-.map-viewport.fullscreen-mode .fs-dock {
+.fs-dock {
   position: absolute;
   left: 24px;
   right: 24px;
@@ -837,7 +890,7 @@ body {
      stay visible (Google Maps ToS). */
   bottom: 36px;
   display: block;
-  padding: 22px 26px;
+  padding: var(--fs-dock-inset);
   border-radius: 20px;
   background: rgba(11, 14, 19, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -845,17 +898,23 @@ body {
   -webkit-backdrop-filter: blur(34px) saturate(1.2);
 }
 
-.fs-dock-toggle {
+.fs-dock-top-tools {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: var(--fs-dock-inset);
+  right: var(--fs-dock-inset);
   z-index: 3;
   display: flex;
   align-items: center;
+  gap: 6px;
+}
+
+.fs-dock-toggle {
+  display: flex;
+  align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.75);
@@ -864,6 +923,39 @@ body {
 
 .fs-dock-toggle:hover {
   border-color: rgba(255, 255, 255, 0.3);
+}
+
+.fs-dock-metric-wrap {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.fs-dock-field-controls {
+  flex: none;
+  display: grid;
+  align-self: center;
+  gap: 6px;
+}
+
+.fs-dock-field-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.06);
+  font: 700 13px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.fs-dock-field-btn:disabled {
+  cursor: default;
+  opacity: 0.38;
 }
 
 .fs-dock-toggle svg {
@@ -878,20 +970,19 @@ body {
 .fs-dock-body {
   display: flex;
   align-items: stretch;
-  gap: 28px;
-  padding-right: 34px;
+  gap: var(--fs-dock-gap);
 }
 
 /* Two rows of tiles; the column count and tile width are set from JS to fit
    however many data fields the user enabled in Settings (fewer = wider, up to
    eight = narrower). See layoutMetricTiles() in app.js. */
 .fs-dock-metrics {
-  flex: none;
   display: grid;
+  height: 100%;
   grid-template-rows: repeat(2, 1fr);
   grid-auto-flow: column;
   grid-auto-columns: var(--metric-tile-w, 150px);
-  gap: 13px;
+  gap: 8px;
   align-content: center;
 }
 
@@ -899,10 +990,21 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 15px 17px;
-  border-radius: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.05);
+  cursor: grab;
+  user-select: none;
+}
+
+.fs-tile.dragging {
+  opacity: 0.45;
+}
+
+.fs-tile.drag-over {
+  border-color: rgba(246, 165, 44, 0.78);
+  background: rgba(246, 165, 44, 0.12);
 }
 
 .fs-tile-label {
@@ -913,8 +1015,8 @@ body {
 }
 
 .fs-tile-value {
-  margin-top: 10px;
-  font: 600 26px/1 var(--font-num);
+  margin-top: 7px;
+  font: 600 20px/1 var(--font-num);
   letter-spacing: -0.02em;
   color: #fff;
 }
@@ -935,17 +1037,20 @@ body {
 .fs-road-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
+  min-height: 26px;
+  padding-right: 168px;
 }
 
 .fs-road-title {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 9px;
+  min-width: 0;
 }
 
 .fs-road-eyebrow {
+  flex: none;
   font: 600 12px/1 var(--font-ui);
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -953,13 +1058,55 @@ body {
 }
 
 .fs-road-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font: 500 11px/1 var(--font-mono);
   color: rgba(255, 255, 255, 0.4);
 }
 
-.fs-road-stats {
-  display: flex;
-  gap: 22px;
+.profile-series-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.profile-series-toggle button {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.05);
+  font: 600 9px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.profile-series-toggle button[data-profile-series="speed"] {
+  --series-active-color: var(--blue);
+  --series-active-ink: #06101b;
+}
+
+.profile-series-toggle button[data-profile-series="power"] {
+  --series-active-color: var(--accent);
+  --series-active-ink: var(--accent-ink);
+}
+
+.profile-series-toggle button[data-profile-series="heartRate"] {
+  --series-active-color: var(--red);
+  --series-active-ink: #fff;
+}
+
+.fs-dock-series-toggle button {
+  min-width: 38px;
+  min-height: 26px;
+}
+
+.profile-series-toggle button[aria-pressed="true"] {
+  color: var(--series-active-ink, #11141a);
+  background: var(--series-active-color, var(--accent));
+  border-color: transparent;
 }
 
 .fs-road-stat {
@@ -987,13 +1134,13 @@ body {
 .fs-road-plot {
   position: relative;
   flex: 1;
-  min-height: 0;
+  min-height: 92px;
 }
 
 .fs-dock-progress {
   display: flex;
-  gap: 26px;
-  margin-top: 13px;
+  gap: var(--fs-dock-gap);
+  margin-top: 8px;
 }
 
 .fs-bar {
@@ -1003,7 +1150,7 @@ body {
 .fs-bar-head {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .fs-bar-head span:first-child {
@@ -1023,7 +1170,7 @@ body {
 }
 
 .fs-bar-track {
-  height: 8px;
+  height: 6px;
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.14);
   overflow: hidden;
@@ -1044,15 +1191,41 @@ body {
 }
 
 /* Collapsed dock: drop the road-ahead profile, shrink the tiles into a single
-   inline strip, and stack the two progress bars in the freed space. */
+   inline strip, and keep the two progress bars beside each other. */
 .fs-dock.collapsed .fs-dock-body {
   align-items: center;
-  gap: 24px;
+  gap: var(--fs-dock-gap);
 }
 
 .fs-dock.collapsed .fs-dock-metrics {
   display: flex;
-  gap: 22px;
+  gap: 16px;
+}
+
+.fs-dock.collapsed .fs-dock-metric-wrap {
+  align-items: center;
+}
+
+.fs-dock.collapsed .fs-dock-body {
+  padding-right: 0;
+}
+
+.fs-dock.collapsed .fs-dock-right {
+  padding-right: 40px;
+}
+
+.fs-dock.collapsed .fs-dock-field-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.fs-dock.collapsed .fs-dock-top-tools {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.fs-dock.collapsed .fs-dock-series-toggle {
+  display: none;
 }
 
 .fs-dock.collapsed .fs-tile {
@@ -1064,7 +1237,7 @@ body {
 
 .fs-dock.collapsed .fs-tile-value {
   margin-top: 6px;
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .fs-dock.collapsed .fs-road-head,
@@ -1073,8 +1246,7 @@ body {
 }
 
 .fs-dock.collapsed .fs-dock-progress {
-  flex-direction: column;
-  gap: 12px;
+  gap: var(--fs-dock-gap);
   margin-top: 0;
 }
 
@@ -1176,6 +1348,10 @@ body {
   overflow: hidden;
 }
 
+.panel-card-zone-help {
+  overflow: visible;
+}
+
 .panel-card-head {
   display: flex;
   align-items: flex-start;
@@ -1202,6 +1378,14 @@ body {
   gap: 13px;
 }
 
+.profile-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .profile-legend span {
   display: flex;
   align-items: center;
@@ -1214,6 +1398,122 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 2px;
+}
+
+.rider-zone-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.rider-zone-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.rider-zone-form span {
+  font: 600 9px/1 var(--font-ui);
+  letter-spacing: 0.11em;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+
+.rider-zone-form input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.04);
+  font: 600 13px/1 var(--font-num);
+}
+
+.zone-editor {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.zone-editor-note {
+  margin: 0;
+  font: 400 11px/1.45 var(--font-ui);
+  color: var(--faint);
+}
+
+.zone-editor-section {
+  position: relative;
+  display: grid;
+  gap: 7px;
+}
+
+.zone-editor-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 9px/1 var(--font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #c2c6cf;
+}
+
+.zone-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--faint);
+  background: rgba(255, 255, 255, 0.04);
+  font: 700 10px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.zone-help-btn[aria-expanded="true"] {
+  color: var(--accent);
+  border-color: rgba(246, 165, 44, 0.55);
+  background: rgba(246, 165, 44, 0.12);
+}
+
+.zone-help-popover {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 7px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--ink);
+  background: rgba(18, 22, 29, 0.96);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.38);
+}
+
+.zone-help-popover[hidden] {
+  display: none;
+}
+
+.zone-help-popover strong {
+  font: 700 10px/1.25 var(--font-ui);
+  color: var(--ink-bright);
+}
+
+.zone-help-popover span {
+  font: 500 10px/1.35 var(--font-ui);
+  color: var(--muted);
+}
+
+.zone-summary {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.035);
+  font: 500 11px/1.45 var(--font-mono);
 }
 
 /* ---- climbs ----------------------------------------------------------------- */
@@ -1834,6 +2134,73 @@ input[type="color"] {
 
 /* HUD field toggle rows */
 
+.hud-order-list {
+  display: grid;
+  gap: 8px;
+}
+
+.hud-order-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: grab;
+}
+
+.hud-order-row.dragging {
+  opacity: 0.45;
+}
+
+.hud-order-row.drag-over {
+  border-color: rgba(246, 165, 44, 0.75);
+  background: rgba(246, 165, 44, 0.08);
+}
+
+.hud-order-handle {
+  flex: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  font: 700 9px/1 var(--font-ui);
+  color: var(--faint);
+  text-transform: uppercase;
+}
+
+.hud-order-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.hud-order-text span {
+  font: 600 13px/1 var(--font-ui);
+  color: var(--ink);
+}
+
+.hud-order-text i {
+  font: 500 11px/1 var(--font-mono);
+  color: var(--faint);
+  font-style: normal;
+}
+
+.hud-count-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-count-control output {
+  min-width: 48px;
+  text-align: center;
+  font: 600 13px/1 var(--font-num);
+  color: var(--ink-bright);
+}
+
 .field-toggle-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2209,24 +2576,24 @@ input[type="color"] {
   }
 }
 
-/* ---- fullscreen HUD on phones ---------------------------------------------
-   The fullscreen dock is laid out for a wide screen: its body is a horizontal
-   row (fixed-width metric grid + separator + road-ahead profile) and the
-   collapsed strip lays every metric tile inline. Neither fits a phone, so on
-   narrow viewports the corner overlays pull in from the edges and the dock
-   stacks into a compact, always-fits column. */
+/* ---- map HUD on phones -----------------------------------------------------
+   The dock is laid out for a wide screen: its body is a horizontal row
+   (fixed-width metric grid + separator + road-ahead profile) and the collapsed
+   strip lays every metric tile inline. Neither fits a phone, so on narrow
+   viewports the corner overlays pull in from the edges and the dock stacks
+   into a compact, always-fits column. */
 @media (max-width: 860px) {
-  .map-viewport.fullscreen-mode #minimap {
+  #minimap {
     left: 14px;
     top: 62px;
   }
 
-  .map-viewport.fullscreen-mode .map-actions {
+  .map-actions {
     top: 14px;
     right: 14px;
   }
 
-  .map-viewport.fullscreen-mode .fs-clock {
+  .fs-clock {
     top: 14px;
     left: 14px;
     gap: 8px;
@@ -2242,9 +2609,28 @@ input[type="color"] {
     font-size: 13px;
   }
 
+  .fs-clock-ascent {
+    font-size: 13px;
+  }
+
+  .fs-training-meters {
+    top: 112px;
+    left: 14px;
+    width: 150px;
+    gap: 6px;
+  }
+
+  .fs-zone-meter {
+    padding: 8px 9px;
+  }
+
+  .fs-zone-meter strong {
+    font-size: 16px;
+  }
+
   /* The banner's desktop min-width (420px) overflows a phone; let it span the
      viewport width instead and drop the centring transform. */
-  .map-viewport.fullscreen-mode .climb-banner {
+  .climb-banner {
     left: 14px;
     right: 14px;
     min-width: 0;
@@ -2252,7 +2638,7 @@ input[type="color"] {
     transform: none;
   }
 
-  .map-viewport.fullscreen-mode .fs-dock {
+  .fs-dock {
     left: 10px;
     right: 10px;
     bottom: 12px;
@@ -2260,12 +2646,27 @@ input[type="color"] {
     border-radius: 16px;
   }
 
+  .fs-dock-top-tools {
+    top: 8px;
+    right: 8px;
+  }
+
+  .fs-dock-metric-wrap {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .fs-dock-field-controls {
+    align-self: center;
+  }
+
   /* Stack the body: metrics on top, road-ahead below. Keep clear of the
      collapse toggle in the top-right corner. */
   .fs-dock-body {
     flex-direction: column;
     gap: 14px;
-    padding-right: 30px;
+    padding-top: 30px;
+    padding-right: 0;
   }
 
   .fs-dock-sep {
@@ -2275,9 +2676,10 @@ input[type="color"] {
   /* Tiles flow into a four-column grid (two rows when all eight are on) that
      fills the width; the JS-set per-tile width no longer applies. */
   .fs-dock-metrics {
+    flex: 1;
     grid-template-rows: none;
     grid-auto-flow: row;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
     grid-auto-columns: auto;
     gap: 8px;
   }
@@ -2293,7 +2695,7 @@ input[type="color"] {
 
   .fs-tile-value {
     margin-top: 5px;
-    font-size: 17px;
+    font-size: 16px;
   }
 
   /* Once the body is a column the road plot has no intrinsic height, so pin
@@ -2301,12 +2703,15 @@ input[type="color"] {
   .fs-road-plot {
     flex: none;
     height: 76px;
+    min-height: 0;
   }
 
   .fs-road-head {
     flex-wrap: wrap;
     gap: 6px 14px;
     margin-bottom: 8px;
+    min-height: 0;
+    padding-right: 0;
   }
 
   .fs-road-note {
@@ -2323,6 +2728,12 @@ input[type="color"] {
   .fs-dock.collapsed .fs-dock-body {
     align-items: stretch;
     gap: 14px;
+    padding-top: 0;
+    padding-right: 0;
+  }
+
+  .fs-dock.collapsed .fs-dock-right {
+    padding-right: 40px;
   }
 
   .fs-dock.collapsed .fs-dock-metrics {

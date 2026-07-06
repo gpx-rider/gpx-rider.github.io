@@ -7,11 +7,14 @@
 // summary: { startTimeMs, totalElapsedSeconds, totalTimerSeconds,
 //            totalDistanceMeters, totalCalories (kcal, nullable) }
 
+import { APP_NAME } from "./tuning.mjs";
+
 const FIT_EPOCH_OFFSET_SECONDS = 631065600; // 1989-12-31T00:00:00Z
 const SEMICIRCLES_PER_DEGREE = 2 ** 31 / 180;
 
 const BASE_TYPE = {
   enum: 0x00,
+  string: 0x07,
   uint8: 0x02,
   uint16: 0x84,
   uint32: 0x86,
@@ -20,6 +23,7 @@ const BASE_TYPE = {
 
 const INVALID = {
   [BASE_TYPE.enum]: 0xff,
+  [BASE_TYPE.string]: 0x00,
   [BASE_TYPE.uint8]: 0xff,
   [BASE_TYPE.uint16]: 0xffff,
   [BASE_TYPE.uint32]: 0xffffffff,
@@ -28,6 +32,7 @@ const INVALID = {
 
 const SIZE = {
   [BASE_TYPE.enum]: 1,
+  [BASE_TYPE.string]: 1,
   [BASE_TYPE.uint8]: 1,
   [BASE_TYPE.uint16]: 2,
   [BASE_TYPE.uint32]: 4,
@@ -36,7 +41,6 @@ const SIZE = {
 
 const GLOBAL_MSG = { fileId: 0, session: 18, lap: 19, record: 20, event: 21, activity: 34 };
 const FILE_TYPE_ACTIVITY = 4;
-const MANUFACTURER_DEVELOPMENT = 255;
 const SPORT_CYCLING = 2;
 const SUB_SPORT_VIRTUAL_ACTIVITY = 58;
 const EVENT_TIMER = 0;
@@ -54,6 +58,7 @@ const FILE_ID_FIELDS = [
   [1, BASE_TYPE.uint16], // manufacturer
   [2, BASE_TYPE.uint16], // product
   [4, BASE_TYPE.uint32], // time_created
+  [8, BASE_TYPE.string, 16], // product_name
 ];
 const EVENT_FIELDS = [
   [253, BASE_TYPE.uint32], // timestamp
@@ -147,7 +152,16 @@ class ByteWriter {
     this.bytes.push(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff);
   }
 
-  write(baseType, value) {
+  write(baseType, value, size = SIZE[baseType]) {
+    if (baseType === BASE_TYPE.string) {
+      const text = typeof value === "string" ? value : "";
+      const encoded = new TextEncoder().encode(text);
+      for (let i = 0; i < size; i += 1) {
+        this.u8(i < encoded.length ? encoded[i] : 0);
+      }
+      this.bytes[this.bytes.length - 1] = 0;
+      return;
+    }
     const encoded = value === null || value === undefined || Number.isNaN(value)
       ? INVALID[baseType]
       : value;
@@ -163,16 +177,16 @@ function writeDefinition(writer, localType, globalMsg, fields) {
   writer.u8(0); // little-endian
   writer.u16(globalMsg);
   writer.u8(fields.length);
-  for (const [fieldNumber, baseType] of fields) {
+  for (const [fieldNumber, baseType, size = SIZE[baseType]] of fields) {
     writer.u8(fieldNumber);
-    writer.u8(SIZE[baseType]);
+    writer.u8(size);
     writer.u8(baseType);
   }
 }
 
 function writeData(writer, localType, fields, values) {
   writer.u8(localType);
-  fields.forEach(([, baseType], index) => writer.write(baseType, values[index]));
+  fields.forEach(([, baseType, size], index) => writer.write(baseType, values[index], size));
 }
 
 function encodeScaled(value, scale, offset = 0) {
@@ -188,7 +202,7 @@ export function encodeFitActivity({ samples, summary }) {
   const writer = new ByteWriter();
 
   writeDefinition(writer, 0, GLOBAL_MSG.fileId, FILE_ID_FIELDS);
-  writeData(writer, 0, FILE_ID_FIELDS, [FILE_TYPE_ACTIVITY, MANUFACTURER_DEVELOPMENT, 0, startFit]);
+  writeData(writer, 0, FILE_ID_FIELDS, [FILE_TYPE_ACTIVITY, null, null, startFit, APP_NAME]);
 
   writeDefinition(writer, 1, GLOBAL_MSG.event, EVENT_FIELDS);
   writeData(writer, 1, EVENT_FIELDS, [startFit, EVENT_TIMER, EVENT_TYPE_START]);
