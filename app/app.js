@@ -71,6 +71,7 @@ import {
   DEFAULT_CAMERA_ANGLE_DEGREES,
   DEFAULT_CAMERA_BEHIND_METERS,
   DEFAULT_CAMERA_ZOOM,
+  DEFAULT_FIRST_PERSON_CAMERA_HEIGHT_METERS,
   DEFAULT_CLIMB_FOCUS_MODE,
   DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV,
   DEFAULT_GRADE_INTERVAL_SECONDS,
@@ -118,6 +119,10 @@ import {
   OVERVIEW_ORBIT_DIRECTION,
   OVERVIEW_ANIM_INTRO_SECONDS,
   ELLIPSE_FLYBY,
+  FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS,
+  FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS,
+  FIRST_PERSON_CAMERA_TILT_DEGREES,
+  FIRST_PERSON_LOOK_AHEAD_METERS,
   OVERVIEW_MARGIN_FACTOR,
   OVERVIEW_RANGE_FACTOR,
   OVERVIEW_MIN_RANGE_METERS,
@@ -274,6 +279,8 @@ const state = {
   overviewActive: false,
   overviewMenuOpen: false,
   climbOverviewMenuOpen: false,
+  cameraViewMenuOpen: false,
+  cameraViewPreset: null,
   overviewMode: DEFAULT_OVERVIEW_MODE,
   climbFocusMode: DEFAULT_CLIMB_FOCUS_MODE,
   climbOrbitSecondsPerRev: DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV,
@@ -289,6 +296,7 @@ const state = {
   cameraOffsetForwardMeters: 0,
   cameraOffsetRightMeters: 0,
   cameraCenterAltitudeOffsetMeters: 0,
+  firstPersonCameraHeightMeters: DEFAULT_FIRST_PERSON_CAMERA_HEIGHT_METERS,
   centerRider: true,
   screenshotInProgress: false,
   showScreenshotButton: DEFAULT_SHOW_SCREENSHOT_BUTTON,
@@ -392,6 +400,8 @@ const els = {
   cameraAngleOutput: document.querySelector("#cameraAngleOutput"),
   cameraBehindInput: document.querySelector("#cameraBehindInput"),
   cameraBehindOutput: document.querySelector("#cameraBehindOutput"),
+  firstPersonHeightInput: document.querySelector("#firstPersonHeightInput"),
+  firstPersonHeightOutput: document.querySelector("#firstPersonHeightOutput"),
   cameraReadout: document.querySelector("#cameraReadout"),
   centerRiderInput: document.querySelector("#centerRiderInput"),
   resetCameraBtn: document.querySelector("#resetCameraBtn"),
@@ -432,7 +442,11 @@ const els = {
   mapViewport: document.querySelector("#mapViewport"),
   minimap: document.querySelector("#minimap"),
   fullscreenBtn: document.querySelector("#fullscreenBtn"),
+  resetCameraControl: document.querySelector("#resetCameraControl"),
   resetCameraViewBtn: document.querySelector("#resetCameraViewBtn"),
+  cameraViewMenuBtn: document.querySelector("#cameraViewMenuBtn"),
+  cameraViewMenu: document.querySelector("#cameraViewMenu"),
+  cameraViewButtons: Array.from(document.querySelectorAll("[data-camera-view-preset]")),
   mapOverviewControl: document.querySelector("#mapOverviewControl"),
   overviewToggleBtn: document.querySelector("#overviewToggleBtn"),
   overviewMenuBtn: document.querySelector("#overviewMenuBtn"),
@@ -784,6 +798,7 @@ function bindEvents() {
   els.cameraZoomInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
   els.cameraBehindInput.addEventListener("input", updateCameraSettingsFromControls);
+  els.firstPersonHeightInput.addEventListener("input", updateFirstPersonHeightFromControl);
   els.centerRiderInput.addEventListener("change", updateCenterRiderFromControl);
   els.centerRiderBtn.addEventListener("click", () => {
     els.centerRiderInput.checked = !els.centerRiderInput.checked;
@@ -815,6 +830,8 @@ function bindEvents() {
   els.fullscreenBtn.addEventListener("click", toggleMapFullscreen);
   els.dockToggleBtn.addEventListener("click", toggleHudDock);
   els.resetCameraViewBtn.addEventListener("click", resetCameraView);
+  els.cameraViewMenuBtn.addEventListener("click", toggleCameraViewMenu);
+  els.cameraViewButtons.forEach((button) => button.addEventListener("click", selectCameraViewPresetFromMenu));
   els.overviewToggleBtn.addEventListener("click", toggleRouteOverview);
   els.overviewMenuBtn.addEventListener("click", toggleOverviewModeMenu);
   els.overviewModeButtons.forEach((button) => button.addEventListener("click", selectOverviewModeFromMenu));
@@ -837,6 +854,10 @@ function bindEvents() {
     }
     if (event.key === "Escape" && state.overviewMenuOpen) {
       closeOverviewModeMenu();
+      return;
+    }
+    if (event.key === "Escape" && state.cameraViewMenuOpen) {
+      closeCameraViewMenu();
       return;
     }
     // When the settings or gallery dialog is open, Escape closes it
@@ -1642,6 +1663,11 @@ function currentRouteLinePoints() {
 function renderRiderDot(point) {
   const { AltitudeMode, Model3DElement, Polyline3DElement } = state.maps3d;
 
+  if (isFirstPersonCameraView()) {
+    removeRiderMarker();
+    return;
+  }
+
   renderRiderBeacon();
 
   // A Model3DElement (an actual mesh, RIDER_DOT_MODEL_PATH in tuning.mjs),
@@ -1683,7 +1709,7 @@ function renderRiderBeacon() {
   }
 
   const { AltitudeMode, Polygon3DElement } = state.maps3d ?? {};
-  if (!state.beaconEnabled || !Polygon3DElement || !state.map) return;
+  if (isFirstPersonCameraView() || !state.beaconEnabled || !Polygon3DElement || !state.map) return;
 
   // Extruded from the ground up to the path altitude, with occluded segments
   // drawn so nearby trees and buildings never hide the rider's position.
@@ -1697,6 +1723,15 @@ function renderRiderBeacon() {
   state.map.append(state.riderBeacon);
 }
 
+function removeRiderMarker() {
+  if (state.riderDot) state.riderDot.remove();
+  if (state.riderBeacon) state.riderBeacon.remove();
+  state.riderDot = null;
+  state.riderBeacon = null;
+  state.lastRiderDot = null;
+  state.lastRiderBeacon = null;
+}
+
 function beaconFillColor() {
   const hex = BEACON_COLOR_PATTERN.test(state.beaconColor) ? state.beaconColor : DEFAULT_BEACON_COLOR;
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
@@ -1705,15 +1740,10 @@ function beaconFillColor() {
 
 function clearRouteFromMap() {
   state.routeLines.forEach((line) => line.remove());
-  if (state.riderDot) state.riderDot.remove();
-  if (state.riderBeacon) state.riderBeacon.remove();
+  removeRiderMarker();
   clearOverviewDebugLine();
 
   state.routeLines = [];
-  state.riderDot = null;
-  state.riderBeacon = null;
-  state.lastRiderDot = null;
-  state.lastRiderBeacon = null;
 }
 
 // --- Movement: simulation button + pedaling detection -----------------------
@@ -1940,10 +1970,14 @@ function updateRideUi(options = {}) {
 
   const point = interpolateRoutePoint(state.route, state.progressMeters);
 
-  if (state.riderDot) {
+  if (isFirstPersonCameraView()) {
+    removeRiderMarker();
+  } else if (state.riderDot) {
     updateRiderDot(point);
-    updateMapCamera();
+  } else if (state.mapProvider === "google3d" && state.map) {
+    renderRiderDot(point);
   }
+  updateMapCamera();
 
   // Per-frame work ends here. DOM stats, the profile canvas, and the trainer
   // grade only need a few updates per second while riding.
@@ -2372,6 +2406,11 @@ function confirmClearRideData() {
 // --- Camera ------------------------------------------------------------------
 
 function updateRiderDot(position) {
+  if (isFirstPersonCameraView()) {
+    removeRiderMarker();
+    return;
+  }
+
   if (state.riderBeacon) {
     // Real-world-sized geometry, so a coarse circle keeps the extruded
     // cylinder cheap to re-tessellate as it follows the rider. Throttled
@@ -2465,6 +2504,10 @@ function cameraFlightTarget() {
 function followCameraTarget() {
   const position = interpolateRoutePoint(state.route, state.progressMeters);
   const heading = currentRouteHeading();
+  if (isFirstPersonCameraView()) {
+    return firstPersonCameraTarget(position, heading);
+  }
+
   const camera = computeFollowCamera({
     riderPosition: position,
     heading,
@@ -2498,6 +2541,16 @@ function followCameraTarget() {
   const center = { lat: camera.center.lat, lng: camera.center.lng, altitude: liftedCenterAltitude };
   const eye = cameraEyePosition({ center, range: camera.range, tilt, heading: camera.heading });
   return eye ? { eye, center, heading: camera.heading } : null;
+}
+
+function firstPersonCameraTarget(position, heading) {
+  const eyeAltitude = Math.max(0, (Number(position.ele) || 0) + state.firstPersonCameraHeightMeters);
+  const centerGround = destinationPoint(position, heading, FIRST_PERSON_LOOK_AHEAD_METERS);
+  return {
+    eye: { lat: position.lat, lng: position.lng, altitude: eyeAltitude },
+    center: { ...centerGround, altitude: eyeAltitude },
+    heading: normalizeHeading(heading),
+  };
 }
 
 // Advance the camera flight one step: chase the target's eye and look-at
@@ -2741,6 +2794,11 @@ function returnToRiderCamera() {
   state.cameraFlight = null;
   state.map.fov = DEFAULT_MAP_FOV_DEGREES;
   syncOverviewControls();
+  if (isFirstPersonCameraView()) {
+    removeRiderMarker();
+  } else if (!state.riderDot) {
+    renderRiderDot(interpolateRoutePoint(state.route, state.progressMeters));
+  }
   updateMapCamera();
   if (!state.movementLoopActive) ensureCameraFlightLoop();
   updateOverviewDebugLine();
@@ -3062,6 +3120,7 @@ function endUserInteraction() {
 
 function captureManualCameraSettings() {
   if (!state.map) return;
+  state.cameraViewPreset = null;
 
   const tilt = Number(state.map.tilt);
   const range = Number(state.map.range);
@@ -3146,6 +3205,9 @@ function syncCameraControls() {
   els.cameraZoomInput.value = String(Math.round(state.cameraZoom * 10) / 10);
   els.cameraAngleInput.value = String(Math.round(state.cameraAngleDegrees));
   els.cameraBehindInput.value = String(Math.round(state.cameraBehindMeters / 20) * 20);
+  els.firstPersonHeightInput.min = String(FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS);
+  els.firstPersonHeightInput.max = String(FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS);
+  els.firstPersonHeightInput.value = String(Math.round(state.firstPersonCameraHeightMeters * 10) / 10);
   els.overviewModeSelect.value = state.overviewMode;
   els.climbFocusModeSelect.value = state.climbFocusMode;
   els.climbOrbitSpeedInput.value = String(state.climbOrbitSecondsPerRev);
@@ -3237,10 +3299,22 @@ function toggleClimbOverviewModeMenu(event) {
   syncOverviewControls();
 }
 
+function toggleCameraViewMenu(event) {
+  event.stopPropagation();
+  state.cameraViewMenuOpen = !state.cameraViewMenuOpen;
+  syncResetCameraButton();
+}
+
 function closeOverviewModeMenu() {
   if (!state.overviewMenuOpen) return;
   state.overviewMenuOpen = false;
   syncOverviewControls();
+}
+
+function closeCameraViewMenu() {
+  if (!state.cameraViewMenuOpen) return;
+  state.cameraViewMenuOpen = false;
+  syncResetCameraButton();
 }
 
 function closeClimbOverviewModeMenu() {
@@ -3255,6 +3329,9 @@ function closeOverviewModeMenuOnOutsideClick(event) {
   }
   if (state.climbOverviewMenuOpen && !els.climbOverviewControl?.contains(event.target)) {
     closeClimbOverviewModeMenu();
+  }
+  if (state.cameraViewMenuOpen && !els.resetCameraControl?.contains(event.target)) {
+    closeCameraViewMenu();
   }
 }
 
@@ -3293,6 +3370,17 @@ function selectClimbOverviewModeFromMenu(event) {
   if (route?.length > 1) {
     enterOverviewMode({ route, mode: state.climbFocusMode });
   }
+}
+
+function selectCameraViewPresetFromMenu(event) {
+  event.stopPropagation();
+  const preset = event.currentTarget.dataset.cameraViewPreset;
+  closeCameraViewMenu();
+  if (preset === "firstPerson") {
+    applyFirstPersonCameraView();
+    return;
+  }
+  resetCameraView();
 }
 
 function syncOverviewControls() {
@@ -3351,11 +3439,47 @@ function cameraAtDefaults() {
     state.cameraCenterAltitudeOffsetMeters === 0;
 }
 
+function firstPersonCameraPreset() {
+  const tilt = clamp(FIRST_PERSON_CAMERA_TILT_DEGREES, CAMERA_TILT_MIN, CAMERA_TILT_MAX);
+  return {
+    cameraZoom: 1,
+    cameraAngleDegrees: tilt,
+    cameraBehindMeters: FIRST_PERSON_LOOK_AHEAD_METERS,
+    cameraHeadingOffsetDegrees: 0,
+    cameraOffsetForwardMeters: FIRST_PERSON_LOOK_AHEAD_METERS,
+    cameraOffsetRightMeters: 0,
+    cameraCenterAltitudeOffsetMeters: 0,
+    centerRider: false,
+  };
+}
+
+function isFirstPersonCameraView() {
+  return state.cameraViewPreset === "firstPerson" &&
+    state.cameraMode !== "manual" &&
+    !state.overviewActive;
+}
+
+function cameraAtFirstPerson() {
+  return isFirstPersonCameraView();
+}
+
 // The reset-camera button is only usable when it would actually do something:
 // disabled while the camera is already at its defaults, enabled once the user
 // has moved it (a drag captures new offsets, or leaves the camera in manual).
 function syncResetCameraButton() {
+  const hasRoute = state.route.length > 1;
   if (els.resetCameraViewBtn) els.resetCameraViewBtn.disabled = cameraAtDefaults();
+  if (els.cameraViewMenuBtn) {
+    els.cameraViewMenuBtn.disabled = !hasRoute;
+    els.cameraViewMenuBtn.setAttribute("aria-expanded", String(state.cameraViewMenuOpen));
+  }
+  if (els.cameraViewMenu) els.cameraViewMenu.hidden = !state.cameraViewMenuOpen;
+  if (els.resetCameraControl) els.resetCameraControl.classList.toggle("active", cameraAtFirstPerson());
+  els.cameraViewButtons?.forEach((button) => {
+    const preset = button.dataset.cameraViewPreset;
+    const checked = preset === "firstPerson" ? cameraAtFirstPerson() : cameraAtDefaults();
+    button.setAttribute("aria-checked", String(checked));
+  });
 }
 
 function normalizeOverviewMode(mode) {
@@ -3377,6 +3501,7 @@ function updateCameraSettingsLabels() {
   els.cameraZoomOutput.value = `${state.cameraZoom.toFixed(1)}x`;
   els.cameraAngleOutput.value = `${Math.round(state.cameraAngleDegrees)} deg`;
   els.cameraBehindOutput.value = `${Math.round(state.cameraBehindMeters)} m`;
+  els.firstPersonHeightOutput.value = `${state.firstPersonCameraHeightMeters.toFixed(1)} m`;
   const range = Number(state.map?.range);
   const heading = Number(state.map?.heading);
   els.cameraReadout.value = [
@@ -3389,6 +3514,7 @@ function updateCameraSettingsLabels() {
     `pan F ${Math.round(state.cameraOffsetForwardMeters)} m`,
     `R ${Math.round(state.cameraOffsetRightMeters)} m`,
     `alt Δ ${Math.round(state.cameraCenterAltitudeOffsetMeters)} m`,
+    `1st ${state.firstPersonCameraHeightMeters.toFixed(1)} m`,
   ].join("  ");
 }
 
@@ -3911,6 +4037,7 @@ function applyMapMode() {
 }
 
 function updateCameraSettingsFromControls() {
+  state.cameraViewPreset = null;
   state.cameraZoom = Number(els.cameraZoomInput.value);
   state.cameraAngleDegrees = Number(els.cameraAngleInput.value);
   state.cameraBehindMeters = Number(els.cameraBehindInput.value);
@@ -3921,7 +4048,23 @@ function updateCameraSettingsFromControls() {
   updateRideUi();
 }
 
+function updateFirstPersonHeightFromControl() {
+  const wasFirstPerson = cameraAtFirstPerson();
+  state.firstPersonCameraHeightMeters = clamp(
+    Number(els.firstPersonHeightInput.value),
+    FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS,
+    FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS,
+  );
+  updateCameraSettingsLabels();
+  saveSettings();
+
+  if (wasFirstPerson) {
+    applyFirstPersonCameraView();
+  }
+}
+
 function resetCameraToDefaults() {
+  state.cameraViewPreset = null;
   state.cameraZoom = DEFAULT_CAMERA_ZOOM;
   state.cameraAngleDegrees = DEFAULT_CAMERA_ANGLE_DEGREES;
   state.cameraBehindMeters = DEFAULT_CAMERA_BEHIND_METERS;
@@ -3939,12 +4082,36 @@ function resetCameraToDefaults() {
   updateRideUi();
 }
 
+function applyFirstPersonCameraView() {
+  const preset = firstPersonCameraPreset();
+  state.cameraViewPreset = "firstPerson";
+  state.cameraZoom = preset.cameraZoom;
+  state.cameraAngleDegrees = preset.cameraAngleDegrees;
+  state.cameraBehindMeters = preset.cameraBehindMeters;
+  state.cameraHeadingOffsetDegrees = preset.cameraHeadingOffsetDegrees;
+  state.cameraOffsetForwardMeters = preset.cameraOffsetForwardMeters;
+  state.cameraOffsetRightMeters = preset.cameraOffsetRightMeters;
+  state.cameraCenterAltitudeOffsetMeters = preset.cameraCenterAltitudeOffsetMeters;
+  state.centerRider = preset.centerRider;
+  state.cameraFlight = null;
+
+  syncCameraControls();
+  syncCenterRiderButton();
+  updateCameraSettingsLabels();
+  saveSettings();
+  removeRiderMarker();
+
+  if (state.route.length) returnToRiderCamera();
+  else updateRideUi();
+}
+
 // The map-action-bar shortcut for resetCameraToDefaults. It is fully decoupled
 // from the overview: it only resets the manual follow-camera adjustments and,
 // if the rider camera is the active surface, flies it back into place. An
 // active overview is left untouched (the reset never activates or deactivates
 // it) — the overview control is the only thing that toggles the overview.
 function resetCameraView() {
+  closeCameraViewMenu();
   resetCameraToDefaults();
   if (!state.route.length || state.overviewActive) return;
   returnToRiderCamera();
@@ -4035,6 +4202,7 @@ function applyScreenshotButtonVisibility() {
 }
 
 function updateCenterRiderFromControl() {
+  state.cameraViewPreset = null;
   state.centerRider = els.centerRiderInput.checked;
   if (state.centerRider) {
     state.cameraOffsetForwardMeters = 0;
@@ -4240,15 +4408,25 @@ function restoreSettings() {
   const offsetForward = Number(settings?.cameraOffsetForwardMeters);
   const offsetRight = Number(settings?.cameraOffsetRightMeters);
   const climbOrbitSeconds = Number(settings?.climbOrbitSecondsPerRev);
+  const firstPersonHeight = Number(settings?.firstPersonCameraHeightMeters);
 
   state.overviewMode = normalizeOverviewMode(settings?.overviewMode);
   state.climbFocusMode = normalizeClimbFocusMode(settings?.climbFocusMode);
+  state.cameraViewPreset = settings?.cameraViewPreset === "firstPerson" ? "firstPerson" : null;
   state.activeOverviewMode = state.overviewMode;
   if (Number.isFinite(climbOrbitSeconds)) {
     state.climbOrbitSecondsPerRev = clamp(
       climbOrbitSeconds,
       CLIMB_ORBIT_SECONDS_PER_REV_MIN,
       CLIMB_ORBIT_SECONDS_PER_REV_MAX,
+    );
+  }
+
+  if (Number.isFinite(firstPersonHeight)) {
+    state.firstPersonCameraHeightMeters = clamp(
+      firstPersonHeight,
+      FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS,
+      FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS,
     );
   }
 
@@ -4464,6 +4642,8 @@ function saveSettings() {
     cameraOffsetForwardMeters: state.cameraOffsetForwardMeters,
     cameraOffsetRightMeters: state.cameraOffsetRightMeters,
     cameraCenterAltitudeOffsetMeters: state.cameraCenterAltitudeOffsetMeters,
+    firstPersonCameraHeightMeters: state.firstPersonCameraHeightMeters,
+    cameraViewPreset: state.cameraViewPreset === "firstPerson" ? "firstPerson" : null,
     centerRider: state.centerRider,
     routeGradeColorsEnabled: state.routeGradeColorsEnabled,
     beaconEnabled: state.beaconEnabled,
