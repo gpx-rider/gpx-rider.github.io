@@ -119,6 +119,21 @@ export const DEFAULT_CAMERA_ZOOM = 2.5;
 export const DEFAULT_CAMERA_ANGLE_DEGREES = 75;
 export const DEFAULT_CAMERA_BEHIND_METERS = 800;
 
+// First-person camera preset: eye height above the rider/route surface. The
+// default approximates a seated rider's eye line; the Settings slider lets the
+// user tune it for their position.
+export const DEFAULT_FIRST_PERSON_CAMERA_HEIGHT_METERS = 1.7;
+
+// Bounds for the configurable first-person eye height.
+export const FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS = 0.8;
+export const FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS = 2.2;
+
+// First-person preset geometry. The camera eye is placed at the rider and looks
+// at a point this far ahead on the route. The tilt value keeps the ordinary
+// Camera angle slider near the horizon while the preset is selected.
+export const FIRST_PERSON_LOOK_AHEAD_METERS = 20;
+export const FIRST_PERSON_CAMERA_TILT_DEGREES = 88;
+
 // Route overview shown when a route loads: whole route framed from this tilt.
 // Tilt is degrees from straight-down — 0 is top-down, ~89 is nearly at the
 // horizon (a low, terrain-revealing angle). NOTE: Google's 3D map limits how
