@@ -11,32 +11,9 @@ The live demo runs entirely in your browser. It ships with a domain-restricted G
 
 ## Screenshots
 
-<table>
-  <tr>
-    <td width="50%">
-      <img src="screenshots/setup_screen.jpeg" alt="GPX Rider setup screen with route, map, trainer, and ride controls">
-      <br>
-      <strong>Route setup</strong>
-    </td>
-    <td width="50%">
-      <img src="screenshots/before_climb.jpeg" alt="GPX Rider ride view approaching a climb with the fullscreen HUD">
-      <br>
-      <strong>Before a climb</strong>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="screenshots/climbing.jpeg" alt="GPX Rider fullscreen ride HUD while climbing on photorealistic terrain">
-      <br>
-      <strong>Live climbing HUD</strong>
-    </td>
-    <td width="50%">
-      <img src="screenshots/settings.jpeg" alt="GPX Rider settings dialog for trainer, camera, rendering, units, and data">
-      <br>
-      <strong>Settings</strong>
-    </td>
-  </tr>
-</table>
+![Ride](screenshots/ride.jpeg)
+![Overview](screenshots/overview.jpeg)
+![Setup](screenshots/setup.jpeg)
 
 ## Why GPX Rider?
 
