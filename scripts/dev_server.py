@@ -23,7 +23,8 @@ committed empty default is served unchanged, so the app just falls back to
 asking for a key in Settings exactly as before.
 
 Usage: python3 scripts/dev_server.py [PORT] [HOST]   (defaults: 5173 127.0.0.1)
-Run it from the repo root; the app is then at http://HOST:PORT/app/.
+Run it from the repo root; the landing page is then at http://HOST:PORT/app/
+and the app itself at http://HOST:PORT/app/app.html.
 """
 
 import base64
@@ -107,7 +108,7 @@ def main(argv):
     port = int(argv[1]) if len(argv) > 1 else DEFAULT_PORT
     host = argv[2] if len(argv) > 2 else DEFAULT_HOST
     server = HTTPServer((host, port), NoCacheHandler)
-    print(f"GPX Rider (no-cache dev server) at http://{host}:{port}/app/")
+    print(f"GPX Rider (no-cache dev server): landing http://{host}:{port}/app/ · app http://{host}:{port}/app/app.html")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

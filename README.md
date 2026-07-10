@@ -7,7 +7,7 @@
 
 **[Launch the App](https://ziizii.github.io/gpx-rider/)**
 
-The live demo runs entirely in your browser. It ships with a domain-restricted Google Maps key; self-hosted copies can use your own key, stored locally in your browser.
+The link opens a short landing page that replays a real route (the Ještěd climb) in photorealistic 3D; **Launch GPX Rider** opens the app with that same route loaded. The live demo runs entirely in your browser. It ships with a domain-restricted Google Maps key; self-hosted copies can use your own key, stored locally in your browser.
 
 ## Screenshots
 
@@ -51,7 +51,7 @@ cd gpx-rider
 make run
 ```
 
-Open the printed URL in **Chrome or Edge on macOS**. Safari does not support Web Bluetooth, so it cannot talk to a trainer. If you are running your own copy, paste in a free [Google Maps API key](https://developers.google.com/maps/documentation/javascript/get-api-key) when prompted.
+`make run` prints two URLs: the **landing page** (`…/app/`) and the **app itself** (`…/app/app.html`, also one click away via "Launch GPX Rider" on the landing). Open either in **Chrome or Edge on macOS**. Safari does not support Web Bluetooth, so it cannot talk to a trainer. If you are running your own copy, paste in a free [Google Maps API key](https://developers.google.com/maps/documentation/javascript/get-api-key) when prompted.
 
 Run the unit tests with:
 
@@ -113,7 +113,7 @@ The debug category has a **camera debug overlay** — a collapsible translucent 
 
 ## Hosting Your Own Copy
 
-The `app/` folder is a fully static site. It can be hosted anywhere that serves static files: GitHub Pages, Netlify, Vercel, S3, or a laptop on your home network.
+The `app/` folder is a fully static site. It can be hosted anywhere that serves static files: GitHub Pages, Netlify, Vercel, S3, or a laptop on your home network. Its entry point (`app/index.html`) is the landing page; the app itself is `app/app.html`.
 
 This repo includes a GitHub Actions workflow at [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) that deploys `app/` to GitHub Pages on every push to `main`. To enable it for your fork, go to **Settings -> Pages -> Source: GitHub Actions**.
 

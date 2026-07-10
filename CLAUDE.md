@@ -9,7 +9,7 @@ the user explicitly asks for one.
 
 ```sh
 make           # default: gallery-data + test (the deploy Action runs the same generation)
-make run       # serve the repo at http://127.0.0.1:5173/app/ (scripts/dev_server.py — a no-cache static server so edits never load stale)
+make run       # serve the repo (scripts/dev_server.py — a no-cache static server so edits never load stale). Landing page at http://127.0.0.1:5173/app/, the app itself at http://127.0.0.1:5173/app/app.html
 make test      # node --test tests/*.test.mjs (no dependencies needed)
 make gallery-data  # regenerate app/gallery.json from gallery/*/metadata.json + export.gpx (texts, preview camera, distance/ascent/descent, difficulty, and mini-profile bars)
 make rider-dot-model  # regenerate app/assets/rider-dot.glb (the 3D rider marker mesh) — only needed after editing scripts/generate_rider_dot_model.py, not part of the default `make`
@@ -20,11 +20,14 @@ modules can at least be syntax-checked with `node --check app/<file>.mjs`.
 
 ## Architecture
 
-Everything the browser loads lives in `app/`. `app/app.js` is the only
-entry point (loaded as a module from `index.html`); it owns the mutable
-`state` object, the DOM element map (`els`), event wiring, the Google 3D
-map + follow camera, and the movement loop. Everything else is a focused
-module:
+Everything the browser loads lives in `app/`, which is what GitHub Pages
+deploys as the site root. `app/index.html` is the **public landing page**
+(hero replay + marketing sections, driven by `app/landing.mjs`); its "Launch
+GPX Rider" links point to `app.html`, the actual application. `app/app.js` is
+the application's only entry point (loaded as a module from `app/app.html`);
+it owns the mutable `state` object, the DOM element map (`els`), event wiring,
+the Google 3D map + follow camera, and the movement loop. Everything else is a
+focused module:
 
 | File | Responsibility |
 |---|---|
@@ -48,6 +51,8 @@ module:
 | `app/gallery.mjs` | Fullscreen ride-gallery overlay (`<dialog#galleryDialog>`): route cards from `app/gallery.json` — all stats/card data is precomputed by `generate_gallery_json.py`, while the preview is a live interactive Google 3D map using each route's `metadata.json#previewCamera` (falling back to the normal overview framing). |
 | `app/storage.mjs` | Persistence: IndexedDB behind a sync in-memory cache (localStorage fallback + one-time migration; tested) |
 | `app/config.mjs` | `deployedMapsApiKey()` — empty in source, rewritten at deploy time (see below) |
+| `app/index.html` + `app/landing.mjs` | **Public landing page.** A no-build port of the Claude Design "GPX Rider Landing" prototype: a hero that replays one route (`landing-route.mjs`) over a live Google Photorealistic 3D map with a faked HUD, then a summit orbit, then loops; below it, static marketing sections. Reuses the app's Maps-key resolution (visitor key wins over the deploy-time key) and falls back to a still (`images/ride.jpg`) when no map is available. All hero knobs live in `LANDING_HERO` (`tuning.mjs`). "Launch GPX Rider" deep-links the Ještěd gallery route (`app.html?route=0050_jested`). |
+| `app/landing-route.mjs` | Static route data (`[lat, lng, ele]`) the landing hero replays, downsampled from `gallery/0050_jested/export.gpx`. Marketing data, not part of the app runtime |
 
 Module conventions: browser modules use the `.mjs` extension (except the
 `app.js` entry point), pure logic goes in its own module with tests, and
@@ -98,7 +103,7 @@ in place).
   it); a pure simulation ETA is plain remaining-distance ÷ slider-speed.
   The estimator resets when a new GPX loads, not on ride reset.
 - **UI layout & reusable components.** The app is a dark, single-viewport
-  shell (`index.html`): a fixed top bar (brand, GPX chip, Open/Browse/Settings),
+  shell (`app.html`): a fixed top bar (brand, GPX chip, Open/Browse/Settings),
   a 3D map filling the left, and a fixed-width right control panel. CSS
   components in `styles.css` are meant to be reused, not re-invented per
   screen: `.btn` (+ `-ghost`/`-blue`/`-accent`/`-outline-*`/`-sm`),
@@ -256,10 +261,15 @@ in place).
   the rider camera/follow behavior and shows only the segment stats in the map
   HUD banner. A selected custom segment is not added to `state.climbs` and must
   not affect climb detection/status.
-- **First-open auto-load**: with no saved ride and a working map,
-  `initGallery` loads the first gallery route automatically
+- **First-open auto-load & route deep-link**: with no saved ride and a working
+  map, `initGallery` loads the first gallery route automatically
   (`shouldAutoLoadFirst` in `app.js`); it is skipped when the map/API key
-  is missing so the first-run key prompt stays front and center.
+  is missing so the first-run key prompt stays front and center. Opening the
+  app with a `?route=<gallery-id>` query (the landing page's "Launch GPX Rider"
+  button uses `app.html?route=0050_jested`) forces that specific gallery route
+  on load — ahead of both a restored saved ride and the auto-load-first — via
+  `getRequestedRouteId` passed to `initGallery`. An absent or unknown id just
+  falls through to the normal behavior.
 - **Units**: all internal values are metric (meters, km/h, kcal). Only
   format at the display edge via `units.mjs`.
 - **BLE**: FTMS control-point writes must go through the write queue in
@@ -486,7 +496,14 @@ deployed key is present, `startApp()` hides the whole API-key section in
 Settings (`els.apiKeySection`) instead of showing an empty field nobody
 needs. Never widen the referrer restriction beyond the exact deployed
 origin, and don't add a second, unrestricted key anywhere in the client
-bundle.
+bundle. The landing page (`landing.mjs`) resolves the key the same way —
+visitor's saved key, else the baked-in `config.mjs` key — so it lights up on
+the live demo and in local dev without any separate wiring.
+
+`inject_maps_api_key.py` also injects the optional `HEAD` repository variable
+(deployment-only tags such as analytics) right after `<head>` in
+`app/index.html`, which is now the **landing page** — the public entry point,
+so that is where such tags belong.
 
 **Local dev key.** For local development the map needs a key too, but it must
 never be committed. `scripts/dev_server.py` injects a *local* key into the
