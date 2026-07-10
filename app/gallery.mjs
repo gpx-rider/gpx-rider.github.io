@@ -51,6 +51,7 @@ let previewServices = null;
 
 export async function initGallery(onLoadRoute, {
   shouldAutoLoadFirst = () => false,
+  getRequestedRouteId = () => null,
   getCurrentRouteName = () => null,
   getDistanceUnits = () => "metric",
   getMaps3d = () => null,
@@ -98,6 +99,18 @@ export async function initGallery(onLoadRoute, {
     void startGalleryPreviews();
   });
   els.closeBtn.addEventListener("click", () => els.dialog.close());
+
+  // A specific route requested via the app URL (e.g. the landing page's
+  // "Launch GPX Rider" deep-link, ?route=<id>) always wins over a restored
+  // saved ride and over the first-open auto-load. Falls through to the normal
+  // behavior when the id is absent or unknown.
+  const requestedId = getRequestedRouteId();
+  const requested = requestedId ? routes.find((route) => route.id === requestedId) : null;
+  if (requested?.gpx) {
+    await onLoadRoute(requested.gpx, requested.title, galleryRouteMetadata(requested));
+    refreshCards(getCurrentRouteName, getDistanceUnits);
+    return;
+  }
 
   if (routes[0].gpx && shouldAutoLoadFirst()) {
     await onLoadRoute(routes[0].gpx, routes[0].title, galleryRouteMetadata(routes[0]));

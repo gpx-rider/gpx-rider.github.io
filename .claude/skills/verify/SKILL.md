@@ -5,10 +5,11 @@ description: Build/launch/drive recipe for verifying GPX Rider changes end-to-en
 
 # Verifying GPX Rider in a real browser
 
-No build step. Serve the repo root and drive `app/` with Playwright:
+No build step. Serve the repo root and drive the app with Playwright. The app
+now lives at `app/app.html` (`app/index.html` is the public landing page):
 
 ```sh
-python3 -m http.server 5173 --bind 127.0.0.1 &   # app at http://127.0.0.1:5173/app/
+python3 -m http.server 5173 --bind 127.0.0.1 &   # app at http://127.0.0.1:5173/app/app.html
 ```
 
 In remote/CI environments Playwright is installed globally — import it from

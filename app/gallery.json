@@ -1,6 +1,210 @@
 {
   "routes": [
     {
+      "id": "0050_jested",
+      "title": "Ještěd",
+      "description": "A short but steady climb toward one of the Czech Republic’s most iconic mountaintop landmarks. The route starts near Záskalí and works its way upward in three distinct steps, saving the steepest section for the final approach to Hotel Ještěd and its unmistakable tower above Liberec.",
+      "previewCamera": {
+        "center": {
+          "lat": 50.732867,
+          "lng": 14.985417,
+          "altitude": 1009.1
+        },
+        "heading": 129.41,
+        "range": 297.6,
+        "tilt": 81.28,
+        "roll": 0,
+        "fov": 35
+      },
+      "gpx": "gallery/0050_jested/export.gpx",
+      "distanceMeters": 13194,
+      "ascentMeters": 593,
+      "descentMeters": 123,
+      "bars": [
+        {
+          "h": 12.1,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 12.5,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 12.5,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 12.2,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 11.2,
+          "c": "#57b877"
+        },
+        {
+          "h": 10.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 8.9,
+          "c": "#57b877"
+        },
+        {
+          "h": 8.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 8.6,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 8.9,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 10.5,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 15.0,
+          "c": "#d9542f"
+        },
+        {
+          "h": 21.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 23.2,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 17.8,
+          "c": "#57b877"
+        },
+        {
+          "h": 20.9,
+          "c": "#e8823c"
+        },
+        {
+          "h": 22.4,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 23.7,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 25.5,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 27.7,
+          "c": "#e8823c"
+        },
+        {
+          "h": 29.2,
+          "c": "#e8b74e"
+        },
+        {
+          "h": 33.2,
+          "c": "#e8823c"
+        },
+        {
+          "h": 36.8,
+          "c": "#e8823c"
+        },
+        {
+          "h": 40.5,
+          "c": "#e8823c"
+        },
+        {
+          "h": 47.5,
+          "c": "#d9542f"
+        },
+        {
+          "h": 50.7,
+          "c": "#e8823c"
+        },
+        {
+          "h": 53.5,
+          "c": "#e8823c"
+        },
+        {
+          "h": 61.7,
+          "c": "#d9542f"
+        },
+        {
+          "h": 63.8,
+          "c": "#e8823c"
+        },
+        {
+          "h": 63.9,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 66.6,
+          "c": "#e8823c"
+        },
+        {
+          "h": 66.6,
+          "c": "rgba(200, 206, 214, 0.55)"
+        },
+        {
+          "h": 65.6,
+          "c": "#57b877"
+        },
+        {
+          "h": 62.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 58.4,
+          "c": "#57b877"
+        },
+        {
+          "h": 63.6,
+          "c": "#d9542f"
+        },
+        {
+          "h": 71.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 76.6,
+          "c": "#d9542f"
+        },
+        {
+          "h": 82.8,
+          "c": "#d9542f"
+        },
+        {
+          "h": 88.1,
+          "c": "#d9542f"
+        },
+        {
+          "h": 85.0,
+          "c": "#57b877"
+        },
+        {
+          "h": 89.1,
+          "c": "#d9542f"
+        },
+        {
+          "h": 94.6,
+          "c": "#d9542f"
+        },
+        {
+          "h": 100.0,
+          "c": "#d9542f"
+        }
+      ],
+      "classification": {
+        "distanceClass": "XS",
+        "terrainClass": "Mountainous",
+        "difficulty": "Very Easy"
+      }
+    },
+    {
       "id": "0100_goldengate",
       "title": "Golden Gate Bridge",
       "description": "A short scenic ride along the San Francisco coast, heading toward the iconic red towers of the Golden Gate Bridge. Expect big ocean views, rolling hills, glimpses of San Francisco Bay, and a finish near Point Lobos.",

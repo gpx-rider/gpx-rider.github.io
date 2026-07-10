@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GPX Rider</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="top-bar">
+        <div class="top-bar-group">
+          <div class="brand">
+            <span class="brand-dot"></span>
+            <span id="brandName" class="brand-name">GPX Rider</span>
+          </div>
+          <span class="top-bar-divider"></span>
+          <div id="gpxChip" class="gpx-chip" hidden>
+            <span class="gpx-chip-tag">GPX</span>
+            <span id="gpxChipName" class="gpx-chip-name">--</span>
+          </div>
+          <label class="file-picker btn btn-ghost">
+            <input id="gpxFile" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml">
+            <span>Open GPX file…</span>
+          </label>
+          <button id="browseGalleryBtn" type="button" class="btn btn-blue" hidden>
+            Browse gallery
+            <span id="browseGalleryCount" class="count-badge">0</span>
+          </button>
+        </div>
+        <button id="settingsBtn" type="button" class="btn btn-ghost">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Settings
+        </button>
+      </header>
+
+      <div class="app-body">
+        <section class="map-pane">
+          <div id="mapViewport" class="map-viewport">
+            <div id="map" aria-label="Route map"></div>
+            <div id="minimap" aria-label="Minimap showing rider position on the route"></div>
+            <div class="map-actions">
+              <button id="screenshotBtn" type="button" class="map-action-btn" title="Save a JPG of the map view" aria-label="Save a JPG of the map view">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+              </button>
+              <button id="fullscreenBtn" type="button" class="map-action-btn" title="Enter fullscreen" aria-label="Toggle fullscreen">
+                <svg class="icon-fs-enter" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M16 3h3a2 2 0 0 1 2 2v3"></path><path d="M8 21H5a2 2 0 0 1-2-2v-3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>
+                <svg class="icon-fs-exit" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h3a2 2 0 0 0 2-2V3"></path><path d="M21 8h-3a2 2 0 0 1-2-2V3"></path><path d="M3 16h3a2 2 0 0 1 2 2v3"></path><path d="M21 16h-3a2 2 0 0 0-2 2v3"></path></svg>
+              </button>
+              <div id="resetCameraControl" class="map-overview-control map-reset-camera-control">
+                <button id="resetCameraViewBtn" type="button" class="map-action-btn map-overview-toggle" title="Reset the camera to its default view" aria-label="Reset the camera to its default view" disabled>
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a9 9 0 1 1-1.6 5"></path><path d="M3 3v5h5"></path></svg>
+                </button>
+                <button id="cameraViewMenuBtn" type="button" class="map-action-btn map-overview-menu-btn" title="Choose rider camera view" aria-label="Choose rider camera view" aria-haspopup="menu" aria-expanded="false">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                </button>
+                <div id="cameraViewMenu" class="map-overview-menu" role="menu" hidden>
+                  <button type="button" role="menuitemradio" data-camera-view-preset="default">Default follow</button>
+                  <button type="button" role="menuitemradio" data-camera-view-preset="firstPerson">First person</button>
+                </div>
+              </div>
+              <div id="mapOverviewControl" class="map-overview-control">
+                <button id="overviewToggleBtn" type="button" class="map-action-btn map-overview-toggle" title="Show route overview" aria-label="Show route overview" aria-pressed="true">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5c1-1 1.3-2.6.8-3.1s-2.1-.2-3.1.8L13.7 8.8 5.5 7 4 8.5l6.6 3.1-3.5 3.5-2.8-.6-1.2 1.2 4.1 2.1 2.1 4.1 1.2-1.2-.6-2.8 3.5-3.5 3.1 6.6z"></path></svg>
+                </button>
+                <button id="overviewMenuBtn" type="button" class="map-action-btn map-overview-menu-btn" title="Choose overview style" aria-label="Choose overview style" aria-haspopup="menu" aria-expanded="false">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                </button>
+                <div id="overviewModeMenu" class="map-overview-menu" role="menu" hidden>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="static">Static</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="orbit">Orbit</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="flyby">Fly-by</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="flyover">Fly-over</button>
+                  <button type="button" role="menuitemradio" data-map-overview-mode="satellite">Satellite</button>
+                </div>
+              </div>
+              <div id="climbOverviewControl" class="map-overview-control map-climb-overview-control" hidden>
+                <button id="climbOverviewToggleBtn" type="button" class="map-action-btn map-overview-toggle" title="Return to route overview" aria-label="Return to route overview" aria-pressed="true">
+                  <svg class="icon-climb-focus" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 19 6.5-12 3.5 6 2-3 6 9H3Z"></path><path d="m8.2 9.4 1.3-2.4 1.4 2.4"></path></svg>
+                  <svg class="icon-segment-focus" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12c3.2-4.5 6.8 4.5 10 0s3.8-3.2 4-3"></path><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="9" r="2"></circle></svg>
+                </button>
+                <button id="climbOverviewMenuBtn" type="button" class="map-action-btn map-overview-menu-btn" title="Choose climb overview style" aria-label="Choose climb overview style" aria-haspopup="menu" aria-expanded="false">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                </button>
+                <div id="climbOverviewModeMenu" class="map-overview-menu" role="menu" hidden>
+                  <button type="button" role="menuitemradio" data-map-climb-mode="static">Static</button>
+                  <button type="button" role="menuitemradio" data-map-climb-mode="orbit">Orbit</button>
+                  <button type="button" role="menuitemradio" data-map-climb-mode="satellite">Satellite</button>
+                </div>
+              </div>
+              <button id="centerRiderBtn" type="button" class="map-action-btn" title="Keep rider centered" aria-label="Keep rider centered" aria-pressed="true">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><line x1="12" y1="1.5" x2="12" y2="4.5"></line><line x1="12" y1="19.5" x2="12" y2="22.5"></line><line x1="1.5" y1="12" x2="4.5" y2="12"></line><line x1="19.5" y1="12" x2="22.5" y2="12"></line><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"></circle></svg>
+              </button>
+              <!-- Fullscreen hides the top bar (and its Settings button), so
+                   surface Settings here — only while fullscreen. -->
+              <button id="mapSettingsShortcutBtn" type="button" class="map-action-btn map-action-btn-settings" title="Settings" aria-label="Open settings">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              </button>
+            </div>
+
+            <!-- Developer camera-debug overlay (Settings › Debug). A plain map
+                 overlay — shown in both windowed and fullscreen — its body is
+                 filled live from the map's current camera values. -->
+            <div id="cameraDebug" class="camera-debug" hidden aria-hidden="true">
+              <div class="camera-debug-head">
+                <div class="camera-debug-title">CAMERA DEBUG</div>
+                <button id="cameraDebugCollapseBtn" type="button" class="camera-debug-toggle" title="Collapse camera debug" aria-label="Collapse camera debug" aria-expanded="true">
+                  <svg class="camera-debug-toggle-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
+              <dl id="cameraDebugBody" class="camera-debug-body"></dl>
+            </div>
+
+            <!-- Ride HUD. These overlays are children of the map viewport, so
+                 the same component is used in setup and fullscreen. -->
+
+            <!-- top-left: local time + elapsed + distance -->
+            <div id="fullscreenClock" class="fs-clock" hidden aria-live="polite">
+              <span id="fsClockLocal" class="fs-clock-time" title="Local time">00:00:00</span>
+              <span class="fs-clock-sep"></span>
+              <span id="fsClockElapsed" class="fs-clock-elapsed" title="Ride time">0:00</span>
+              <span class="fs-clock-sep"></span>
+              <span id="fsClockDistance" class="fs-clock-dist" title="Ridden distance">--</span>
+              <span class="fs-clock-sep"></span>
+              <span id="fsClockAscent" class="fs-clock-ascent" title="Current ascent">--</span>
+            </div>
+
+            <div id="fullscreenTrainingMeters" class="fs-training-meters" hidden aria-live="polite">
+              <div id="powerMeter" class="fs-zone-meter" data-zone-meter="power">
+                <span class="fs-zone-label">Power</span>
+                <strong id="zonePowerValue">--</strong>
+                <span id="zonePowerMeta" class="fs-zone-meta">FTP --</span>
+                <div class="fs-zone-track"><div id="zonePowerFill" class="fs-zone-fill"></div></div>
+              </div>
+              <div id="heartRateMeter" class="fs-zone-meter" data-zone-meter="heartRate">
+                <span class="fs-zone-label">Heart rate</span>
+                <strong id="zoneHeartRateValue">--</strong>
+                <span id="zoneHeartRateMeta" class="fs-zone-meta">Max --</span>
+                <div class="fs-zone-track"><div id="zoneHeartRateFill" class="fs-zone-fill"></div></div>
+              </div>
+              <div id="gradeMeter" class="fs-zone-meter" data-zone-meter="grade">
+                <span class="fs-zone-label">Grade</span>
+                <strong id="zoneGradeValue">--</strong>
+                <span id="zoneGradeMeta" class="fs-zone-meta">Live road</span>
+                <div class="fs-zone-track"><div id="zoneGradeFill" class="fs-zone-fill"></div></div>
+              </div>
+            </div>
+
+            <!-- top-center: climb banner (on a climb, or approaching one) -->
+            <div id="climbBanner" class="climb-banner" hidden aria-live="polite">
+              <div id="climbBannerAhead" class="climb-banner-ahead" hidden>
+                <div class="cb-lead">
+                  <span id="cbAheadOrder" class="cb-order">--</span>
+                  <span id="cbCategory" class="cb-category">CLIMB</span>
+                  <div class="cb-in">
+                    <span class="cb-in-label">IN</span>
+                    <span id="cbInDist" class="cb-in-value">--</span>
+                    <span id="cbInUnit" class="cb-in-unit">km</span>
+                  </div>
+                </div>
+                <div class="cb-mini">
+                  <div id="cbMini" class="cb-mini-bars"></div>
+                  <div class="cb-mini-alts">
+                    <span id="cbBaseAlt">--</span>
+                    <span id="cbPeakAltMini">--</span>
+                  </div>
+                </div>
+                <div class="cb-divider"></div>
+                <div class="cb-stats">
+                  <div class="cb-stat"><span>LENGTH</span><strong id="cbLen">--</strong></div>
+                  <div class="cb-stat"><span>GAIN</span><strong id="cbGain">--</strong></div>
+                  <div class="cb-stat"><span>AVG</span><strong id="cbAvg">--</strong></div>
+                  <div class="cb-stat"><span>MAX</span><strong id="cbMax" class="cb-stat-accent">--</strong></div>
+                </div>
+              </div>
+              <div id="climbBannerOn" class="climb-banner-on" hidden>
+                <span id="cbOnOrder" class="cb-order">--</span>
+                <div class="cb-stats">
+                  <div class="cb-stat"><span>TO TOP</span><strong id="cbToTop">--</strong></div>
+                  <div class="cb-stat"><span>TO GO</span><strong id="cbToGo" class="cb-stat-accent">--</strong></div>
+                  <div class="cb-stat"><span>CURRENT</span><strong id="cbCurAlt">--</strong></div>
+                  <div class="cb-stat"><span>PEAK</span><strong id="cbPeakAlt">--</strong></div>
+                  <div class="cb-stat"><span>GRADE LEFT</span><strong id="cbGradeLeft">--</strong></div>
+                </div>
+                <!-- Two unlabelled bars, matching the dock's colours: blue =
+                     distance through the climb, amber = ascent through it. The
+                     numbers above (TO TOP / TO GO) are the readable values. -->
+                <div class="cb-progress">
+                  <div class="cb-progress-track"><div id="cbDistFill" class="cb-progress-fill fs-bar-fill-blue"></div></div>
+                  <div class="cb-progress-track"><div id="cbAscFill" class="cb-progress-fill fs-bar-fill-amber"></div></div>
+                </div>
+              </div>
+              <div id="segmentBanner" class="segment-banner" hidden>
+                <span class="cb-order">Selected segment</span>
+                <div class="cb-stats">
+                  <div class="cb-stat"><span>START</span><strong id="sbStart">--</strong></div>
+                  <div class="cb-stat"><span>END</span><strong id="sbEnd">--</strong></div>
+                  <div class="cb-stat"><span>LENGTH</span><strong id="sbLen">--</strong></div>
+                  <div class="cb-stat"><span>ASCENT</span><strong id="sbAsc" class="cb-stat-accent">--</strong></div>
+                  <div class="cb-stat"><span>DESCENT</span><strong id="sbDesc">--</strong></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- bottom data dock: metric tiles + the road-ahead profile -->
+            <div id="fullscreenOverlayBottom" class="fs-dock" hidden>
+              <div class="fs-dock-top-tools">
+                <div class="profile-series-toggle fs-dock-series-toggle" role="group" aria-label="Profile history series">
+                  <button type="button" data-profile-series="speed" aria-pressed="true">Speed</button>
+                  <button type="button" data-profile-series="power" aria-pressed="true">Power</button>
+                  <button type="button" data-profile-series="heartRate" aria-pressed="true">HR</button>
+                </div>
+                <button id="dockToggleBtn" type="button" class="fs-dock-toggle" title="Collapse / expand" aria-label="Collapse or expand the data dock" aria-expanded="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
+              <div class="fs-dock-body">
+                <div class="fs-dock-metric-wrap">
+                  <div id="fullscreenHud" class="fs-dock-metrics" aria-live="polite">
+                    <div class="fs-tile" data-hud="power"><span class="fs-tile-label">Power</span><strong id="hudPowerStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="speed"><span class="fs-tile-label">Speed</span><strong id="hudSpeedStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="heartRate"><span class="fs-tile-label">Heart rate</span><strong id="hudHeartRateStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="grade"><span class="fs-tile-label">Grade</span><strong id="hudGradeStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="ridden"><span class="fs-tile-label">Ridden</span><strong id="hudRiddenStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="remaining"><span class="fs-tile-label">Remaining</span><strong id="hudRemainingStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="ascentLeft"><span class="fs-tile-label">Ascent left</span><strong id="hudAscentLeftStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="eta"><span class="fs-tile-label">ETA</span><strong id="hudEtaStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="calories"><span class="fs-tile-label">Calories</span><strong id="hudCaloriesStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="altitude"><span class="fs-tile-label">Altitude</span><strong id="hudAltitudeStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="ascent"><span class="fs-tile-label">Ascent</span><strong id="hudAscentStat" class="fs-tile-value">--</strong></div>
+                    <div class="fs-tile" data-hud="elapsed"><span class="fs-tile-label">Elapsed</span><strong id="hudElapsedStat" class="fs-tile-value">--</strong></div>
+                  </div>
+                  <div class="fs-dock-field-controls" aria-label="Map data fields">
+                    <button id="hudLessBtn" type="button" class="fs-dock-field-btn" title="Show fewer fields" aria-label="Show fewer fields">-</button>
+                    <button id="hudMoreBtn" type="button" class="fs-dock-field-btn" title="Show more fields" aria-label="Show more fields">+</button>
+                    <button id="hudSettingsBtn" type="button" class="fs-dock-field-btn" title="HUD settings" aria-label="Open HUD settings">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="fs-dock-sep"></div>
+
+                <div class="fs-dock-right">
+                  <div class="fs-road-head">
+                    <div class="fs-road-title">
+                      <span id="fsRoadRouteName" class="fs-road-eyebrow">Route</span>
+                      <span id="fsRoadRouteProps" class="fs-road-note">--</span>
+                    </div>
+                  </div>
+                  <div id="fsProfileMount" class="fs-road-plot"></div>
+                  <div class="fs-dock-progress">
+                    <div class="fs-bar">
+                      <div class="fs-bar-head"><span>DISTANCE</span><span id="fsDistLabel" class="fs-bar-value">--</span></div>
+                      <div class="fs-bar-track"><div id="fsDistFill" class="fs-bar-fill fs-bar-fill-blue"></div></div>
+                    </div>
+                    <div class="fs-bar">
+                      <div class="fs-bar-head"><span>CLIMBING</span><span id="fsClimbLabel" class="fs-bar-value fs-bar-value-accent">--</span></div>
+                      <div class="fs-bar-track"><div id="fsClimbFill" class="fs-bar-fill fs-bar-fill-amber"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="control-pane">
+          <div class="stat-grid stat-grid-4">
+            <div class="stat-tile">
+              <span class="stat-label">Distance</span>
+              <strong id="distanceStat" class="stat-value">--</strong>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-label">Ascent</span>
+              <strong id="ascentStat" class="stat-value">--</strong>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-label">Descent</span>
+              <strong id="descentStat" class="stat-value">--</strong>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-label">Difficulty</span>
+              <strong id="difficultyStat" class="stat-value">--</strong>
+              <span id="difficultyDetail" class="stat-detail"></span>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-card-head">
+              <span class="panel-card-title">Detected climbs</span>
+            </div>
+            <canvas id="profile" aria-label="Elevation profile"></canvas>
+            <div id="climbsSection" class="climbs-section" hidden>
+              <div id="climbStatus" class="climb-status" aria-live="polite">
+                <strong id="climbStatusHeadline">--</strong>
+                <span id="climbStatusDetail">--</span>
+              </div>
+              <ol id="climbsList" class="climbs-list"></ol>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-card-head">
+              <div>
+                <span class="panel-card-title">Ride</span>
+                <p class="panel-card-hint" id="progressLabel">Load a route to begin</p>
+              </div>
+              <button id="resetBtn" type="button" class="btn btn-ghost btn-sm" disabled>Reset</button>
+            </div>
+            <div class="progress-wrap">
+              <progress id="progress" max="1" value="0"></progress>
+              <progress id="ascentProgress" class="ascent-progress" max="1" value="0" hidden></progress>
+              <span id="ascentProgressLabel" class="progress-note" hidden>--</span>
+            </div>
+            <div class="stat-grid stat-grid-live" aria-live="polite">
+              <div class="stat-tile">
+                <span class="stat-label">Ridden</span>
+                <strong id="riddenStat" class="stat-value stat-value-sm">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Remaining</span>
+                <strong id="remainingStat" class="stat-value stat-value-sm">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">ETA</span>
+                <strong id="etaStat" class="stat-value stat-value-sm">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Ascent left</span>
+                <strong id="ascentLeftStat" class="stat-value stat-value-sm">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Grade</span>
+                <strong id="gradeStat" class="stat-value stat-value-sm">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Altitude</span>
+                <strong id="altitudeStat" class="stat-value stat-value-sm">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Power</span>
+                <strong id="powerStat" class="stat-value stat-value-sm">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Speed</span>
+                <strong id="speedStat" class="stat-value stat-value-sm">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Heart rate</span>
+                <strong id="heartRateStat" class="stat-value stat-value-sm">--</strong>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Calories</span>
+                <strong id="caloriesStat" class="stat-value stat-value-sm">--</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-card panel-card-flush panel-card-zone-help">
+            <div class="connection-row">
+              <div class="connection-info">
+                <span id="trainerDot" class="status-dot"></span>
+                <div>
+                  <div class="connection-name">Smart trainer</div>
+                  <div id="trainerStat" class="connection-status">Idle</div>
+                </div>
+              </div>
+              <button id="connectBtn" type="button" class="btn btn-outline-blue btn-sm">Connect</button>
+            </div>
+            <div class="connection-row">
+              <div class="connection-info">
+                <span id="hrDot" class="status-dot"></span>
+                <div>
+                  <div class="connection-name">Heart rate strap</div>
+                  <div id="hrConnectionStat" class="connection-status">Not connected</div>
+                </div>
+              </div>
+              <button id="connectHrBtn" type="button" class="btn btn-outline-blue btn-sm">Connect</button>
+            </div>
+            <div class="rider-zone-form">
+              <label>
+                <span>Resting HR</span>
+                <input id="restingHeartRateInput" type="number" inputmode="numeric" min="30" max="140" value="60">
+              </label>
+              <label>
+                <span>Max HR</span>
+                <input id="maxHeartRateInput" type="number" inputmode="numeric" min="80" max="240" value="180">
+              </label>
+              <label>
+                <span>FTP</span>
+                <input id="ftpInput" type="number" inputmode="numeric" min="1" max="1000" placeholder="W">
+              </label>
+            </div>
+            <div class="zone-editor">
+              <p class="zone-editor-note">Heart-rate zones use Heart Rate Reserve from resting and max HR. FTP calculates power zones.</p>
+              <div class="zone-editor-section">
+                <div class="zone-editor-title">Heart-rate zones <button id="heartRateZoneHelpBtn" type="button" class="zone-help-btn" aria-label="Heart-rate zone help" aria-expanded="false" aria-controls="heartRateZoneHelp" data-zone-help-trigger>?</button></div>
+                <div id="heartRateZoneSummary" class="zone-summary">--</div>
+                <div id="heartRateZoneHelp" class="zone-help-popover" hidden>
+                  <strong>Z1 Recovery</strong><span>Easy effort. Good for warmups, cooldowns, and very light rides.</span>
+                  <strong>Z2 Endurance</strong><span>Comfortable aerobic effort. You should be able to talk in full sentences.</span>
+                  <strong>Z3 Tempo</strong><span>Moderately hard. Sustainable, but talking becomes shorter.</span>
+                  <strong>Z4 Threshold</strong><span>Hard effort near your limit for longer intervals.</span>
+                  <strong>Z5 Max</strong><span>Very hard effort for short intervals.</span>
+                </div>
+              </div>
+              <div class="zone-editor-section">
+                <div class="zone-editor-title">Power zones <button id="powerZoneHelpBtn" type="button" class="zone-help-btn" aria-label="Power zone help" aria-expanded="false" aria-controls="powerZoneHelp" data-zone-help-trigger>?</button></div>
+                <div id="powerZoneSummary" class="zone-summary">--</div>
+                <div id="powerZoneHelp" class="zone-help-popover" hidden>
+                  <strong>Z1 Active Recovery</strong><span>&lt; 55% FTP</span>
+                  <strong>Z2 Endurance</strong><span>56% - 75% FTP</span>
+                  <strong>Z3 Tempo</strong><span>76% - 90% FTP</span>
+                  <strong>Z4 Lactate Threshold</strong><span>91% - 105% FTP</span>
+                  <strong>Z5 VO2max</strong><span>106% - 120% FTP</span>
+                  <strong>Z6 Anaerobic Capacity</strong><span>121% - 150% FTP</span>
+                  <strong>Z7 Neuromuscular Power</strong><span>&gt; 150% FTP</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-card-head">
+              <div>
+                <span class="panel-card-title">FIT data buffer</span>
+                <p class="panel-card-hint">Collected automatically while you ride, stored in this browser</p>
+              </div>
+              <span id="recIndicator" class="recording-indicator" hidden>
+                <span class="recording-pulse"></span>Recording
+              </span>
+            </div>
+            <dl class="rec-stats">
+              <div><dt>distance</dt><dd id="recDistanceStat">--</dd></div>
+              <div><dt>time</dt><dd id="recTimeStat">--</dd></div>
+              <div><dt>points</dt><dd id="recPointsStat">0</dd></div>
+              <div><dt>heart rate</dt><dd id="recHeartRateStat">--</dd></div>
+              <div><dt>energy</dt><dd id="recCaloriesStat">--</dd></div>
+            </dl>
+            <div class="button-row">
+              <button id="downloadFitBtn" type="button" class="btn btn-accent" disabled>Download .FIT</button>
+              <button id="clearRideDataBtn" type="button" class="btn btn-outline-danger" disabled>Reset buffer</button>
+            </div>
+          </div>
+
+          <div class="panel-card">
+            <div class="panel-card-head">
+              <div>
+                <span class="panel-card-title">Simulation</span>
+                <p class="panel-card-hint">Auto-ride the route with no trainer</p>
+              </div>
+              <button id="startBtn" type="button" class="btn btn-accent" disabled>
+                <svg class="icon-sim-play" width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2 1.5v9l8-4.5z"></path></svg>
+                <svg class="icon-sim-stop" width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><rect x="2" y="2" width="8" height="8" rx="1"></rect></svg>
+                <span id="startBtnLabel">Start</span>
+              </button>
+            </div>
+            <div class="speed-control">
+              <label for="speedInput" class="speed-label">Speed</label>
+              <input id="speedInput" type="range" min="8" max="100" step="1" value="24">
+              <output id="speedOutput" for="speedInput">24 km/h</output>
+            </div>
+          </div>
+
+          <div class="panel-card gallery-export-card">
+            <div class="panel-card-head">
+              <div>
+                <span class="panel-card-title">Export to gallery</span>
+                <p class="panel-card-hint">Frame the map, then save this as metadata.json in the ride folder</p>
+              </div>
+              <button id="copyGalleryMetadataBtn" type="button" class="btn btn-ghost btn-sm" disabled>Copy JSON</button>
+            </div>
+            <div class="gallery-export-fields">
+              <label>
+                <span>Title</span>
+                <input id="galleryTitleInput" type="text" placeholder="Route title" disabled>
+              </label>
+              <label>
+                <span>Description</span>
+                <textarea id="galleryDescriptionInput" rows="4" placeholder="Markdown is supported" disabled></textarea>
+              </label>
+              <label>
+                <span>metadata.json</span>
+                <textarea id="galleryMetadataOutput" class="gallery-metadata-output" rows="12" spellcheck="false" readonly></textarea>
+              </label>
+            </div>
+          </div>
+
+          <div class="help-note">
+            <span class="help-note-mark">?</span>
+            <div>No route file of your own? Plan any route for free at
+              <a href="https://mapy.com" target="_blank" rel="noopener">mapy.com</a>
+              and export it as GPX — a route is just a series of points and elevations, no account needed.</div>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <dialog id="settingsDialog" class="settings-dialog" aria-labelledby="settingsPanelTitle">
+      <div class="settings-rail">
+        <div class="settings-rail-eyebrow">Settings</div>
+        <nav class="settings-tabs">
+          <button type="button" class="settings-tab" data-settings-tab="camera"
+            data-panel-title="Camera &amp; view" data-panel-subtitle="How the follow camera frames the rider.">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2"></rect></svg>
+            <span>Camera &amp; view</span>
+          </button>
+          <button type="button" class="settings-tab" data-settings-tab="rendering"
+            data-panel-title="Rendering" data-panel-subtitle="Route styling, rider beacon, terrain avoidance and map labels.">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M2 12h4M18 12h4M12 2v4M12 18v4"></path></svg>
+            <span>Rendering</span>
+          </button>
+          <button type="button" class="settings-tab" data-settings-tab="hud"
+            data-panel-title="HUD &amp; data fields" data-panel-subtitle="Choose which tiles appear on the fullscreen ride HUD.">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>
+            <span>HUD &amp; data fields</span>
+          </button>
+          <button type="button" class="settings-tab" data-settings-tab="units"
+            data-panel-title="Units" data-panel-subtitle="Display units — internal values always stay metric.">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>
+            <span>Units</span>
+          </button>
+          <button type="button" class="settings-tab" data-settings-tab="trainer"
+            data-panel-title="Trainer &amp; sensors" data-panel-subtitle="How the smart trainer receives the route's grade.">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"></path></svg>
+            <span>Trainer &amp; sensors</span>
+          </button>
+          <button type="button" class="settings-tab" data-settings-tab="screenshots"
+            data-panel-title="Screenshots" data-panel-subtitle="Size and framing of the 📷 map screenshots.">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+            <span>Screenshots</span>
+          </button>
+          <button type="button" class="settings-tab" data-settings-tab="data"
+            data-panel-title="Data &amp; storage" data-panel-subtitle="Everything stays in this browser — nothing is uploaded.">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>
+            <span>Data &amp; storage</span>
+          </button>
+          <button type="button" class="settings-tab" data-settings-tab="debug"
+            data-panel-title="Debug" data-panel-subtitle="Developer overlays for inspecting the live camera.">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="6" width="8" height="14" rx="4"></rect><path d="M12 6V3M5 9l3 1.5M19 9l-3 1.5M4 15h4M16 15h4M6 20l2.5-1.5M18 20l-2.5-1.5"></path></svg>
+            <span>Debug</span>
+          </button>
+        </nav>
+        <div class="settings-rail-foot">GPX Rider · open source<br>settings saved locally</div>
+      </div>
+
+      <div class="settings-main">
+        <header class="settings-head">
+          <div>
+            <div id="settingsPanelTitle" class="settings-panel-title">Camera &amp; view</div>
+            <div id="settingsPanelSubtitle" class="settings-panel-subtitle">How the follow camera frames the rider.</div>
+          </div>
+          <button id="settingsCloseBtn" type="button" class="icon-btn" title="Close settings" aria-label="Close settings">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg>
+          </button>
+        </header>
+
+        <div class="settings-body">
+          <section class="settings-panel" data-settings-panel="camera">
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Route overview</span>
+                <span class="setting-row-hint">how the whole route is framed in the overview</span>
+              </div>
+              <select id="overviewModeSelect">
+                <option value="static">Static</option>
+                <option value="orbit">Orbit</option>
+                <option value="flyby">Fly-by</option>
+                <option value="flyover">Fly-over</option>
+                <option value="satellite">Satellite</option>
+              </select>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Selected climb camera</span>
+                <span class="setting-row-hint">how a climb is framed after clicking it</span>
+              </div>
+              <select id="climbFocusModeSelect">
+                <option value="static">Static</option>
+                <option value="orbit">Orbit</option>
+                <option value="satellite">Satellite</option>
+              </select>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="climbOrbitSpeedInput">Climb orbit speed</label>
+                <output id="climbOrbitSpeedOutput" for="climbOrbitSpeedInput">30 s/lap</output>
+              </div>
+              <input id="climbOrbitSpeedInput" type="range" step="1">
+            </div>
+            <div class="settings-divider"></div>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="cameraZoomInput">Zoom</label>
+                <output id="cameraZoomOutput" for="cameraZoomInput">1.0x</output>
+              </div>
+              <input id="cameraZoomInput" type="range" min="0.1" max="10" step="0.1" value="1">
+            </div>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="cameraAngleInput">Camera angle</label>
+                <output id="cameraAngleOutput" for="cameraAngleInput">67 deg</output>
+              </div>
+              <input id="cameraAngleInput" type="range" min="25" max="80" step="1" value="67">
+            </div>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="cameraBehindInput">Camera behind</label>
+                <output id="cameraBehindOutput" for="cameraBehindInput">300 m</output>
+              </div>
+              <input id="cameraBehindInput" type="range" min="20" max="10000" step="20" value="300">
+            </div>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="firstPersonHeightInput">First-person eye height</label>
+                <output id="firstPersonHeightOutput" for="firstPersonHeightInput">1.7 m</output>
+              </div>
+              <input id="firstPersonHeightInput" type="range" step="0.1">
+            </div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Keep rider centered</span>
+                <span class="setting-row-hint">the camera always looks at the rider</span>
+              </div>
+              <label class="switch">
+                <input id="centerRiderInput" type="checkbox" checked>
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+            <output id="cameraReadout" class="camera-readout" aria-live="polite">Camera --</output>
+            <button id="resetCameraBtn" type="button" class="btn btn-ghost">Reset camera to defaults</button>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="rendering" hidden>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Color route by grade</span>
+                <span class="setting-row-hint">green descents through amber climbs to red steep ramps</span>
+              </div>
+              <label class="switch">
+                <input id="routeGradeColorsInput" type="checkbox" checked>
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Rider beacon</span>
+                <span class="setting-row-hint">visible above trees</span>
+              </div>
+              <label class="switch">
+                <input id="beaconEnabledInput" type="checkbox" checked>
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="beaconDiameterInput">Beacon diameter</label>
+                <output id="beaconDiameterOutput" for="beaconDiameterInput">5 m</output>
+              </div>
+              <input id="beaconDiameterInput" type="range" min="1" max="20" step="1" value="5">
+            </div>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="beaconHeightInput">Beacon height</label>
+                <output id="beaconHeightOutput" for="beaconHeightInput">20 m</output>
+              </div>
+              <input id="beaconHeightInput" type="range" min="5" max="100" step="5" value="20">
+            </div>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="beaconOpacityInput">Beacon opacity</label>
+                <output id="beaconOpacityOutput" for="beaconOpacityInput">35%</output>
+              </div>
+              <input id="beaconOpacityInput" type="range" min="0.05" max="0.9" step="0.05" value="0.35">
+            </div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Beacon color</span>
+              </div>
+              <input id="beaconColorInput" type="color" value="#ffffff">
+            </div>
+            <div class="settings-divider"></div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Keep camera above terrain</span>
+                <span class="setting-row-hint">lifts the view over ridges between camera and rider</span>
+              </div>
+              <label class="switch">
+                <input id="terrainAvoidInput" type="checkbox" checked>
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="terrainClearanceInput">Terrain clearance</label>
+                <output id="terrainClearanceOutput" for="terrainClearanceInput">20 m</output>
+              </div>
+              <input id="terrainClearanceInput" type="range" min="5" max="100" step="5" value="20">
+            </div>
+            <div class="settings-divider"></div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Place labels on the 3D map</span>
+                <span class="setting-row-hint">roads and towns over the satellite imagery</span>
+              </div>
+              <label class="switch">
+                <input id="mapLabelsInput" type="checkbox">
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+            <button id="resetRenderingBtn" type="button" class="btn btn-ghost">Reset rendering to defaults</button>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="hud" hidden>
+            <div class="settings-section-label">Bottom dock order</div>
+            <div id="hudOrderList" class="hud-order-list"></div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Fields shown</span>
+                <span class="setting-row-hint">uses the first fields in the order above</span>
+              </div>
+              <div class="hud-count-control">
+                <button id="hudVisibleLessBtn" type="button" class="icon-btn" title="Show fewer fields" aria-label="Show fewer fields">-</button>
+                <output id="hudVisibleCountOutput">8</output>
+                <button id="hudVisibleMoreBtn" type="button" class="icon-btn" title="Show more fields" aria-label="Show more fields">+</button>
+              </div>
+            </div>
+            <p class="settings-note">
+              ETA is the estimated time to the finish: your average pace so far,
+              adjusted for the climbing and descending still ahead.
+            </p>
+            <div class="settings-divider"></div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Minimap</span>
+                <span class="setting-row-hint">bottom-right route overview</span>
+              </div>
+              <label class="switch">
+                <input id="minimapInput" type="checkbox">
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="units" hidden>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Distance units</span>
+              </div>
+              <select id="distanceUnitSelect">
+                <option value="metric">km</option>
+                <option value="imperial">mi</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Energy units</span>
+              </div>
+              <select id="energyUnitSelect">
+                <option value="kcal">kcal</option>
+                <option value="kj">kJ</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Clock format</span>
+                <span class="setting-row-hint">fullscreen local time</span>
+              </div>
+              <select id="timeFormatSelect">
+                <option value="24">24-hour</option>
+                <option value="12">12-hour</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Duration format</span>
+                <span class="setting-row-hint">ride time and ETA</span>
+              </div>
+              <select id="durationFormatSelect">
+                <option value="compact">1h30m</option>
+                <option value="clock">1:30:00</option>
+              </select>
+            </div>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="trainer" hidden>
+            <div class="setting-slider">
+              <div class="setting-slider-head">
+                <label for="gradeIntervalInput">Grade update interval</label>
+                <output id="gradeIntervalOutput" for="gradeIntervalInput">2 s</output>
+              </div>
+              <input id="gradeIntervalInput" type="range" min="1" max="5" step="1" value="2">
+            </div>
+            <p class="settings-note">
+              How often the route's grade is sent to the trainer. Longer
+              intervals smooth resistance changes on noisy GPX files.
+            </p>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="screenshots" hidden>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Screenshot button on the map</span>
+              </div>
+              <label class="switch">
+                <input id="screenshotButtonInput" type="checkbox">
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Aspect ratio</span>
+              </div>
+              <select id="screenshotAspectSelect">
+                <option value="16:9">16:9</option>
+                <option value="4:3">4:3</option>
+                <option value="3:2">3:2</option>
+                <option value="1:1">1:1</option>
+                <option value="viewport">Match window</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Width</span>
+              </div>
+              <select id="screenshotWidthSelect">
+                <option value="1280">1280 px</option>
+                <option value="1920">1920 px</option>
+                <option value="2560">2560 px</option>
+                <option value="3840">3840 px</option>
+              </select>
+            </div>
+            <p class="settings-note">
+              The 📷 button on the map saves a JPG center-cropped to this aspect
+              ratio and scaled to this width, so every ride screenshot comes out
+              the same size.
+            </p>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="data" hidden>
+            <div id="apiKeySection" class="api-key-control">
+              <label for="mapsApiKeyInput" class="setting-row-label">Google Maps API key</label>
+              <div class="api-key-row">
+                <input id="mapsApiKeyInput" type="text" autocomplete="off" spellcheck="false" placeholder="Paste your Google Maps API key">
+                <button id="mapsApiKeySaveBtn" type="button" class="btn btn-accent">Save</button>
+              </div>
+              <p class="settings-note">
+                Stored only in this browser's local storage. Needs the Maps
+                JavaScript API and Photorealistic 3D Maps enabled.
+              </p>
+            </div>
+            <div class="settings-divider"></div>
+            <p class="settings-note">
+              The last GPX route, ride position, fallback speed, and the ride
+              recording are saved in this browser. Chrome may also reconnect to a
+              previously permitted trainer or heart rate sensor when Web
+              Bluetooth allows it.
+            </p>
+          </section>
+
+          <section class="settings-panel" data-settings-panel="debug" hidden>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Camera debug overlay</span>
+                <span class="setting-row-hint">live tilt / range / heading the map actually applies</span>
+              </div>
+              <label class="switch">
+                <input id="cameraDebugInput" type="checkbox">
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
+            </div>
+            <p class="settings-note">
+              Shows a small box on the map with the camera values Google's 3D
+              map reports — useful for comparing what you set against what the
+              map honours after dragging the view by hand.
+            </p>
+          </section>
+        </div>
+
+        <footer class="settings-foot">
+          <span class="settings-foot-note">Settings apply immediately</span>
+          <button id="settingsDoneBtn" type="button" class="btn btn-ghost">Close</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <dialog id="galleryDialog" class="gallery-dialog" aria-labelledby="galleryTitle">
+      <header class="gallery-head">
+        <div class="gallery-head-title">
+          <span id="galleryTitle" class="gallery-title">Route gallery</span>
+          <span id="galleryCount" class="gallery-count">0 ROUTES</span>
+        </div>
+        <div class="gallery-head-actions">
+          <span id="galleryAttribution" class="gallery-attribution"></span>
+          <button id="galleryCloseBtn" type="button" class="icon-btn" title="Close gallery" aria-label="Close gallery">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg>
+          </button>
+        </div>
+      </header>
+      <div class="gallery-scroll">
+        <div class="gallery-grid" id="galleryGrid"></div>
+      </div>
+    </dialog>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

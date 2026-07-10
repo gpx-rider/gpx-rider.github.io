@@ -3,9 +3,11 @@
 # the Pages artifact is uploaded. Bakes the MAPS_API_KEY repository secret
 # (expected to be an HTTP referrer-restricted key scoped to the Pages origin)
 # into app/config.mjs so the live demo works without visitors pasting their
-# own key. It also injects the optional HEAD repository variable immediately
-# after <head> in app/index.html, which is intended for deployment-only tags
-# such as analytics snippets. If either value is unset this leaves the matching
+# own key (config.mjs is shared by the app and the landing page, so both light
+# up). It also injects the optional HEAD repository variable immediately after
+# <head> in app/index.html — the public landing page, the site's entry point —
+# which is intended for deployment-only tags such as analytics snippets. If
+# either value is unset this leaves the matching
 # source default unchanged, so local checkouts and forks are unaffected.
 #
 # The key is base64-encoded in the file, not encrypted — see config.mjs for

@@ -604,8 +604,13 @@ async function startApp() {
   // First open with no saved ride: start on the first gallery route instead
   // of an empty map (only once the map is actually up — a missing API key
   // keeps the "paste your key" flow front and center instead).
+  // The landing page's "Launch GPX Rider" button deep-links a specific gallery
+  // route via ?route=<id>; that forces the route on load, ahead of any saved
+  // ride or the first-open auto-load (handled in gallery.mjs).
+  const requestedRouteId = new URLSearchParams(location.search).get("route");
   void initGallery(loadGpxFromUrl, {
     shouldAutoLoadFirst: () => state.route.length < 2 && Boolean(state.map),
+    getRequestedRouteId: () => requestedRouteId,
     getCurrentRouteName: () => state.routeName,
     getDistanceUnits: () => state.distanceUnits,
     getMaps3d: () => state.maps3d,

@@ -667,3 +667,64 @@ export const CLIMB_MIN_AVERAGE_GRADE_PERCENT = 1.5;
 // more storage churn.
 export const RIDE_SAMPLE_INTERVAL_MS = 1000;
 export const RIDE_PERSIST_INTERVAL_MS = 5000;
+
+// --- Landing page hero replay -------------------------------------------------
+
+// The public landing page (app/index.html, driven by app/landing.mjs) plays a
+// looping cinematic replay of one route over the same Google Photorealistic 3D
+// map the app uses, with a faked HUD, then a summit orbit, then fades and
+// loops. These are that replay's only knobs — the landing has no settings UI,
+// so unlike the rest of this file they are not user-facing defaults, just the
+// one place to retune the hero without touching app/landing.mjs. All are read
+// through LANDING_HERO in landing.mjs.
+export const LANDING_HERO = {
+  // Background-app treatment behind the headline: how much the map+HUD are
+  // dimmed (0–0.75, higher = darker) and blurred (px), plus the strength of the
+  // top/bottom scrim gradient that keeps the headline legible (0–0.9).
+  appDim: 0.18,
+  appBlurPx: 0.6,
+  headlineScrim: 0.66,
+
+  // Faked rider physiology used to animate the HUD numbers during the ride
+  // phase: baseline flat speed the sim rides at (grade slows it), and how many
+  // seconds heart rate lags a change in effort.
+  avgSpeedKmh: 16,
+  hrLagSeconds: 8,
+
+  // Ride-phase pacing: the replay starts the rider partway up the route so the
+  // load→summit stretch shown takes finaleSeconds at finaleSpeedKmh.
+  finaleSpeedKmh: 16,
+  finaleSeconds: 40,
+
+  // Chase camera during the ride: distance behind (m), tilt toward the horizon
+  // (deg), how far ahead of the rider the camera aims into a turn (m), and the
+  // pan rate/acceleration limits that keep heading changes smooth (deg/s,
+  // deg/s²).
+  chaseRangeMeters: 440,
+  chaseTiltDegrees: 75,
+  camLookaheadMeters: 0,
+  camTurnRateDegPerSec: 40,
+  camTurnAccelDegPerSec2: 20,
+
+  // Summit orbit after finishing: orbit distance (m), tilt (deg), seconds per
+  // full revolution, and how long the orbit runs before the fade-out and loop.
+  orbitRangeMeters: 1000,
+  orbitTiltDegrees: 75,
+  orbitSecondsPerRev: 70,
+  orbitSeconds: 22,
+
+  // Assets the hero pulls in, relative to app/. The rider marker mesh is the
+  // same model the app rides on; the fallback still shows when the 3D map
+  // can't load (no API key / unsupported browser).
+  riderModelPath: "assets/rider-dot.glb",
+  fallbackImagePath: "images/ride.jpg",
+
+  // Detected climbs on the replayed route, as [startMeters, endMeters] spans
+  // (end clamped to route length). Matches the Ještěd route's three steps so
+  // the faked climb banner reads true; retune alongside LANDING_ROUTE_POINTS.
+  climbSpansMeters: [
+    [2300, 3900],
+    [4300, 9300],
+    [10400, Infinity],
+  ],
+};
