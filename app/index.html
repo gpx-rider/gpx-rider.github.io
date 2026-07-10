@@ -468,10 +468,35 @@
         font-weight: 600;
       }
 
-      .button-primary {
+      .button-primary,
+      .button-primary:hover {
         background: var(--accent);
         color: var(--surface);
         box-shadow: 0 12px 40px rgba(255, 106, 43, 0.5);
+        transition: box-shadow 0.2s ease;
+      }
+
+      .button-primary:hover {
+        box-shadow: 0 14px 48px rgba(255, 106, 43, 0.7);
+      }
+
+      .hero-cta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 14px 26px 13px;
+      }
+
+      .button-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .button-note {
+        font-size: 12px;
+        font-weight: 400;
+        color: rgba(10, 11, 13, 0.65);
       }
 
       .button-secondary {
@@ -777,6 +802,11 @@
           justify-content: center;
         }
 
+        .hero-cta {
+          align-items: center;
+          text-align: center;
+        }
+
         .hud-clock,
         .hud-metrics,
         .climb-banner {
@@ -918,7 +948,10 @@
             <h1>Ride any route<br>on Earth.</h1>
             <p>Drop in a GPX and ride the real terrain in photorealistic 3D, with the road grade driving your smart trainer. Free, open-source, no install.</p>
             <div class="hero-actions">
-              <a class="button button-primary" href="app.html?route=0050_jested">Launch GPX Rider <span class="mono">→</span></a>
+              <a class="button button-primary hero-cta" href="app.html?route=0050_jested">
+                <span class="button-title">Ride this route <span class="mono">→</span></span>
+                <span class="button-note">Starts instantly. Just connect your trainer.</span>
+              </a>
               <a class="button button-secondary" href="https://github.com/gpx-rider/gpx-rider.github.io"><span class="button-dot"></span>Star on GitHub</a>
             </div>
             <div class="hero-badges">
