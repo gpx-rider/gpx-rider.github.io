@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE)
 [![Deploy to GitHub Pages](https://github.com/ziizii/gpx-rider/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/ziizii/gpx-rider/actions/workflows/deploy-pages.yml)
 
-**[Launch the App](https://ziizii.github.io/gpx-rider/)**
+**[Launch the App](https://gpx-rider.github.io)**
 
 The link opens a short landing page that replays a real route (the Ještěd climb) in photorealistic 3D; **Launch GPX Rider** opens the app with that same route loaded. The live demo runs entirely in your browser. It ships with a domain-restricted Google Maps key; self-hosted copies can use your own key, stored locally in your browser.
 
