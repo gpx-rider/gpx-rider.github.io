@@ -12,7 +12,7 @@ import {
   routeTotalDescent,
   routeTotalDistance,
   sliceRoute,
-} from "../app/route.mjs";
+} from "../app/route/route.mjs";
 
 // A short straight route heading north; consecutive points ~111 m apart.
 const points = [

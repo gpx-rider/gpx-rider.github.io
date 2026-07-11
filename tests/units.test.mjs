@@ -8,7 +8,7 @@ import {
   formatEnergy,
   formatLocalTime,
   formatSpeed,
-} from "../app/units.mjs";
+} from "../app/core/units.mjs";
 
 test("distance formatting respects the unit system", () => {
   assert.equal(formatDistance(10000, "metric"), "10.00 km");

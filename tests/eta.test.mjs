@@ -5,12 +5,12 @@ import {
   estimateRemainingSeconds,
   flatEquivalentMeters,
   recordEstimatorTick,
-} from "../app/eta.mjs";
+} from "../app/ride/eta.mjs";
 import {
   ETA_CLIMB_EQUIVALENT_FACTOR,
   ETA_DESCENT_CREDIT_FACTOR,
   ETA_MIN_HISTORY_SECONDS,
-} from "../app/tuning.mjs";
+} from "../app/core/tuning.mjs";
 
 test("flatEquivalentMeters charges climbs and credits descents", () => {
   assert.equal(flatEquivalentMeters({ distanceMeters: 1000 }), 1000);

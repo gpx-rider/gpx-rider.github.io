@@ -86,7 +86,7 @@ When a route loads, GPX Rider shows the route name, distance, terrain type, and 
 
 During the ride, the same panel switches from planning to live context. On a climb, it shows remaining distance, remaining ascent, and remaining average grade to the top. Between climbs, it shows the next climb and the distance until it begins.
 
-The classification uses distance and elevation gain only; it does not depend on power, speed, or weather. Thresholds and tuning constants live in [`app/tuning.mjs`](app/tuning.mjs), including ascent filtering, climb detection, ETA factors, camera physics, and trainer behavior.
+The classification uses distance and elevation gain only; it does not depend on power, speed, or weather. Thresholds and tuning constants live in [`app/core/tuning.mjs`](app/core/tuning.mjs), including ascent filtering, climb detection, ETA factors, camera physics, and trainer behavior.
 
 ## Camera And HUD
 
@@ -99,7 +99,7 @@ A freshly loaded route starts in a whole-route overview, framed from above so yo
 - **Satellite** — a straight-down view with the route turned to lie across the screen and made as large as it fits.
 - **Satellite (north up)** — the same straight-down view, but locked north-up.
 
-The fly-by ellipse (and the fly-over figure-eight) can intentionally be smaller than the route footprint; altitude, pitch, field of view, inward horizontal look offset, and view distance determine how much of the route stays visible from the air. Direction, lap time, maximum speed, ellipse scale, minimum turning radius, baseline height, minimum terrain clearance, pitch, view distance, field of view, inward look offset, and maximum bank angle are configurable in `app/tuning.mjs`.
+The fly-by ellipse (and the fly-over figure-eight) can intentionally be smaller than the route footprint; altitude, pitch, field of view, inward horizontal look offset, and view distance determine how much of the route stays visible from the air. Direction, lap time, maximum speed, ellipse scale, minimum turning radius, baseline height, minimum terrain clearance, pitch, view distance, field of view, inward look offset, and maximum bank angle are configurable in `app/core/tuning.mjs`.
 
 Once you start pedaling or simulation begins, the camera flies down behind the rider and follows the route using GPX bearing. The overview turns on automatically when a route loads and turns off automatically the moment you start moving — but it's never locked out: the overview button stays available during a ride, so you can flip back to any overview style mid-ride if you want to watch the whole route, then flip back to the rider camera.
 

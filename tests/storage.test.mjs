@@ -6,7 +6,7 @@ import test from "node:test";
 let importCounter = 0;
 async function freshStorage() {
   importCounter += 1;
-  return import(`../app/storage.mjs?test=${importCounter}`);
+  return import(`../app/storage/storage.mjs?test=${importCounter}`);
 }
 
 // Minimal in-memory stand-ins for the browser APIs storage.mjs touches.

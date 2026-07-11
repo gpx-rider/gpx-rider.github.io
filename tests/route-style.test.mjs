@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { enrichRoute } from "../app/route.mjs";
-import { gradeColoredRouteSegments, styledRouteSegments } from "../app/route-style.mjs";
+import { enrichRoute } from "../app/route/route.mjs";
+import { gradeColoredRouteSegments, styledRouteSegments } from "../app/map/route-style.mjs";
 
 test("grade-colored route segments merge adjacent points with the same color", () => {
   const route = enrichRoute([

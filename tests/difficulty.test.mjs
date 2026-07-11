@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyRoute } from "../app/difficulty.mjs";
+import { classifyRoute } from "../app/route/difficulty.mjs";
 
 test("returns null for a routeless/zero-distance state", () => {
   assert.equal(classifyRoute(0, 0), null);

@@ -7,8 +7,8 @@ import {
   demoSpeedForPower,
   demoTargetPowerWatts,
   seedDemoHistory,
-} from "../app/demo.mjs";
-import { DEMO_RIDE } from "../app/tuning.mjs";
+} from "../app/demo/demo.mjs";
+import { DEMO_RIDE } from "../app/core/tuning.mjs";
 
 test("demo target power rises on climbs and backs off on descents", () => {
   assert.ok(demoTargetPowerWatts(7) > demoTargetPowerWatts(0));

@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   centerCropForAspect,
   parseAspectRatio,
-} from "../app/screenshot.mjs";
+} from "../app/map/screenshot.mjs";
 
 test("aspect ratios parse from the settings strings", () => {
   assert.equal(parseAspectRatio("16:9"), 16 / 9);

@@ -6,7 +6,7 @@ import {
   fitFlybyEllipse,
   createFigureEightFlyover,
   fitFlyoverFigureEight,
-} from "../app/flyby.mjs";
+} from "../app/camera/flyby.mjs";
 
 const route = [];
 for (let i = 0; i <= 80; i++) {

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # Hand-rolls app/assets/rider-dot.glb: a minimal binary glTF puck used for the
-# 3D rider marker (see renderRiderDot in app/route-render.mjs). No 3D modeling tool
+# 3D rider marker (see renderRiderDot in app/map/route-render.mjs). No 3D modeling tool
 # available in this environment, so the mesh is built directly from vertex
 # math — the same "no external dependencies, encode the binary format by
 # hand" approach app/fit.mjs takes for FIT files.
 #
 # Two materials so the puck reads as the brand dot from any angle: a bright
 # amber top face and a paler amber rim (side wall + bottom), matching
-# RIDER_DOT_COLOR / RIDER_DOT_RING_COLOR in route-render.mjs. Both use
+# RIDER_DOT_COLOR / RIDER_DOT_RING_COLOR in map/route-render.mjs. Both use
 # KHR_materials_unlit — confirmed by testing (not assumed) that an ordinary
 # lit PBR material renders solid black here regardless of normals, winding,
 # doubleSided, or texturing: the alpha renderer's real-time lighting on

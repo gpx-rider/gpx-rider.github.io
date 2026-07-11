@@ -5,11 +5,11 @@ import {
   GRADE_PROFILE_COLORS,
   gradeColor,
   gradeColorZones,
-} from "../app/profile.mjs";
+} from "../app/route/profile.mjs";
 import {
   GRADE_METER_MAX_PERCENT,
   GRADE_METER_MIN_PERCENT,
-} from "../app/tuning.mjs";
+} from "../app/core/tuning.mjs";
 
 test("grade meter zones use the same thresholds as profile grade colors", () => {
   const zones = gradeColorZones(-30, 30);

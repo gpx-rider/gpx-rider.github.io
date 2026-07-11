@@ -5,7 +5,7 @@ import {
   encodeFitActivity,
   fitCrc16,
   toFitTimestamp,
-} from "../app/fit.mjs";
+} from "../app/ride/fit.mjs";
 
 const START_MS = Date.UTC(2026, 6, 4, 10, 0, 0);
 

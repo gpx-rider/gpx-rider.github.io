@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { orbitCamera, orbitPath } from "../app/flyover.mjs";
+import { orbitCamera, orbitPath } from "../app/camera/flyover.mjs";
 
 test("orbit spins the heading one full turn per period", () => {
   const base = { center: { lat: 50, lng: 14, altitude: 100 }, heading: 30, tilt: 60, range: 5000 };

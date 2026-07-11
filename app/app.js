@@ -25,13 +25,13 @@ import {
   updateClimbOrbitSpeedFromControl,
   updateFirstPersonHeightFromControl,
   updateOverviewModeFromControl,
-} from "./camera-ui.mjs";
-import { toggleCameraDebugCollapsed } from "./camera-debug.mjs";
-import { toggleDemoMode } from "./demo-mode.mjs";
-import { copyGalleryMetadata, syncGalleryMetadataExportAvailability, updateGalleryMetadataExport } from "./gallery-export.mjs";
-import { initGallery } from "./gallery.mjs";
-import { connectHeartRate, initHeartRate, reconnectSavedHeartRate } from "./heartrate.mjs";
-import { getStoredMapsApiKey, initMap, saveMapsApiKey } from "./map-init.mjs";
+} from "./camera/camera-ui.mjs";
+import { registerCameraDebugHud, toggleCameraDebugCollapsed } from "./camera/camera-debug.mjs";
+import { registerDemoBannerHud, toggleDemoMode } from "./demo/demo-mode.mjs";
+import { copyGalleryMetadata, syncGalleryMetadataExportAvailability, updateGalleryMetadataExport } from "./gallery-ui/gallery-export.mjs";
+import { initGallery } from "./gallery-ui/gallery.mjs";
+import { connectHeartRate, initHeartRate, reconnectSavedHeartRate } from "./trainer/heartrate.mjs";
+import { getStoredMapsApiKey, initMap, registerMinimapHud, saveMapsApiKey } from "./map/map-init.mjs";
 import {
   adjustHudVisibleCount,
   exitMapFullscreen,
@@ -40,9 +40,9 @@ import {
   takeMapScreenshot,
   toggleHudDock,
   toggleMapFullscreen,
-} from "./map-hud.mjs";
-import { handleVisibilityChange, resetRide, toggleSimulation } from "./movement.mjs";
-import { restoreSavedRide, restoreSettings, saveRide } from "./persistence.mjs";
+} from "./hud/map-hud.mjs";
+import { handleVisibilityChange, resetRide, toggleSimulation } from "./ride/movement.mjs";
+import { restoreSavedRide, restoreSettings, saveRide } from "./storage/persistence.mjs";
 import {
   cancelProfileSelection,
   handleProfileClick,
@@ -51,10 +51,10 @@ import {
   handleProfilePointerDown,
   handleProfilePointerMove,
   handleProfilePointerUp,
-} from "./profile-ui.mjs";
-import { persistRideLog, restoreRideLog, rideLogSummary } from "./recorder.mjs";
-import { confirmClearRideData, downloadFitFile, updateRecordingUi } from "./recording-ui.mjs";
-import { loadGpxFile, loadGpxFromUrl } from "./route-load.mjs";
+} from "./route/profile-ui.mjs";
+import { persistRideLog, restoreRideLog, rideLogSummary } from "./ride/recorder.mjs";
+import { confirmClearRideData, downloadFitFile, updateRecordingUi } from "./ride/recording-ui.mjs";
+import { loadGpxFile, loadGpxFromUrl } from "./route/route-load.mjs";
 import {
   openSettings,
   resetRenderingToDefaults,
@@ -67,22 +67,25 @@ import {
   updateScreenshotSettingsFromControls,
   updateSpeedOutput,
   updateUnitsFromControls,
-} from "./settings-ui.mjs";
-import { els, state, updateProgressLabel } from "./state.mjs";
-import { initStorage } from "./storage.mjs";
+} from "./settings/settings-ui.mjs";
+import { els, state, updateProgressLabel } from "./core/state.mjs";
+import { initStorage } from "./storage/storage.mjs";
+import { registerClimbBannerHud } from "./route/climbs-ui.mjs";
+import { initScreenManager } from "./hud/screen-manager.mjs";
 import {
   handleHeartRateStatus,
   handleStrapHeartRate,
   handleTrainerStatus,
   handleTrainerTelemetry,
-} from "./telemetry-ui.mjs";
-import { closeTheaterModeOnOutsideClick, exitTheaterMode, toggleTheaterMode } from "./theater-mode.mjs";
-import { connectTrainer, initTrainer, reconnectSavedTrainer } from "./trainer.mjs";
+} from "./ride/telemetry-ui.mjs";
+import { closeTheaterModeOnOutsideClick, exitTheaterMode, toggleTheaterMode } from "./hud/theater-mode.mjs";
+import { connectTrainer, initTrainer, reconnectSavedTrainer } from "./trainer/trainer.mjs";
 import {
   closeZoneHelpOnOutsideClick,
   closeZoneHelpPopovers,
+  registerTrainingMetersHud,
   toggleZoneHelp,
-} from "./training-zones.mjs";
+} from "./ride/training-zones.mjs";
 import {
   APP_NAME,
   CLIMB_ORBIT_SECONDS_PER_REV_MAX,
@@ -90,7 +93,7 @@ import {
   DEFAULT_SIMULATION_SPEED_KPH,
   SIMULATION_SPEED_MAX_KPH,
   SIMULATION_SPEED_MIN_KPH,
-} from "./tuning.mjs";
+} from "./core/tuning.mjs";
 
 startApp();
 
@@ -119,6 +122,17 @@ async function startApp() {
   els.speedInput.value = String(DEFAULT_SIMULATION_SPEED_KPH);
   els.climbOrbitSpeedInput.min = String(CLIMB_ORBIT_SECONDS_PER_REV_MIN);
   els.climbOrbitSpeedInput.max = String(CLIMB_ORBIT_SECONDS_PER_REV_MAX);
+
+  // The HUD layout regions must exist before any feature registers its
+  // component with the screen manager. Each feature owns and registers its
+  // own HUD element; the weights encode the column order (see each register
+  // function). map-hud registers its own pieces inside initializeMapHud.
+  initScreenManager(els.mapViewport);
+  registerClimbBannerHud();
+  registerDemoBannerHud();
+  registerTrainingMetersHud();
+  registerCameraDebugHud();
+  registerMinimapHud();
 
   restoreSettings();
   restoreRideLog();

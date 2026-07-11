@@ -364,9 +364,6 @@ body {
 }
 
 #minimap {
-  position: absolute;
-  right: 16px;
-  bottom: calc(36px + var(--fs-dock-height, 210px) + 12px);
   width: 150px;
   height: 150px;
   overflow: hidden;
@@ -377,10 +374,6 @@ body {
 }
 
 .map-actions {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 10;
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -396,9 +389,6 @@ body {
    buttons, top-right. Shown in windowed and fullscreen; kept out of
    screenshots like the buttons. */
 .camera-debug {
-  position: absolute;
-  top: 70px;
-  right: 16px;
   min-width: 168px;
   padding: 9px 11px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -415,7 +405,6 @@ body {
   user-select: text;
   -webkit-user-select: text;
   cursor: text;
-  z-index: 5;
 }
 
 .map-viewport.capturing .camera-debug {
@@ -677,25 +666,86 @@ body {
   --fs-dock-gap: 10px;
 }
 
-#minimap {
-  right: 24px;
-  bottom: calc(36px + var(--fs-dock-height, 210px) + 12px);
-}
-
-.map-actions {
-  top: 24px;
-  right: 24px;
-}
-
 .map-action-btn-settings {
   display: flex;
 }
 
+/* ---- HUD layout regions (screen-manager.mjs) -------------------------------
+   Four flex stacks the screen manager places registered HUD components into:
+   left / center / right columns plus a full-width bottom stack. Features
+   never absolutely position their own HUD elements — ordering inside a
+   column is the registration weight, spacing is the region gap, and hiding a
+   component collapses its slot. Insets and their phone adjustments live here
+   once instead of per component. */
+
+.map-viewport {
+  --hud-inset: 24px;
+  --hud-gap: 12px;
+  --hud-bottom-inset-x: 24px;
+  --hud-bottom-inset-y: 36px;
+  /* Side columns stop above the bottom stack: map's bottom strip (Google
+     attribution) + the live measured bottom-region height + a gap. */
+  --hud-bottom-clearance: calc(36px + var(--fs-dock-height, 210px) + 12px);
+}
+
+.hud-region {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hud-gap);
+  /* The containers span map area; only the components themselves take input,
+     so the map stays draggable everywhere between them. */
+  pointer-events: none;
+}
+
+.hud-region > * {
+  pointer-events: auto;
+  /* Components keep their intrinsic size — a short column must never squash
+     them (the columns already end above the bottom stack, so overflow there
+     means the viewport is genuinely too small, not a layout error). */
+  flex-shrink: 0;
+}
+
+/* Pins a component to the far end of its column (minimap, bottom-right). */
+.hud-align-end {
+  margin-top: auto;
+}
+
+.hud-region-left {
+  top: var(--hud-inset);
+  left: var(--hud-inset);
+  bottom: var(--hud-bottom-clearance);
+  align-items: flex-start;
+}
+
+.hud-region-right {
+  top: var(--hud-inset);
+  right: var(--hud-inset);
+  bottom: var(--hud-bottom-clearance);
+  align-items: flex-end;
+}
+
+.hud-region-center {
+  top: var(--hud-inset);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 2 * var(--hud-inset));
+  align-items: center;
+  gap: 10px;
+}
+
+/* One full-width panel/stack; children stretch across it. */
+.hud-region-bottom {
+  left: var(--hud-bottom-inset-x);
+  right: var(--hud-bottom-inset-x);
+  bottom: var(--hud-bottom-inset-y);
+  align-items: stretch;
+  gap: 10px;
+}
+
 /* top-left: local time + elapsed + ridden distance */
 .fs-clock {
-  position: absolute;
-  top: 24px;
-  left: 24px;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -734,9 +784,6 @@ body {
 }
 
 .fs-training-meters {
-  position: absolute;
-  top: 92px;
-  left: 24px;
   display: grid;
   width: 184px;
   gap: 8px;
@@ -796,10 +843,6 @@ body {
 
 /* top-center: climb banner */
 .climb-banner {
-  position: absolute;
-  top: 24px;
-  left: 50%;
-  transform: translateX(-50%);
   display: block;
   min-width: 420px;
   padding: 14px 20px 15px;
@@ -957,13 +1000,11 @@ body {
 
 /* bottom data dock */
 .fs-dock {
-  position: absolute;
-  left: 24px;
-  right: 24px;
-  /* Leave the map's bottom strip clear: the Google logo and legal notices
-     render there inside a closed shadow root — they cannot be moved and must
-     stay visible (Google Maps ToS). */
-  bottom: 36px;
+  /* Relative: .fs-dock-top-tools inside anchors to the dock's own corner.
+     The bottom region places the dock; its 36px inset leaves the map's
+     bottom strip clear for the Google logo/legal notices (ToS). */
+  position: relative;
+  width: 100%;
   display: block;
   padding: var(--fs-dock-inset);
   border-radius: 20px;
@@ -1896,12 +1937,7 @@ progress.ascent-progress::-moz-progress-bar {
 }
 
 .demo-banner {
-  position: absolute;
-  top: 24px;
-  left: 50%;
-  z-index: 7;
-  transform: translateX(-50%);
-  max-width: calc(100% - 32px);
+  max-width: 100%;
   padding: 8px 12px;
   border: 1px solid rgba(246, 165, 44, 0.45);
   border-radius: 999px;
@@ -2889,25 +2925,23 @@ input[type="color"] {
    viewports the corner overlays pull in from the edges and the dock stacks
    into a compact, always-fits column. */
 @media (max-width: 860px) {
-  #minimap {
-    right: 14px;
-    bottom: calc(36px + var(--fs-dock-height, 290px) + 10px);
+  .map-viewport {
+    --hud-inset: 14px;
+    --hud-bottom-inset-x: 10px;
+    --hud-bottom-inset-y: 12px;
+    --hud-bottom-clearance: calc(36px + var(--fs-dock-height, 290px) + 10px);
   }
 
-  .map-actions {
-    top: 14px;
-    right: 14px;
+  .hud-region-center {
+    left: var(--hud-inset);
+    right: var(--hud-inset);
+    max-width: none;
+    transform: none;
   }
 
   .fs-clock {
-    top: 14px;
-    left: 14px;
     gap: 8px;
     padding: 8px 12px;
-  }
-
-  .demo-banner {
-    top: 14px;
   }
 
   .fs-clock-time,
@@ -2924,8 +2958,6 @@ input[type="color"] {
   }
 
   .fs-training-meters {
-    top: 112px;
-    left: 14px;
     width: 150px;
     gap: 6px;
   }
@@ -2941,17 +2973,12 @@ input[type="color"] {
   /* The banner's desktop min-width (420px) overflows a phone; let it span the
      viewport width instead and drop the centring transform. */
   .climb-banner {
-    left: 14px;
-    right: 14px;
+    width: 100%;
     min-width: 0;
     padding: 12px 14px 13px;
-    transform: none;
   }
 
   .fs-dock {
-    left: 10px;
-    right: 10px;
-    bottom: 12px;
     padding: 14px 14px 16px;
     border-radius: 16px;
   }

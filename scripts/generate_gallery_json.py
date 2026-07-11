@@ -7,8 +7,8 @@ ascent/descent, the distance/terrain/difficulty classification, and the
 ready-to-draw bars of the mini elevation profile. The live 3D preview camera
 comes from metadata.json when present; the browser falls back to its normal
 route overview framing when a route has not been hand-framed yet. The numbers
-mirror app/route.mjs and app/difficulty.mjs; the thresholds below are kept in
-sync with app/tuning.mjs by hand (no build step to import them).
+mirror app/route/route.mjs and app/route/difficulty.mjs; the thresholds below are kept in
+sync with app/core/tuning.mjs by hand (no build step to import them).
 """
 import json
 import math
@@ -21,14 +21,14 @@ APP_DIR = pathlib.Path("app")
 OUTPUT_JSON = APP_DIR / "gallery.json"
 APP_GALLERY_DIR = APP_DIR / "gallery"
 
-# Mirrors CLIMB_NOISE_THRESHOLD_METERS in app/tuning.mjs (enrichRoute's
+# Mirrors CLIMB_NOISE_THRESHOLD_METERS in app/core/tuning.mjs (enrichRoute's
 # noise-filtered ascent/descent counter), so gallery cards report the same
 # totals the app shows once the route is loaded.
 CLIMB_NOISE_THRESHOLD_METERS = 2
 # Bars drawn in each card's mini elevation profile strip.
 PROFILE_BARS = 44
 
-# Classification thresholds — mirror app/tuning.mjs / app/difficulty.mjs.
+# Classification thresholds — mirror app/core/tuning.mjs / app/route/difficulty.mjs.
 EQUIVALENT_KM_CLIMB_METERS = 100
 DISTANCE_CLASS_THRESHOLDS_KM = [
     (0, "XS"), (20, "S"), (40, "M"), (70, "L"), (110, "XL"), (160, "XXL"),
@@ -41,7 +41,7 @@ DIFFICULTY_THRESHOLDS_EQUIVALENT_KM = [
     (85, "Hard"), (130, "Very Hard"), (190, "Epic"),
 ]
 
-# Grade palette for the mini profile — mirrors gradeColor in app/profile.mjs
+# Grade palette for the mini profile — mirrors gradeColor in app/route/profile.mjs
 # and the gallery mini-bar buckets.
 FLAT_BAR_COLOR = "rgba(200, 206, 214, 0.55)"
 

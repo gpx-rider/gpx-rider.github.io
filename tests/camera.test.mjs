@@ -12,8 +12,8 @@ import {
   measureCameraOffset,
   normalizeHeading,
   rangeForBehind,
-} from "../app/camera.mjs";
-import * as geo from "../app/geo.mjs";
+} from "../app/camera/camera.mjs";
+import * as geo from "../app/core/geo.mjs";
 
 const riderPosition = { lat: 50.087, lng: 14.421 };
 
