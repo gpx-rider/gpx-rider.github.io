@@ -743,6 +743,25 @@ key into a tracked file or commit it.
 
 ## Testing & manual verification
 
+- **Understand before you touch code.** Before implementing a bug fix or
+  feature, take a moment to actually think through the problem: what is the
+  current behavior, why is it happening (trace it to the responsible module
+  using the layer/folder table above, don't guess), and what should the
+  correct behavior be. Skipping straight to an edit is how superficial
+  patches (fixing a symptom at the call site instead of the root cause in
+  the owning module) end up in this codebase.
+- **Reproduce before you fix.** For a bug fix, write a failing unit test
+  that captures the reported behavior *before* changing implementation code
+  — for pure logic (layer 2 modules) this is a real `tests/*.test.mjs` case;
+  for something only reachable through the DOM/3D map, reproduce it manually
+  in the browser first (`make run`) and note the exact repro steps. Watch it
+  fail for the reason you expect, then implement the fix and watch the same
+  test/repro pass. For a new feature, write the test(s) for the pure logic
+  it needs first, then implement against them. This is what caught, for
+  example, that FIT's `activity.local_timestamp` needs to differ from
+  `timestamp` by the local UTC offset (issue #4) rather than repeating the
+  same UTC value — the failing test forced decoding the real encoded bytes
+  instead of eyeballing the change.
 - Unit tests cover the pure modules (`camera`, `route`, `units`, `fit`,
   `eta`). Add tests alongside any new pure logic.
 - Web Bluetooth requires Chrome/Edge; hardware paths can't be unit-tested.

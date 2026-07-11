@@ -81,3 +81,25 @@ test("encoded activity carries the app product name", () => {
 test("encoding refuses an empty ride", () => {
   assert.throws(() => encodeFitActivity({ samples: [], summary: {} }));
 });
+
+test("activity local_timestamp is shifted by the local UTC offset", () => {
+  const bytes = encodeFitActivity(sampleRide());
+
+  // The activity message's local_timestamp (field 5, last in ACTIVITY_FIELDS)
+  // is the final 4 bytes before the trailing file CRC.
+  const localTimestampOffset = bytes.length - 2 - 4;
+  const localTimestamp = bytes[localTimestampOffset]
+    | (bytes[localTimestampOffset + 1] << 8)
+    | (bytes[localTimestampOffset + 2] << 16)
+    | (bytes[localTimestampOffset + 3] << 24);
+  // ...preceded by event_type(1) + event(1) + type(1) + num_sessions(2), then timestamp(4).
+  const timestampOffset = localTimestampOffset - 9 - 4;
+  const timestamp = bytes[timestampOffset]
+    | (bytes[timestampOffset + 1] << 8)
+    | (bytes[timestampOffset + 2] << 16)
+    | (bytes[timestampOffset + 3] << 24);
+
+  const endMs = sampleRide().samples.at(-1).t * 1000;
+  const expectedOffsetSeconds = -new Date(endMs).getTimezoneOffset() * 60;
+  assert.equal(localTimestamp - timestamp, expectedOffsetSeconds);
+});

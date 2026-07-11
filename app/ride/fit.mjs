@@ -131,6 +131,15 @@ export function toFitTimestamp(unixSeconds) {
   return Math.max(0, Math.round(unixSeconds) - FIT_EPOCH_OFFSET_SECONDS);
 }
 
+// FIT's activity.local_timestamp is the UTC timestamp shifted by the
+// device's local UTC offset — consumers (Garmin Connect, Strava) read the
+// difference between it and the UTC timestamp to display the ride at the
+// rider's actual local time instead of UTC.
+function toFitLocalTimestamp(fitTimestamp, unixMs) {
+  const offsetSeconds = -new Date(unixMs).getTimezoneOffset() * 60;
+  return fitTimestamp + offsetSeconds;
+}
+
 export function degreesToSemicircles(degrees) {
   return Math.round(degrees * SEMICIRCLES_PER_DEGREE);
 }
@@ -243,7 +252,8 @@ export function encodeFitActivity({ samples, summary }) {
 
   writeDefinition(writer, 5, GLOBAL_MSG.activity, ACTIVITY_FIELDS);
   writeData(writer, 5, ACTIVITY_FIELDS, [
-    endFit, timerMs, 1, ACTIVITY_TYPE_MANUAL, EVENT_ACTIVITY, EVENT_TYPE_STOP, endFit,
+    endFit, timerMs, 1, ACTIVITY_TYPE_MANUAL, EVENT_ACTIVITY, EVENT_TYPE_STOP,
+    toFitLocalTimestamp(endFit, samples.at(-1).t * 1000),
   ]);
 
   const dataBytes = writer.bytes;
