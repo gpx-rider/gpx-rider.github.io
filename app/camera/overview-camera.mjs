@@ -19,10 +19,11 @@ import {
   updateMapCamera,
 } from "./follow-camera.mjs";
 import {
+  arcsIntoMode,
   captureCameraTransitionStart,
   cancelCameraTransition,
+  startCameraTransitionToFlyPattern,
   startCameraTransitionToFollow,
-  startCameraTransitionToOverview,
 } from "./transition-camera.mjs";
 import { createEllipseFlyby, createFigureEightFlyover } from "./flyby.mjs";
 import { orbitCamera } from "./flyover.mjs";
@@ -76,9 +77,14 @@ export function enterOverviewMode({
   // overview off" (ensureMovementLoop), and "ride just finished → finish-line
   // orbit on" (enterFinishOrbit, below); everything else here is user-driven.
   if (!route.length || !state.map) return;
-  // Capture the current pose and driver velocity for the transition arc
-  // BEFORE anything below rewrites the map FOV or tears the driver down.
-  const transitionStart = instant ? null : captureCameraTransitionStart();
+  // Only the fly-by / fly-over patterns are entered with a transition arc (a
+  // fly path is a natural continuous motion). Capture the current pose + driver
+  // velocity for it BEFORE the teardown below tears that driver down; every
+  // other overview (static / orbit / satellite, incl. the climb-focus variants)
+  // snaps or eases through its own driver and never arcs.
+  const wantFlyArc = !instant && isFlyOverviewMode(mode) && arcsIntoMode(mode);
+  const transitionStart = wantFlyArc ? captureCameraTransitionStart() : null;
+  // Cancel any arc currently in flight (e.g. a profile-seek teleport).
   cancelCameraTransition();
   // Any call here (user toggle, a new climb/segment focus, a fresh route)
   // supersedes a running finish-line orbit.
@@ -110,16 +116,15 @@ export function enterOverviewMode({
   if (!state.overviewCamera) return;
   state.cameraMode = "overview";
 
-  // A physically-flown transition arc into the overview (static/satellite
-  // pose, or docking into the orbit's spin) beats every other entry. When no
-  // arc fits — or for the fly modes, which keep their own eased pattern
-  // entry — fall through to the pre-existing behavior.
-  if (!instant && startCameraTransitionToOverview(transitionStart)) return;
-
-  // Animated modes (orbit / fly-by / fly-over) drive the map themselves. If one
-  // can't be set up (e.g. a fly path on a route too small to fly), fall through
-  // to the static framing below.
-  if (isAnimatedOverviewMode(mode) && startOverviewAnimation({ instant })) return;
+  // Animated modes (orbit / fly-by / fly-over) drive the map themselves. Fly
+  // modes first try a physical arc onto the pattern (it hands off to the
+  // animation on docking); when that's off or doesn't fit, and for orbit, the
+  // pattern eases in from the current pose. If one can't be set up (e.g. a fly
+  // path on a route too small to fly), fall through to the static framing below.
+  if (isAnimatedOverviewMode(mode)) {
+    if (wantFlyArc && startCameraTransitionToFlyPattern(transitionStart, mode)) return;
+    if (startOverviewAnimation({ instant })) return;
+  }
 
   clearOverviewAnimation();
   if (instant) {
@@ -205,10 +210,14 @@ function isAnimatedOverviewMode(mode) {
   return mode === "orbit" || isFlyOverviewMode(mode);
 }
 
-export function returnToRiderCamera() {
+// `transition` flies the physical arc back to the rider when one fits (the
+// overview-off toggle and movement-start handoffs want it); the reset-camera
+// button passes `transition: false` so resetting the follow offsets just eases
+// the plain chase flight home instead of a dramatic arc.
+export function returnToRiderCamera({ transition = true } = {}) {
   // Capture the pose and the running driver's velocity for the transition
   // arc BEFORE the teardown below clears that driver.
-  const transitionStart = captureCameraTransitionStart();
+  const transitionStart = transition ? captureCameraTransitionStart() : null;
   cancelCameraTransition();
   state.overviewActive = false;
   state.finishOrbitActive = false;
@@ -231,9 +240,9 @@ export function returnToRiderCamera() {
     renderRiderDot(interpolateRoutePoint(state.route, state.progressMeters));
   }
   // Fly the physical transition arc back to the rider camera when one fits
-  // (it carries FOV and roll with it); otherwise the pre-existing chase
-  // flight takes the camera home.
-  if (!startCameraTransitionToFollow(transitionStart)) {
+  // (it carries FOV and roll with it); otherwise (or when the caller opted
+  // out) the pre-existing chase flight takes the camera home.
+  if (!transition || !startCameraTransitionToFollow(transitionStart)) {
     state.map.fov = DEFAULT_MAP_FOV_DEGREES;
     updateMapCamera();
     if (!state.movementLoopActive) ensureCameraFlightLoop();
@@ -248,10 +257,10 @@ export function returnToRiderCamera() {
 // fly-over a figure-eight around the route. On entry the view eases from the
 // current pose into the motion so switching modes or resetting never jumps.
 
-// `backdateSeconds` starts the motion partway through (with no intro ease):
-// when a transition arc docks into the orbit's spin, the orbit must resume
-// from the pose it would have reached in that time, not from its start.
-export function startOverviewAnimation({ instant = false, backdateSeconds = 0 } = {}) {
+// `atS` (fly modes only) enters the pattern at that arc-length with no intro
+// ease: a fly transition arc that just docked onto the pattern passes the
+// entry point it delivered, so the animation continues from exactly there.
+export function startOverviewAnimation({ instant = false, atS = null } = {}) {
   const mode = state.activeOverviewMode;
   const route = state.overviewRoute ?? state.route;
   let flyby = null;
@@ -264,19 +273,21 @@ export function startOverviewAnimation({ instant = false, backdateSeconds = 0 } 
   // The animation is the sole camera driver from here.
   cancelCameraTransition();
   const now = performance.now();
+  const enteringFromArc = atS !== null;
   // Ease in from where the camera currently is, unless we're snapping (a fresh
-  // load can be on the far side of the world — no sensible lerp) or resuming
-  // after a transition arc that already docked on the motion exactly.
-  const introFrom = instant || backdateSeconds > 0 ? null : currentMapCameraPose();
-  // Enter a fly pattern at the point nearest the current camera, so the flight
-  // takes the short way in instead of always flying to the pattern's start.
-  const startS = flyby && introFrom?.eye ? flyby.nearestSTo(introFrom.eye) : 0;
+  // load can be on the far side of the world — no sensible lerp) or an arc just
+  // docked onto the pattern (it already delivered the entry frame).
+  const introFrom = instant || enteringFromArc ? null : currentMapCameraPose();
+  // Enter a fly pattern at the arc-length the docking arc delivered, else at the
+  // point nearest the current camera, so the flight takes the short way in
+  // instead of always flying to the pattern's start.
+  const startS = enteringFromArc ? atS : (flyby && introFrom?.eye ? flyby.nearestSTo(introFrom.eye) : 0);
   state.overviewAnim = {
     mode,
     flyby,
     s: startS,
     lastFrame: null,
-    startMs: now - Math.max(0, backdateSeconds) * 1000,
+    startMs: now,
     lastMs: now,
     introFrom,
     introMs: now,
@@ -284,11 +295,11 @@ export function startOverviewAnimation({ instant = false, backdateSeconds = 0 } 
   // The animation is the sole camera driver now; drop any parked chase state.
   state.cameraFlight = null;
   updateOverviewDebugLine();
-  // On an instant (fresh-load) entry, jump straight to the first frame now
-  // instead of waiting for the first animation tick — so the map snaps to the
-  // route exactly like the static overview, with no flight from wherever the
-  // camera was.
-  if (instant) stepOverviewAnimation(now);
+  // On an instant (fresh-load) entry or an arc handoff, jump straight to the
+  // first frame now instead of waiting for the first animation tick — so the
+  // map snaps to the route (instant) or continues seamlessly from the docked
+  // pose (arc), with no gap.
+  if (instant || enteringFromArc) stepOverviewAnimation(now);
   ensureOverviewAnimationLoop();
   return true;
 }
@@ -298,17 +309,10 @@ export function clearOverviewAnimation() {
   state.overviewAnim = null;
 }
 
-// Called by the transition arc the instant it docks into the orbit's spin:
-// restart the orbit animation backdated by the flight time, so the motion
-// continues from exactly the pose (and angular phase) the arc delivered.
-export function resumeOverviewOrbitAfterTransition(elapsedSeconds) {
-  if (state.cameraMode !== "overview" || state.activeOverviewMode !== "orbit" || !state.overviewCamera) return;
-  startOverviewAnimation({ backdateSeconds: elapsedSeconds });
-}
-
 // The revolution pace and direction the orbit overview runs at right now —
-// shared by the animation step below and the transition arc that docks into
-// the spin, so both always agree on where the orbit will be.
+// shared by the animation step below and the transition arc that flies away
+// from a spinning orbit (it reads the orbit's tangential velocity at handoff),
+// so both always agree on how fast the orbit is turning.
 export function orbitSpin() {
   const secondsPerRevolution = state.finishOrbitActive
     ? FINISH_ORBIT_SECONDS_PER_REV

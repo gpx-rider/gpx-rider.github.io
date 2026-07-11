@@ -1,42 +1,55 @@
-// App-side driver for the overview ↔ chase transition arcs: captures the
-// current camera pose and the velocity of whatever currently drives it
-// (static pose, chase flight, orbit, fly-by/fly-over), predicts the dock
-// state (the follow camera where the rider *will* be, or the overview pose —
-// including docking into a running orbit mid-spin), and flies the pure arc
-// from camera/transition-arc.mjs frame by frame. The pure math lives there;
-// this module owns the state.cameraTransition lifecycle, the animation loop,
-// and the handoffs on either end. Every entry point returns false when no
-// physically-valid arc exists, and the caller keeps its pre-existing chase
-// flight behavior — the arc is an upgrade, never a requirement.
+// App-side driver for the transition arc that flies the camera onto a
+// continuously-moving target: captures the current camera pose and the velocity
+// of whatever currently drives it (static pose, chase flight, orbit,
+// fly-by/fly-over), predicts the dock state, and flies the pure arc from
+// camera/transition-arc.mjs frame by frame. The pure math lives there; this
+// module owns the state.cameraTransition lifecycle, the animation loop, and the
+// handoff at the dock. Two targets get the arc (gated by
+// `camera_transition.arc_into_modes` in tuning.yaml): the follow (rider) camera
+// — for the overview-off / movement-start handoff and the elevation-profile
+// teleport — docking where the rider *will* be; and the fly-by / fly-over
+// patterns, docking onto the pattern point nearest the camera. Static / orbit /
+// satellite overviews are never arced into — they snap or ease through their
+// own driver. Each entry point returns false when no physically-valid arc
+// exists (or the target isn't an arc mode), and the caller keeps its
+// pre-existing chase / eased-entry behavior — the arc is an upgrade, never a
+// requirement.
 
 import { createCameraTransition } from "./transition-arc.mjs";
-import { cameraEyePosition, cameraFromEyeAndCenter } from "./camera.mjs";
+import { cameraFromEyeAndCenter } from "./camera.mjs";
 import {
-  applyCameraNow,
   currentMapCameraPose,
   currentRouteHeading,
   ensureCameraFlightLoop,
   followCameraTargetAt,
 } from "./follow-camera.mjs";
-import {
-  clearOverviewAnimation,
-  orbitSpin,
-  resumeOverviewOrbitAfterTransition,
-} from "./overview-camera.mjs";
+import { clearOverviewAnimation, orbitSpin, startOverviewAnimation } from "./overview-camera.mjs";
+import { createEllipseFlyby, createFigureEightFlyover } from "./flyby.mjs";
 import { orbitCamera } from "./flyover.mjs";
 import { updateGalleryMetadataExport } from "../gallery-ui/gallery-export.mjs";
 import { bearing, clamp, haversine, toRad } from "../core/geo.mjs";
 import { gradeAt, interpolateRoutePoint, routeTotalDistance } from "../route/route.mjs";
 import { updateRiderDot } from "../map/route-render.mjs";
 import { els, state } from "../core/state.mjs";
-import { CAMERA_TRANSITION, DEFAULT_MAP_FOV_DEGREES } from "../core/tuning.mjs";
+import { CAMERA_TRANSITION, DEFAULT_MAP_FOV_DEGREES, ELLIPSE_FLYBY } from "../core/tuning.mjs";
+
+// Which camera targets are flown into with the physical arc (vs. snapped or
+// eased by their own driver). The declarative policy lives in tuning.yaml's
+// `camera_transition.arc_into_modes`; see that key for the rationale. Each arc
+// entry point gates on its own target mode, so removing a mode there falls that
+// mode's transitions back to the plain chase / eased pattern entry.
+export function arcsIntoMode(mode) {
+  const modes = CAMERA_TRANSITION.arc_into_modes;
+  return Array.isArray(modes) && modes.includes(mode);
+}
 
 // Fly from wherever the camera is to the follow camera behind the rider —
-// the overview-off handoff (user toggle, or movement starting). The rider
-// keeps moving during the flight, so the dock state is a function of the
-// candidate duration: the arc intercepts the chase camera where it will be.
+// the overview-off handoff (user toggle, movement starting) and the
+// elevation-profile teleport. The rider keeps moving during the flight, so the
+// dock state is a function of the candidate duration: the arc intercepts the
+// chase camera where it will be.
 export function startCameraTransitionToFollow(startState = null) {
-  if (!canTransition()) return false;
+  if (!canTransition() || !arcsIntoMode("follow")) return false;
   const start = startState ?? captureCameraTransitionStart();
   if (!start) return false;
 
@@ -60,43 +73,37 @@ export function startCameraTransitionToFollow(startState = null) {
   return true;
 }
 
-// Fly from wherever the camera is into the already-computed
-// state.overviewCamera — the overview-on handoff. Static and satellite modes
-// dock on the still pose; orbit docks *into the spin* (the dock state is the
-// orbit pose after the flight's duration, moving at the orbit's tangential
-// velocity, and the orbit animation resumes backdated so it continues from
-// exactly that pose). Fly-by/fly-over keep their own eased pattern entry.
-export function startCameraTransitionToOverview(startState = null) {
-  if (!canTransition() || !state.overviewCamera) return false;
-  const mode = state.activeOverviewMode;
-  if (mode === "flyby" || mode === "flyover") return false;
+// Fly from wherever the camera is onto a fly-by / fly-over pattern — a natural
+// continuous flight, so an arc into it reads as one motion. It docks at the
+// pattern point nearest the current camera, matching that point's velocity,
+// bank and FOV, then hands off to the pattern animation entering exactly there
+// (no intro ease — the arc already delivered that frame). Returns false (caller
+// keeps the eased pattern entry) when the route is too small to fly, this mode
+// isn't an arc target, or no physically-valid arc fits.
+export function startCameraTransitionToFlyPattern(startState, mode) {
+  if (!canTransition() || !arcsIntoMode(mode)) return false;
+  const route = state.overviewRoute ?? state.route;
+  const pattern = mode === "flyover"
+    ? createFigureEightFlyover(route, ELLIPSE_FLYBY)
+    : createEllipseFlyby(route, ELLIPSE_FLYBY);
+  if (!pattern) return false;
   const start = startState ?? captureCameraTransitionStart();
   if (!start) return false;
 
-  let end;
-  let onComplete;
-  if (mode === "orbit") {
-    const spin = orbitSpin();
-    end = (durationSeconds) => orbitDockStateAt(durationSeconds, spin);
-    onComplete = (finishedArc) => resumeOverviewOrbitAfterTransition(finishedArc.durationSeconds);
-  } else {
-    end = staticOverviewDockState();
-    if (!end) return false;
-    // Docked exactly on the overview pose — applyCameraNow re-applies the
-    // same values and parks the chase state there for the next move.
-    onComplete = () => applyCameraNow(state.overviewCamera);
-  }
+  const enterS = pattern.nearestSTo(start.eye);
+  const dock = flyPatternDockState(pattern, enterS);
+  if (!dock) return false;
 
-  const arc = createCameraTransition({ start, end }, CAMERA_TRANSITION);
+  const arc = createCameraTransition({ start, end: dock }, CAMERA_TRANSITION);
   if (!arc) return false;
-  beginTransition(arc, onComplete);
+  beginTransition(arc, () => startOverviewAnimation({ atS: enterS }));
   return true;
 }
 
 // The current map pose plus the velocity of whichever driver owns the camera,
 // as a transition-arc start state. Callers that are about to tear the current
-// driver down (returnToRiderCamera clears the overview animation, and
-// enterOverviewMode resets the map FOV) capture this FIRST and pass it in.
+// driver down (returnToRiderCamera clears the overview animation) capture this
+// FIRST and pass it in.
 export function captureCameraTransitionStart() {
   const pose = currentMapCameraPose();
   if (!pose) return null;
@@ -205,34 +212,20 @@ function followDockStateAt(durationSeconds) {
   };
 }
 
-function staticOverviewDockState() {
-  const overview = state.overviewCamera;
-  const eye = cameraEyePosition(overview);
-  if (!eye) return null;
+// A fly-by / fly-over pattern's entry frame as an arc dock state: its eye and
+// look-at, the flight's velocity there, and the pattern's own bank and FOV — so
+// the arc arrives already matching the motion it hands off to.
+function flyPatternDockState(pattern, s) {
+  const frame = pattern.frameAt(s);
+  if (!frame?.eye || !frame?.lookAt) return null;
+  const velocity = flyPatternVelocityAt(pattern, s);
   return {
-    eye,
-    lookAt: { ...overview.center },
-    velocity: [0, 0, 0],
-    lookAtVelocity: [0, 0, 0],
-    rollDegrees: 0,
-    fovDegrees: DEFAULT_MAP_FOV_DEGREES,
-  };
-}
-
-// Where the orbit will be `durationSeconds` into its spin, moving at its
-// tangential eye velocity — so the arc merges into the rotation instead of
-// landing on a pose the orbit immediately leaves.
-function orbitDockStateAt(durationSeconds, spin) {
-  const camera = orbitCamera(state.overviewCamera, durationSeconds, spin);
-  const eye = camera && cameraEyePosition(camera);
-  if (!eye) return null;
-  return {
-    eye,
-    lookAt: { ...camera.center },
-    velocity: orbitEyeVelocity(camera, spin),
-    lookAtVelocity: [0, 0, 0],
-    rollDegrees: 0,
-    fovDegrees: DEFAULT_MAP_FOV_DEGREES,
+    eye: frame.eye,
+    lookAt: frame.lookAt,
+    velocity: velocity.eye,
+    lookAtVelocity: velocity.lookAt,
+    rollDegrees: Number(frame.bankDegrees) || 0,
+    fovDegrees: Number(frame.cameraFovDegrees) || DEFAULT_MAP_FOV_DEGREES,
   };
 }
 
@@ -271,16 +264,22 @@ function orbitEyeVelocity(camera, { secondsPerRevolution = 60, direction = 1 } =
 }
 
 // Fly-by/fly-over eye and look-at velocities from two pattern frames one
-// meter of arc apart, scaled by the pattern's constant ground speed.
-function flybyVelocity(anim) {
-  const speed = Math.max(0.1, Number(anim.flyby.speedAt()) || 0.1);
-  const here = anim.flyby.frameAt(anim.s);
-  const ahead = anim.flyby.frameAt(anim.s + 1);
+// meter of arc apart, scaled by the pattern's constant ground speed — the
+// velocity both a running pattern (docking away from it) and a to-be-entered
+// pattern (docking onto it) expose at parameter `s`.
+function flyPatternVelocityAt(pattern, s) {
+  const speed = Math.max(0.1, Number(pattern.speedAt()) || 0.1);
+  const here = pattern.frameAt(s);
+  const ahead = pattern.frameAt(s + 1);
   const seconds = 1 / speed;
   return {
     eye: geoVelocityBetween(here.eye, ahead.eye, seconds),
     lookAt: geoVelocityBetween(here.lookAt, ahead.lookAt, seconds),
   };
+}
+
+function flybyVelocity(anim) {
+  return flyPatternVelocityAt(anim.flyby, anim.s);
 }
 
 function geoVelocityBetween(from, to, seconds) {

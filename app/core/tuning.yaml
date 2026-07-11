@@ -255,7 +255,7 @@ overview_motion:
 
   # Camera behavior after selecting a detected climb: "static" holds the
   # fitted climb view; "orbit" circles it; "satellite" shows it north-up.
-  default_climb_focus_mode: "static"
+  default_climb_focus_mode: "orbit"
 
   # When an animated overview (orbit/flyby) starts from a different camera
   # pose, ease into the motion over this many seconds instead of jumping.
@@ -336,6 +336,19 @@ overview_motion:
 # ordinary chase flight, exactly as before this feature existed.
 camera_transition:
   enabled: true
+
+  # Which camera targets are flown into with the physical transition arc, vs.
+  # snapped/eased by their own driver. The arc only makes sense when the target
+  # is a continuously-moving camera you can dock onto with matching velocity:
+  #   "follow"  — the rider camera (the rider is a real moving object)
+  #   "flyby"   — the ellipse fly-by pattern (a natural continuous flight)
+  #   "flyover" — the figure-eight fly-over pattern (likewise)
+  # Deliberately NOT arced into: "static"/"orbit"/"satellite" overviews (incl.
+  # the climb-focus and finish-line variants) — they are artificial framings, so
+  # arcing into them like a real object reads as two stitched motions. A camera
+  # reset also stays off the arc (it is a small "put it back", not a transition).
+  # Remove a mode here to fall its transitions back to the plain chase/eased entry.
+  arc_into_modes: ["follow", "flyby", "flyover"]
 
   # Candidate flight durations, in seconds: the solver scans from min upward
   # in solver_step increments and flies the shortest duration whose curve

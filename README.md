@@ -138,8 +138,8 @@ GPX Rider is deliberately engineered as a small, inspectable static application 
 
 The camera system uses purpose-built geometry rather than canned animations:
 
-- **Time-scaled cubic Hermite splines** fly overview ↔ rider transitions in a local east/north/up frame. The curves are executed as cubic Béziers whose control offsets encode the endpoint velocities.
-- **Exact position-and-velocity docking** makes both ends of a flight continuous. The chase camera inherits the arc's terminal velocity; Orbit is intercepted mid-spin and resumes backdated by the flight duration.
+- **Time-scaled cubic Hermite splines** fly the camera onto a continuously-moving target in a local east/north/up frame, executed as cubic Béziers whose control offsets encode the endpoint velocities. The arc is used only where docking with matching velocity reads as one motion — flying back to the rider (leaving an overview, starting to move, teleporting via the elevation profile) and flying onto the Fly-by / Fly-over pattern. Artificial framings (static, orbit, satellite) snap or ease through their own driver, and a camera reset eases the plain chase home. Which targets get the arc is a single tunable list.
+- **Exact position-and-velocity docking** makes both ends of a flight continuous: the chase camera inherits the arc's terminal velocity so follow tracking picks up without a restart, and an arc onto a Fly-by/Fly-over pattern docks at the pattern point nearest the camera and hands off at that exact arc-length.
 - **Dual-arc, tangent POV** flies the camera eye on the Hermite path while looking strictly along its flight tangent mid-arc. Near each dock, Rodrigues rotation turns the view direction at a constant rate into the real endpoint view—never through independent heading and tilt interpolation.
 - **Moving-target interception** solves the rider's future follow-camera pose for each candidate flight duration instead of aiming where the rider was when the transition began.
 - **Centripetal banking** derives roll from the path's lateral acceleration, producing aircraft-like banking into turns.

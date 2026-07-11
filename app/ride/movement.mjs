@@ -283,8 +283,19 @@ function tick(now) {
 // Jump the rider to a distance along the route (profile click, climb click).
 export function seekToMeters(meters) {
   if (!state.route.length) return;
+  const wasMoving = isMoving();
   state.progressMeters = clamp(meters, 0, routeTotalDistance(state.route));
   state.lastTick = performance.now();
+  // A teleport while parked in the rider camera (clicking the elevation
+  // profile) flies the transition arc from the old camera pose to the new
+  // rider position, instead of a plain chase snap. Skip it while moving (the
+  // follow camera is already tracking), in an overview (the framing shouldn't
+  // move), and in manual mode (a manual drag should stay put). It captures the
+  // pre-teleport pose itself, so start it before updateRideUi nudges the
+  // chase; updateMapCamera yields while the arc owns the camera.
+  if (!wasMoving && state.cameraMode !== "overview" && state.cameraMode !== "manual") {
+    startCameraTransitionToFollow();
+  }
   updateRideUi({ force: true });
   saveRide();
   ensureMovementLoop();

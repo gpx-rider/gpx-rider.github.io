@@ -43,7 +43,7 @@ pages, `styles.css`, `gallery.json`, and `assets/` stay at the app root.
 |---|---|---|
 | `app/core/` | Shared foundation | `state.mjs` (the single mutable `state` object + `els` DOM map + `updateProgressLabel`; bottom of the feature import graph — must never import a feature module), `tuning.mjs` (loads and re-exports **all tunable behavior parameters** from `tuning.yaml` under their historical names — new knobs go in the yaml, not this file), `tuning.yaml` (the actual values + one documented comment each, shared with `scripts/tuning_config.py`), `yaml.mjs` (hand-rolled parser for the small YAML subset `tuning.yaml` uses; tested), `geo.mjs` (pure geodesy: haversine, bearing, destinationPoint, clamp, lerp; tested), `units.mjs` (km/mi + kcal/kJ display formatting; internal state is always metric; tested) |
 | `app/map/` | Map rendering | `map-init.mjs` (Maps API key resolution/saving, Google Maps JS loader, 3D map + minimap creation), `route-render.mjs` (elevated 3D route lines, rider dot mesh + fallback ring, rider beacon, minimap route/marker — see the rider-dot notes below), `route-style.mjs` (pure route segment styling), `screenshot.mjs` (viewport JPG via tab capture — the 3D canvas sits in a closed shadow root and cannot be read directly) |
-| `app/camera/` | Camera behavior | `camera.mjs` (pure follow-camera math; tested), `flyover.mjs` (pure orbit math; tested), `flyby.mjs` (pure ellipse/figure-eight flight math; tested), `follow-camera.mjs` (follow/first-person targets, chase flight, terrain avoidance, manual-drag capture), `overview-camera.mjs` (overview state machine: static/satellite framing, animated orbit/fly-by/fly-over, finish orbit, return-to-rider), `camera-ui.mjs` (map action-bar camera controls + menus, camera settings sliders, first-person preset, reset button state), `camera-debug.mjs` (debug overlay readout + red travel-path debug line), `transition-arc.mjs` (pure overview ↔ chase transition-arc math: Hermite/Bezier eye + look-at flight, duration solver against scale-aware physical limits; tested), `transition-camera.mjs` (app-side transition driver: captures pose + driver velocity, predicts dock states, flies the arc, hands off to follow/orbit) |
+| `app/camera/` | Camera behavior | `camera.mjs` (pure follow-camera math; tested), `flyover.mjs` (pure orbit math; tested), `flyby.mjs` (pure ellipse/figure-eight flight math; tested), `follow-camera.mjs` (follow/first-person targets, chase flight, terrain avoidance, manual-drag capture), `overview-camera.mjs` (overview state machine: static/satellite framing, animated orbit/fly-by/fly-over, finish orbit, return-to-rider), `camera-ui.mjs` (map action-bar camera controls + menus, camera settings sliders, first-person preset, reset button state), `camera-debug.mjs` (debug overlay readout + red travel-path debug line), `transition-arc.mjs` (pure overview ↔ chase transition-arc math: Hermite/Bezier eye + look-at flight, duration solver against scale-aware physical limits; tested), `transition-camera.mjs` (app-side transition driver: captures pose + driver velocity, predicts the dock state, flies the arc into whichever target is in `arc_into_modes` — the follow camera (overview-off, movement-start, profile-seek teleport) or the fly-by/fly-over pattern; static/orbit/satellite overviews are never arced into) |
 | `app/route/` | Route processing | `route.mjs` (GPX parsing, enrichment, interpolation, grade; tested), `climb-signal.mjs` (pure resample/smooth/rolling-grade elevation-signal helpers behind climb detection; tested), `climbs.mjs` (sustained-climb detection — the fatigue-pressure state machine built on `climb-signal.mjs`; tested), `difficulty.mjs` (classification from distance + gain; tested), `route-load.mjs` (GPX file/URL intake, `applyGpxText` route-swap sequence, once-per-load route overview), `climbs-ui.mjs` (climb/segment focus, live climb status, the HUD climb/segment banner), `profile.mjs` (elevation profile canvas drawing + hit-testing), `profile-ui.mjs` (profile rendering + hover/seek/drag-select wiring) |
 | `app/ride/` | Ride execution & telemetry | `movement.mjs` (the movement loop `tick`, simulation toggle, pedaling hysteresis, reset, seek), `eta.mjs` (flat-equivalent pace ETA model; tested), `ride-ui.mjs` (`updateRideUi`, the per-tick UI driver), `telemetry-ui.mjs` (trainer/HR callbacks, HR source resolution, calories/timer, telemetry readouts), `training-zones.mjs` (HR/power zones, fullscreen zone meters, zone summaries), `recorder.mjs` (ride sample bucket), `recording-ui.mjs` (FIT card, download, clear), `fit.mjs` (FIT encoder — must stay sport=cycling, sub_sport=virtual_activity; tested) |
 | `app/trainer/` | Hardware | `trainer.mjs` (FTMS over Web Bluetooth: pairing, reconnect, write queue, Indoor Bike Data), `heartrate.mjs` (BLE heart-rate strap, service 0x180D) |
@@ -593,10 +593,33 @@ in place).
   by orbit, fly-by and fly-over and tuned by `OVERVIEW_DEBUG_LINE_COLOR`,
   `OVERVIEW_DEBUG_LINE_WIDTH`, `OVERVIEW_DEBUG_LINE_ALTITUDE_METERS`, and
   `OVERVIEW_DEBUG_LINE_SAMPLE_COUNT`.
-- **Overview ↔ chase transition arcs.** The handoffs between the route
-  overview and the rider camera — the overview toggle in either direction,
-  and the movement-start auto-off — are flown as a physically-constrained
-  "missile POV" arc instead of the plain chase flight. The pure math lives in
+- **Transition arcs into continuously-moving cameras.** Some camera handoffs
+  are flown as a physically-constrained "missile POV" arc instead of the plain
+  chase / eased entry. Which *targets* get the arc is a declarative policy —
+  `camera_transition.arc_into_modes` in `tuning.yaml` (default `["follow",
+  "flyby", "flyover"]`), read by the `arcsIntoMode(mode)` predicate. The rule
+  behind that list: arc only into a target that represents continuous physical
+  motion you can dock onto with matching velocity. So:
+  - **follow (the rider camera)** — arced into on the overview-off toggle, the
+    movement-start auto-off (overview → follow), and a teleport to the rider
+    (clicking the elevation profile to seek while parked in the rider camera —
+    `seekToMeters` in `movement.mjs`, guarded to skip while moving, in an
+    overview, or in manual mode). The dock is where the rider *will* be.
+  - **fly-by / fly-over** — arced into from any camera when the mode is
+    selected (`startCameraTransitionToFlyPattern`): the arc docks at the
+    pattern point nearest the current camera (`nearestSTo`) with that point's
+    velocity, bank and FOV, then hands off to the pattern animation entering
+    at exactly that arc-length (`startOverviewAnimation({ atS })`, no intro
+    ease). Falls back to the eased pattern entry when no arc fits (already on
+    the pattern, too steep a climb, etc.).
+  - **static / orbit / satellite** (whole-route, climb-focus, and finish-line
+    alike) — **never** arced into. They're artificial framings (a held frame
+    or a turntable), so an arc into them reads as two stitched motions; they
+    snap on a fresh load or ease through their own driver.
+  The **reset-camera button** also opts out of the follow arc even though it
+  targets follow (`returnToRiderCamera({ transition: false })`) — a "put it
+  back" reset should ease the plain chase home, not fly a dramatic arc. The
+  pure math lives in
   `camera/transition-arc.mjs` (tested): the camera eye and its look-at point
   each fly a time-scaled cubic Hermite curve (executed as a cubic Bezier,
   control offsets = velocity·T/3) in a local east/north/up frame, so position
@@ -614,23 +637,21 @@ in place).
   `camera_transition` in `tuning.yaml`. `camera/transition-camera.mjs` is the
   app-side driver: `captureCameraTransitionStart` reads the current pose plus
   the velocity of whichever driver owns the camera (static pose, chase-flight
-  velocities, orbit tangential velocity, fly-by frame speed), the dock state
-  is a function of the candidate duration (a moving rider is intercepted
+  velocities, orbit tangential velocity, fly-by frame speed), the dock state is
+  either a function of the candidate duration (a moving rider is intercepted
   where they *will* be via `followCameraTargetAt(progress, { terrainLift:
-  false })`; an orbit is docked into mid-spin via `orbitDockStateAt`, after
-  which `resumeOverviewOrbitAfterTransition` restarts the orbit animation
-  backdated by the flight time so the spin continues seamlessly), and
-  `state.cameraTransition` + its rAF loop own the map while flying
-  (`updateMapCamera`/`ensureCameraFlightLoop` yield on it, exactly like
-  `state.overviewAnim`). On docking at the rider, the chase flight is seeded
-  with the arc's terminal velocity so follow tracking continues the motion.
-  Every call site keeps its pre-existing behavior as the fallback: when
-  `camera_transition.enabled` is false, no candidate duration satisfies the
-  limits, the two cameras are closer than `min_distance_meters`, or the
-  overview mode is fly-by/fly-over (they keep their own eased pattern entry),
-  the classic `chaseStep` flight/intro runs unchanged. A manual map grab
-  cancels the flight outright, and `applyCameraNow` (instant snaps) always
-  supersedes it.
+  false })`) or a fixed pose (the fly pattern's entry frame + velocity/bank/FOV
+  via `flyPatternDockState`), and `state.cameraTransition` + its rAF loop own
+  the map while flying (`updateMapCamera`/`ensureCameraFlightLoop` yield on it,
+  exactly like `state.overviewAnim`). On docking at the rider, the chase flight
+  is seeded with the arc's terminal velocity so follow tracking continues the
+  motion; on docking onto a fly pattern, the pattern animation resumes at the
+  docked arc-length. Every call site keeps its pre-existing behavior as the
+  fallback: when `camera_transition.enabled` is false, the target isn't in
+  `arc_into_modes`, no candidate duration satisfies the limits, or the two
+  cameras are closer than `min_distance_meters`, the classic `chaseStep`
+  flight / eased pattern intro runs unchanged. A manual map grab cancels the
+  flight outright, and `applyCameraNow` (instant snaps) always supersedes it.
 - **Finish-line orbit.** The instant a ride — pedaled, simulated, or demo —
   reaches the end of the route (the finish check inside `tick`, `movement.mjs`),
   `enterFinishOrbit` takes the camera into an orbit around the rider's exact

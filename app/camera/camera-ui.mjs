@@ -429,7 +429,9 @@ export function resetCameraView() {
   closeCameraViewMenu();
   resetCameraToDefaults();
   if (!state.route.length || state.overviewActive) return;
-  returnToRiderCamera();
+  // A reset is a "put it back" action, not a cinematic move — ease the plain
+  // chase flight home rather than flying the transition arc.
+  returnToRiderCamera({ transition: false });
 }
 
 export function updateCenterRiderFromControl() {
