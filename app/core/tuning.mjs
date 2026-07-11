@@ -240,14 +240,34 @@ export const DISTANCE_CLASS_THRESHOLDS_KM = req("route_difficulty", "distance_cl
 export const TERRAIN_CLASS_THRESHOLDS_M_PER_KM = req("route_difficulty", "terrain_class_thresholds_m_per_km");
 export const DIFFICULTY_THRESHOLDS_EQUIVALENT_KM = req("route_difficulty", "difficulty_thresholds_equivalent_km");
 
-// Climb detection (leaky-bucket fatigue integrator — see tuning.yaml)
-export const CLIMB_FATIGUE_THRESHOLD = req("climb_detection", "fatigue_threshold");
+// Climb detection (resampled fatigue-pressure integrator — see tuning.yaml)
+export const CLIMB_RESAMPLE_STEP_METERS = req("climb_detection", "resample_step_meters");
+export const CLIMB_ELEVATION_MEDIAN_WINDOW_METERS = req("climb_detection", "elevation_median_window_meters");
+export const CLIMB_ELEVATION_SMOOTH_WINDOW_METERS = req("climb_detection", "elevation_smooth_window_meters");
+export const CLIMB_SHORT_GRADE_WINDOW_METERS = req("climb_detection", "short_grade_window_meters");
+export const CLIMB_LONG_GRADE_WINDOW_METERS = req("climb_detection", "long_grade_window_meters");
+export const CLIMB_LONG_GRADE_WEIGHT = req("climb_detection", "long_grade_weight");
+export const CLIMB_START_FATIGUE = req("climb_detection", "start_fatigue");
+export const CLIMB_END_FATIGUE = req("climb_detection", "end_fatigue");
+export const CLIMB_END_FATIGUE_MIN_DISTANCE_METERS = req("climb_detection", "end_fatigue_min_distance_meters");
 export const CLIMB_MAX_FATIGUE = req("climb_detection", "max_fatigue");
-export const CLIMB_RESTING_GRADIENT_PERCENT = req("climb_detection", "resting_gradient_percent");
-export const CLIMB_RECOVERY_MULTIPLIER = req("climb_detection", "recovery_multiplier");
-export const CLIMB_SMOOTHING_WINDOW_SIZE = req("climb_detection", "smoothing_window_size");
+export const CLIMB_PRESSURE_START_GRADE_PERCENT = req("climb_detection", "pressure_start_grade_percent");
+export const CLIMB_PRESSURE_EXPONENT = req("climb_detection", "pressure_exponent");
+export const CLIMB_RECOVERY_UPHILL_THRESHOLD_PERCENT = req("climb_detection", "recovery_uphill_threshold_percent");
+export const CLIMB_RECOVERY_FLAT_THRESHOLD_PERCENT = req("climb_detection", "recovery_flat_threshold_percent");
+export const CLIMB_RECOVERY_FLAT_PRESSURE = req("climb_detection", "recovery_flat_pressure");
+export const CLIMB_RECOVERY_DOWNHILL_BASE = req("climb_detection", "recovery_downhill_base");
+export const CLIMB_RECOVERY_DOWNHILL_SCALE = req("climb_detection", "recovery_downhill_scale");
+export const CLIMB_RECOVERY_MAX = req("climb_detection", "recovery_max");
 export const CLIMB_MIN_GAIN_METERS = req("climb_detection", "min_gain_meters");
-export const CLIMB_MIN_AVERAGE_GRADE_PERCENT = req("climb_detection", "min_average_grade_percent");
+export const CLIMB_MIN_DISTANCE_METERS = req("climb_detection", "min_distance_meters");
+export const CLIMB_START_LOOKBACK_METERS = req("climb_detection", "start_lookback_meters");
+export const CLIMB_END_DROP_METERS = req("climb_detection", "end_drop_meters");
+export const CLIMB_END_DROP_DISTANCE_METERS = req("climb_detection", "end_drop_distance_meters");
+export const CLIMB_MAX_EASY_AFTER_PEAK_METERS = req("climb_detection", "max_easy_after_peak_meters");
+export const CLIMB_MERGE_GAP_METERS = req("climb_detection", "merge_gap_meters");
+export const CLIMB_MERGE_MAX_DROP_METERS = req("climb_detection", "merge_max_drop_meters");
+export const CLIMB_MIN_AVERAGE_GRADE_FOR_LENGTH = req("climb_detection", "min_average_grade_for_length");
 
 // Demo mode
 export const DEMO_RIDE = req("demo_ride");

@@ -44,7 +44,7 @@ pages, `styles.css`, `gallery.json`, and `assets/` stay at the app root.
 | `app/core/` | Shared foundation | `state.mjs` (the single mutable `state` object + `els` DOM map + `updateProgressLabel`; bottom of the feature import graph — must never import a feature module), `tuning.mjs` (loads and re-exports **all tunable behavior parameters** from `tuning.yaml` under their historical names — new knobs go in the yaml, not this file), `tuning.yaml` (the actual values + one documented comment each, shared with `scripts/tuning_config.py`), `yaml.mjs` (hand-rolled parser for the small YAML subset `tuning.yaml` uses; tested), `geo.mjs` (pure geodesy: haversine, bearing, destinationPoint, clamp, lerp; tested), `units.mjs` (km/mi + kcal/kJ display formatting; internal state is always metric; tested) |
 | `app/map/` | Map rendering | `map-init.mjs` (Maps API key resolution/saving, Google Maps JS loader, 3D map + minimap creation), `route-render.mjs` (elevated 3D route lines, rider dot mesh + fallback ring, rider beacon, minimap route/marker — see the rider-dot notes below), `route-style.mjs` (pure route segment styling), `screenshot.mjs` (viewport JPG via tab capture — the 3D canvas sits in a closed shadow root and cannot be read directly) |
 | `app/camera/` | Camera behavior | `camera.mjs` (pure follow-camera math; tested), `flyover.mjs` (pure orbit math; tested), `flyby.mjs` (pure ellipse/figure-eight flight math; tested), `follow-camera.mjs` (follow/first-person targets, chase flight, terrain avoidance, manual-drag capture), `overview-camera.mjs` (overview state machine: static/satellite framing, animated orbit/fly-by/fly-over, finish orbit, return-to-rider), `camera-ui.mjs` (map action-bar camera controls + menus, camera settings sliders, first-person preset, reset button state), `camera-debug.mjs` (debug overlay readout + red travel-path debug line), `transition-arc.mjs` (pure overview ↔ chase transition-arc math: Hermite/Bezier eye + look-at flight, duration solver against scale-aware physical limits; tested), `transition-camera.mjs` (app-side transition driver: captures pose + driver velocity, predicts dock states, flies the arc, hands off to follow/orbit) |
-| `app/route/` | Route processing | `route.mjs` (GPX parsing, enrichment, interpolation, grade; tested), `climbs.mjs` (sustained-climb detection; tested), `difficulty.mjs` (classification from distance + gain; tested), `route-load.mjs` (GPX file/URL intake, `applyGpxText` route-swap sequence, once-per-load route overview), `climbs-ui.mjs` (climb/segment focus, live climb status, the HUD climb/segment banner), `profile.mjs` (elevation profile canvas drawing + hit-testing), `profile-ui.mjs` (profile rendering + hover/seek/drag-select wiring) |
+| `app/route/` | Route processing | `route.mjs` (GPX parsing, enrichment, interpolation, grade; tested), `climb-signal.mjs` (pure resample/smooth/rolling-grade elevation-signal helpers behind climb detection; tested), `climbs.mjs` (sustained-climb detection — the fatigue-pressure state machine built on `climb-signal.mjs`; tested), `difficulty.mjs` (classification from distance + gain; tested), `route-load.mjs` (GPX file/URL intake, `applyGpxText` route-swap sequence, once-per-load route overview), `climbs-ui.mjs` (climb/segment focus, live climb status, the HUD climb/segment banner), `profile.mjs` (elevation profile canvas drawing + hit-testing), `profile-ui.mjs` (profile rendering + hover/seek/drag-select wiring) |
 | `app/ride/` | Ride execution & telemetry | `movement.mjs` (the movement loop `tick`, simulation toggle, pedaling hysteresis, reset, seek), `eta.mjs` (flat-equivalent pace ETA model; tested), `ride-ui.mjs` (`updateRideUi`, the per-tick UI driver), `telemetry-ui.mjs` (trainer/HR callbacks, HR source resolution, calories/timer, telemetry readouts), `training-zones.mjs` (HR/power zones, fullscreen zone meters, zone summaries), `recorder.mjs` (ride sample bucket), `recording-ui.mjs` (FIT card, download, clear), `fit.mjs` (FIT encoder — must stay sport=cycling, sub_sport=virtual_activity; tested) |
 | `app/trainer/` | Hardware | `trainer.mjs` (FTMS over Web Bluetooth: pairing, reconnect, write queue, Indoor Bike Data), `heartrate.mjs` (BLE heart-rate strap, service 0x180D) |
 | `app/settings/` | Settings | `settings-ui.mjs` (settings dialog shell + every non-camera panel: units, rider profile, display & HUD toggles, rendering, screenshot settings) |
@@ -356,15 +356,26 @@ in place).
   meters-of-climb-per-km, and "equivalent km" (distance + ascent ÷
   `EQUIVALENT_KM_CLIMB_METERS`) into named classes purely from distance and
   elevation gain — no power/speed/weight/weather data. `climbs.mjs#detectClimbs`
-  walks the route once, extending a candidate climb through small dips
-  (same noise-anchor idea as `enrichRoute`'s ascent counter, but with its own
-  dedicated thresholds, deliberately decoupled from
-  `CLIMB_NOISE_THRESHOLD_METERS`) and only closing it once elevation has
-  dropped `CLIMB_DESCENT_TOLERANCE_METERS` below the peak *and* the route has
-  moved `CLIMB_MERGE_GAP_METERS` past that peak — so a short flat stretch or
-  a few meters of downhill doesn't end a climb; candidates under
-  `CLIMB_MIN_GAIN_METERS` or `CLIMB_MIN_AVERAGE_GRADE_PERCENT` are dropped as
-  noise. All thresholds live in `tuning.mjs`. `updateClimbStatus` (`climbs-ui.mjs`,
+  models a "fatigue" (pressure integrator) score meant to emulate perceived
+  effort rather than reading point-to-point geometry: the route is first
+  resampled to a fixed step and double-smoothed (median filter, then moving
+  average, both in `climb-signal.mjs`), then at every point a short- and a
+  long-distance rolling grade are read and whichever is more "climb-like"
+  (grade run through a nonlinear pressure curve, since humans don't perceive
+  steepness linearly) fills the bucket; flats and descents drain it. A
+  candidate becomes an officially active climb once the bucket crosses
+  `start_fatigue`, and closes on whichever comes first: the bucket draining
+  back to `end_fatigue`, the route dropping `end_drop_meters` below the peak
+  over `end_drop_distance_meters`, or `max_easy_after_peak_meters` passing
+  with no climb pressure at all — so a short flat stretch or a few meters of
+  downhill doesn't end a climb. Accepted candidates within `merge_gap_meters`
+  of each other (and no more than `merge_max_drop_meters` apart in elevation)
+  are merged into one; candidates under `min_gain_meters`, `min_distance_meters`,
+  or the length-scaled `min_average_grade_for_length` floor are dropped as
+  noise. All thresholds live in the `climb_detection` section of `tuning.yaml`
+  (via `tuning.mjs`) — `scripts/climb_tester.py` is a standalone CLI that reads
+  the exact same section for verbose step-by-step diagnostics against a GPX
+  file; it does not affect the shipped app. `updateClimbStatus` (`climbs-ui.mjs`,
   called from `updateRideUi` on the same slow-UI cadence as the other live
   stats) looks up `state.progressMeters` against `state.climbs` each tick: if
   progress falls inside a climb's `[startDistanceMeters, endDistanceMeters]`
@@ -710,6 +721,17 @@ key into a tracked file or commit it.
   workflow change must be reflected in the README (Features, How to use it,
   Notes & limitations). The README is the project's landing page; stale
   docs are treated as bugs.
+- **Feature interesting algorithms and architecture decisions in the
+  README's "Under the hood" section.** When a change introduces or replaces
+  a non-obvious algorithm (e.g. the camera transition-arc kinematics or the
+  climb-detection fatigue model) or makes an architecture decision worth
+  explaining (an ADR-style "why this approach, not the obvious one"), add or
+  update a subsection there in the same change — short intro, a bullet list
+  of the techniques involved, and links to the pure module(s), their tests,
+  and the relevant `tuning.yaml` section. Match the existing subsections'
+  style. Routine bug fixes and small feature additions don't need this;
+  reserve it for things a contributor would otherwise have to read the code
+  to discover.
 - Keep `AGENTS.md` and `CLAUDE.md` synchronized. Any change to one
   agent-instruction file must be reflected in the other in the same change
   (preserving only filename-specific titles if needed).

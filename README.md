@@ -150,6 +150,19 @@ The camera system uses purpose-built geometry rather than canned animations:
 
 The pure transition solver is isolated in [`app/camera/transition-arc.mjs`](app/camera/transition-arc.mjs) and exercised by tests for endpoint docking, velocity continuity, physical limits, orientation smoothness, moving-target interception, and impossible-flight rejection. The browser-facing driver lives in [`app/camera/transition-camera.mjs`](app/camera/transition-camera.mjs). Every behavior knob is documented under `camera_transition` in [`app/core/tuning.yaml`](app/core/tuning.yaml).
 
+### Human-perceived climb detection
+
+Climb detection reads like a rider's own sense of effort rather than raw point-to-point geometry:
+
+- **Resample and dual-filter elevation** to a fixed distance step, then a median filter followed by a moving average, so detection depends only on the terrain's real shape — not the source GPX's point density or GPS jitter.
+- **Short- and long-window rolling grade** are read at every point; whichever reads more "climb-like" wins, so the same detector catches punchy ramps and long sustained drags alike.
+- **A nonlinear pressure curve** converts grade into "fatigue" pressure, modeling how perceived effort ramps up faster than grade does — a jump from 2% to 4% barely registers, but 8%+ hurts far more than twice as much.
+- **A fatigue integrator** (a leaky bucket) accumulates that pressure and drains it on flats and descents; a climb becomes officially active once the bucket crosses a start threshold.
+- **Elevation-based exit conditions** — a large enough drop past the peak, or a long enough flat/downhill spell with no climb pressure at all — can close a climb even before its fatigue has fully drained, so a long descent is never mistaken for part of the climb.
+- **Small-gap merging** stitches climbs separated only by a brief, shallow dip into one human-perceived climb.
+
+The pure signal-processing helpers (resample, smoothing, rolling grade) live in [`app/route/climb-signal.mjs`](app/route/climb-signal.mjs); the fatigue state machine sits in [`app/route/climbs.mjs`](app/route/climbs.mjs). Both are covered by unit tests. Every behavior knob is documented under `climb_detection` in [`app/core/tuning.yaml`](app/core/tuning.yaml); [`scripts/climb_tester.py`](scripts/climb_tester.py) is a standalone CLI that reads the exact same tunables for verbose, step-by-step diagnostics against any GPX file.
+
 ### Architecture
 
 - **Zero build step, vanilla ES modules, no package dependencies.** The deployed `app/` directory is static HTML, CSS, JavaScript, and assets.

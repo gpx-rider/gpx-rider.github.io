@@ -782,57 +782,141 @@ route_difficulty:
 
 # --- Climb detection ---------------------------------------------------------
 #
-# Climb detection relies on a "Leaky Bucket" (fatigue integrator) algorithm
-# to emulate human effort. Rather than purely looking at point-to-point
-# geometry, it calculates a running "fatigue" score.
+# Climb detection models a running "fatigue" (pressure integrator) score
+# meant to emulate human perceived effort, rather than purely reading
+# point-to-point geometry:
 #
-# - Sustained grades above a resting threshold fill the bucket.
-# - Shallow flats and descents drain the bucket.
+# - The raw route is first resampled to a fixed step (independent of the
+#   source GPX's point density), then double-filtered (median, then moving
+#   average) to remove GPS spikes and jitter.
+# - At each point, both a short- and a long-distance rolling grade are
+#   computed; whichever reads more "climb-like" (a nonlinear function of
+#   grade, so a human's non-linear perception of steepness is modeled) fills
+#   the fatigue bucket, so punchy ramps and long sustained drags both
+#   register.
+# - Flats and gentle grades drain the bucket, faster the steeper the descent.
 # - A segment is officially recognized as an active climb once the bucket
-#   hits a specific fatigue threshold.
-# - The climb closes once the route descends enough to completely empty the
-#   bucket.
+#   crosses a start threshold; it closes once the bucket has drained back
+#   down, or once the route has descended enough past the peak, or once
+#   there has been a long enough flat/downhill spell since the peak.
+# - Nearby accepted climbs separated only by a small dip are merged into one.
 #
 # This model prevents a long climb from being fractured into multiple pieces
 # by brief dips or false flats, while correctly ignoring small, insignificant
-# rollers.
+# rollers and long near-flat drags.
 climb_detection:
-  # The "bucket size" required to officially declare a segment an active climb.
-  # Lowering this makes the algorithm more sensitive to shorter, punchy hills.
-  fatigue_threshold: 300
+  # Distance (in meters) the raw route is resampled to before analysis. This
+  # makes climb detection independent of the source GPX's point density.
+  resample_step_meters: 20.0
 
-  # The absolute maximum fatigue the bucket can hold. This acts as a "lid,"
-  # ensuring that massive alpine climbs don't accumulate infinite fatigue.
-  # Without this lid, a long mountain descent would not be enough to drain the
-  # bucket and close the climb.
-  max_fatigue: 900
+  # Median filter window (in meters) applied to resampled elevation first;
+  # removes single-point spikes without smearing real terrain shape.
+  elevation_median_window_meters: 60.0
 
-  # The gradient threshold (in percent) where a rider starts accumulating
-  # fatigue. Gradients above this add to the bucket; gradients below this
-  # trigger recovery.
-  resting_gradient_percent: 0.5
+  # Moving-average window (in meters) applied after the median filter;
+  # removes remaining GPS jitter.
+  elevation_smooth_window_meters: 120.0
 
-  # The leak rate when resting or descending. A multiplier of 0.4 means the
-  # bucket drains at 40% of the speed it fills. This forgiving drain rate
-  # allows climbs to "hold their breath" through false-flats and brief
-  # downhill dips.
-  recovery_multiplier: 0.4
+  # Rolling-grade window (in meters) used to catch short, punchy ramps.
+  short_grade_window_meters: 120.0
 
-  # The number of data points used in the moving average pre-filter. Raw GPS
-  # elevation data is inherently noisy. A 5-point window effectively flattens
-  # micro-jitter without destroying the macro-geometry of the terrain.
-  smoothing_window_size: 5
+  # Rolling-grade window (in meters) used to catch long, sustained drags.
+  long_grade_window_meters: 320.0
 
-  # Sanity Check: Minimum accumulated gain (in meters) from the true base to
-  # the true peak. Using accumulated gain ensures that rocky, rolling trails
-  # that net little elevation but require significant upward pedaling are
-  # still recognized.
-  min_gain_meters: 20
+  # The long-window grade's pressure is scaled by this factor relative to the
+  # short window's, so a long drag needs to be a little more convincing than
+  # a short ramp before it wins out.
+  long_grade_weight: 0.85
 
-  # Sanity Check: Minimum average net grade (in percent) from the true base to
-  # the true peak. Prevents extremely long, nearly flat false-drags from being
-  # classified as categorizable climbs.
-  min_average_grade_percent: 1.5
+  # Fatigue bucket must reach this level for a candidate to become an
+  # officially active climb. Lowering this makes the algorithm more sensitive
+  # to shorter, punchier hills.
+  start_fatigue: 300.0
+
+  # Fatigue bucket level, once an active climb drops to or below this (and
+  # has been at least end_fatigue_min_distance_meters past its peak), that
+  # counts as recovery and closes the climb.
+  end_fatigue: 85.0
+  end_fatigue_min_distance_meters: 80.0
+
+  # Absolute ceiling on the fatigue bucket, so a massive alpine climb never
+  # accumulates unbounded fatigue — without this lid, a long mountain descent
+  # would not be enough to drain the bucket and close the climb.
+  max_fatigue: 1200.0
+
+  # Grade (in percent) below which climb pressure does not fill the bucket at
+  # all. This is the main false-flat killer.
+  pressure_start_grade_percent: 1.8
+
+  # Exponent applied to (grade − pressure_start_grade_percent) to turn grade
+  # into fatigue pressure. Above 1, pressure ramps up faster than grade does
+  # — matching how humans perceive steepness non-linearly (a jump from 2% to
+  # 4% barely registers, 8%+ hurts a lot more than twice as much).
+  pressure_exponent: 1.35
+
+  # Recovery curve: how fast the fatigue bucket drains, based on the steeper
+  # of the short/long rolling grade (so the bucket only drains once both
+  # windows agree the road isn't climbing).
+  # Grade at/above this (percent) is treated as still climbing: no recovery.
+  recovery_uphill_threshold_percent: 1.2
+  # Grade at/above this but below the uphill threshold: flat, slow recovery.
+  recovery_flat_threshold_percent: -0.5
+  recovery_flat_pressure: 0.25
+  # Below the flat threshold (descending): recovery scales with how steep the
+  # descent is, `recovery_downhill_base + |grade| * recovery_downhill_scale`,
+  # capped at recovery_max.
+  recovery_downhill_base: 0.50
+  recovery_downhill_scale: 0.28
+  recovery_max: 3.0
+
+  # Sanity check: minimum accumulated elevation gain (in meters) from the
+  # true base to the true peak. Using accumulated gain ensures that rocky,
+  # rolling trails that net little elevation but require significant upward
+  # pedaling are still recognized.
+  min_gain_meters: 15.0
+
+  # Sanity check: minimum length (in meters) for a candidate to be accepted
+  # as a climb.
+  min_distance_meters: 500.0
+
+  # When fatigue crosses the start threshold, how far back (in meters) the
+  # search for the climb's true base is allowed to look. Prevents a very old
+  # shallow drag from diluting the climb's start forever.
+  start_lookback_meters: 1000.0
+
+  # A climb ends once elevation has dropped this many meters below the
+  # peak...
+  end_drop_meters: 12.0
+
+  # ...and the route has moved this many meters past the peak while dropping.
+  end_drop_distance_meters: 160.0
+
+  # A climb also ends after this many meters with no climb pressure at all
+  # since the peak, even without a meaningful elevation drop.
+  max_easy_after_peak_meters: 500.0
+
+  # Two detected climbs closer together than this (in meters) are merged into
+  # one human-perceived climb...
+  merge_gap_meters: 250.0
+
+  # ...as long as the elevation drop between them is no more than this (in
+  # meters) — a bigger drop means a real intervening descent, not noise.
+  merge_max_drop_meters: 8.0
+
+  # Sanity check: minimum average grade (in percent) a candidate must clear
+  # to be accepted, looked up by its length — short hills need to be steeper
+  # to feel like real climbs; long climbs can be gentler and still feel real.
+  # The first row whose max_length_meters the candidate's length is under
+  # wins; the last (.inf) row is the catch-all for very long climbs.
+  min_average_grade_for_length:
+    - max_length_meters: 350
+      min_average_grade_percent: 4.0
+    - max_length_meters: 700
+      min_average_grade_percent: 3.0
+    - max_length_meters: 1500
+      min_average_grade_percent: 2.0
+    - max_length_meters: .inf
+      min_average_grade_percent: 1.4
 
 # --- Demo mode ---------------------------------------------------------------
 #
