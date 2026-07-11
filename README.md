@@ -1,158 +1,267 @@
 # GPX Rider
 
-**A free, open-source, browser-based virtual cycling trainer.** Load any GPX route, ride it over photorealistic 3D satellite terrain, and drive real grade changes on a Bluetooth smart trainer. No app install, no subscription, no account.
+**A free, open-source virtual cycling trainer that runs in your browser.** Load any GPX route, ride it over photorealistic 3D terrain, and let the real road gradient control your Bluetooth smart trainer.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE)
 [![Deploy to GitHub Pages](https://github.com/ziizii/gpx-rider/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/ziizii/gpx-rider/actions/workflows/deploy-pages.yml)
 
-**[Launch the App](https://gpx-rider.github.io)**
+**[Launch GPX Rider →](https://gpx-rider.github.io/app.html)**  
+[About GPX Rider](https://gpx-rider.github.io/)
 
-The link opens a short landing page that replays a real route (the Ještěd climb) in photorealistic 3D; **Launch GPX Rider** opens the app with that same route loaded. The live demo runs entirely in your browser. It ships with a domain-restricted Google Maps key; self-hosted copies can use your own key, stored locally in your browser.
+> **Zero friction:** The live app requires **zero accounts, zero installations, and zero API keys**. Open it and ride. The hosted version uses a domain-restricted Google Maps key.
+
+The landing page uses the Ještěd climb as an animated 3D backdrop and gives a quick overview of GPX Rider’s features and riding workflow.
 
 ## Screenshots
 
 ![Ride HUD](screenshots/ride.jpg)
-![Setup Screen](screenshots/setup.jpg)
-![Route Gallery](screenshots/gallery.jpg)
+![Setup screen](screenshots/setup.jpg)
+![Route gallery](screenshots/gallery.jpg)
 
 ## Why GPX Rider?
 
-Most indoor cycling apps live inside closed platforms: fixed worlds, subscriptions, and routes chosen for you. GPX Rider is deliberately small and hackable. Point it at a GPX file and ride the actual terrain, with your trainer resistance following the route grade in real time.
+Most indoor cycling platforms give you fixed virtual worlds, subscriptions, and routes chosen for you. GPX Rider takes a different approach: bring any GPX track and ride the actual terrain, with trainer resistance following its grade in real time.
 
-GPX Rider is built for people who want to:
+It is built for people who want to:
 
-- ride their own GPX routes indoors on real-world 3D scenery,
-- preview climbs and routes before taking them outside,
-- control an FTMS-compatible smart trainer from the browser,
-- export virtual rides as FIT files for services like Strava or Garmin Connect,
-- self-host, fork, tweak, or contribute without a backend or build system.
-
-Contributions are very welcome. See [Contributing](#contributing) below.
+- ride their own routes indoors over real-world 3D scenery;
+- preview climbs before riding them outside;
+- control an FTMS-compatible smart trainer directly from the browser;
+- export virtual rides as FIT files for services such as Strava and Garmin Connect;
+- self-host, modify, or contribute without a backend or build system.
 
 ## Highlights
 
-- **GPX import** — drag in any route with track points and elevation, or start from the built-in route gallery.
-- **Photorealistic 3D terrain** — Google Photorealistic 3D Maps render the route with a follow camera, minimap, rider beacon, terrain-aware camera lift, and a whole-route overview (static, orbit, ellipse fly-by, figure-eight fly-over, or straight-down satellite) available before and during the ride.
-- **Bluetooth FTMS trainer control** — connect Wahoo KICKR and other FTMS-compatible trainers over Web Bluetooth. Start pedaling and the map advances from your real trainer speed; stop pedaling and the ride stops.
-- **Heart-rate sensors** — pair a standard Bluetooth heart-rate strap and see live BPM in the stats and ride HUD.
-- **Route difficulty and climbs** — GPX Rider classifies the route, detects sustained climbs, lists each climb with distance/elevation/grade, and tracks live progress to the top while riding.
-- **Map ride HUD** — the setup map and fullscreen map share the same configurable metric tiles, distance progress, climbing progress, road-ahead elevation, minimap, and climb/segment banner; fullscreen just expands the map to fill the screen.
-- **FIT export** — rides are recorded locally in the browser and can be downloaded as `.fit` files tagged as virtual rides.
-- **Simulation mode** — preview any route at a chosen speed without pedaling; real trainer input automatically takes over when you start riding.
-- **Screenshot capture** — an optional map screenshot button saves consistent JPG captures including the HUD, minimap, elevation profile, and required Google attribution.
-- **Session persistence** — route, ride progress, recorded ride data, camera settings, units, API key, and remembered sensors survive reloads via browser storage.
-- **No build step** — plain HTML/CSS/JS ES modules. No framework, no bundler, no `node_modules` required to run the app.
+- **Bring any GPX track** — open a local file or choose a ready-to-ride route from the built-in gallery.
+- **Photorealistic 3D terrain** — follow elevated, grade-colored route lines through Google Photorealistic 3D Maps with a real 3D rider marker, beacon, minimap, and terrain-aware camera lift.
+- **Bluetooth trainer control** — connect an FTMS-compatible smart trainer through Web Bluetooth. Trainer-reported speed advances the rider while route grade drives indoor-bike simulation resistance.
+- **Heart-rate support** — connect a standard Bluetooth heart-rate strap or use heart-rate data reported by the trainer.
+- **Route intelligence** — calculate distance, noise-filtered ascent and descent, grade, difficulty, terrain classification, sustained climbs, and smart ETA directly from the GPX data.
+- **Climb and segment focus** — inspect detected climbs or drag across the elevation profile to select any custom route segment.
+- **Adaptive ride HUD** — use the same standard ride screen in windowed and fullscreen views, with sensor meters appearing only when their data is available.
+- **Cinematic camera system** — switch among follow, first-person, static, orbit, fly-by, fly-over, and satellite views with physically flown transitions between the route overview and rider.
+- **FIT export** — record rides locally and download standards-compliant `.fit` files classified as virtual cycling activities.
+- **Simulation and demo modes** — preview a route at a chosen speed, or drive the complete UI with synthetic trainer and heart-rate data.
+- **Recording view** — frame the map at an exact recording size and choose which HUD components appear in the recording.
+- **Local-first persistence** — routes, progress, recordings, settings, camera preferences, and remembered sensors survive reloads without an account.
+- **Zero build step** — vanilla HTML, CSS, and JavaScript ES modules. No framework, bundler, npm packages, or `node_modules`.
 
-## Quickstart
+## How to ride
+
+[Mapy.com](https://mapy.com/) is a convenient way to create routes: it supports bicycle routing, displays an elevation profile, and exports GPX files ready for GPX Rider.
+
+1. Open GPX Rider in Chrome or Edge.
+2. Choose **Open GPX file…** or select a route from **Browse gallery**. If there is no saved ride or route deep-link, the app automatically opens the first gallery route.
+3. Select **Connect** beside the smart trainer and choose an FTMS-compatible device.
+4. Optionally connect a Bluetooth heart-rate strap the same way.
+5. Start pedaling. Trainer speed moves the rider along the route, while the current GPX grade is sent back to the trainer.
+6. Use **Download .FIT** whenever you want to export the recorded ride.
+
+Not on the bike? Use the Simulation card's **Start** button to preview the route at a fixed speed. Real pedaling automatically stops a running simulation and takes priority.
+
+## Route intelligence
+
+When a route loads, GPX Rider shows its name, distance, ascent, descent, terrain class, and difficulty. The classification uses distance and elevation gain only; it does not depend on power, speed, or weather.
+
+The climb detector tolerates short flats, small descents, and noisy elevation samples, so a sustained climb is not incorrectly split into several pieces. Detected climbs include:
+
+- start and summit positions;
+- length, elevation gain, average grade, and maximum grade;
+- approach distance and climb order;
+- live distance, ascent, and average grade remaining;
+- distance and climbing progress to the summit.
+
+Drag across any part of the elevation profile to select a custom segment. The app reports its start, end, length, ascent, and descent. While stationary, the camera can focus on the selection; while riding, the rider camera remains active and the segment statistics move into the map HUD.
+
+### Smart ETA
+
+During a trainer ride, ETA measures the rider's pace through *flat-equivalent distance*: climbing is charged, descending is credited, and the result is projected across the terrain still ahead. It learns only from real pedaling, so artificial simulation speed never contaminates the estimate.
+
+Simulation ETA remains a straightforward remaining-distance calculation at the selected speed.
+
+## Camera and HUD
+
+### Rider camera
+
+- The default follow camera flies behind the rider using the GPX route bearing.
+- A first-person preset places the camera at rider height.
+- Camera distance, angle, position, heading, and centering can be adjusted.
+- Terrain avoidance lifts the camera when route elevation indicates intervening ground.
+- Manual dragging gives the user direct control; reset restores the selected camera surface.
+
+### Route overview
+
+A newly loaded route opens in a whole-route overview. The same overview control remains available during a ride, so the camera is never locked to the rider.
+
+Five overview styles are available:
+
+- **Static** — a tightly framed still view of the complete route.
+- **Orbit** — a continuous turntable rotation around the route.
+- **Fly-by** — a camera flies a PCA-aligned ellipse around the route and looks into its direction of travel.
+- **Fly-over** — a banking figure-eight that crosses the route's center and reverses its turn direction between lobes.
+- **Satellite** — a near-vertical, north-up view fitted to the route.
+
+Selecting a detected climb or custom segment opens a dedicated static, orbit, or satellite focus camera. Reaching the end of a ride can trigger a finish-line orbit around the rider.
+
+### Cinematic handoffs
+
+- Overview-to-rider, rider-to-overview, and movement-start handoffs are flown rather than cut.
+- The camera intercepts a moving rider where it will be when the flight finishes, rather than chasing its old position.
+- Entering Orbit docks into the rotation already in progress; the orbit then resumes at the same pose and angular speed.
+- Position, view direction, roll, field of view, and velocity continue through the dock without a separate alignment phase.
+- Geometry that cannot satisfy the configured physical limits falls back to the classic chase flight.
+
+The underlying kinematics are described in [Under the hood](#under-the-hood).
+
+### Map HUD
+
+The HUD belongs to the map viewport and remains a standard ride screen in both windowed and fullscreen layouts. Fullscreen expands the same surface instead of switching to a separate UI.
+
+- The bottom dock presents the core ride metrics, road-ahead elevation profile, and distance and climbing progress.
+- Power and heart-rate meters appear only when those sensor values are available; grade appears when a route is loaded.
+- Available power, heart-rate, and grade meters show live training zones.
+- The clock chip combines local time, elapsed time, ridden distance, and ascent.
+- The climb banner shows approaching-climb, active-climb, or custom-segment statistics.
+- The minimap and map controls remain available on the ride surface.
+- The data dock can collapse to a compact strip when more map is wanted.
+
+The separate **Recording view** fixes the map to a consistent output size and lets you hide selected components—clock, meters, bottom dock, climb banner, demo chip, controls, or minimap—without changing the normal ride screen.
+
+### Camera diagnostics
+
+The Debug settings category provides a collapsible overlay with the camera values the 3D map actually applies: look-at center, eye altitude, heading, tilt, range, roll, field of view, and ride progress. For Orbit, Fly-by, and Fly-over, it can also draw the camera travel path as a red 3D line.
+
+## Under the hood
+
+GPX Rider is deliberately engineered as a small, inspectable static application rather than a packaged web platform.
+
+### Broadcast-quality camera kinematics
+
+The camera system uses purpose-built geometry rather than canned animations:
+
+- **Time-scaled cubic Hermite splines** fly overview ↔ rider transitions in a local east/north/up frame. The curves are executed as cubic Béziers whose control offsets encode the endpoint velocities.
+- **Exact position-and-velocity docking** makes both ends of a flight continuous. The chase camera inherits the arc's terminal velocity; Orbit is intercepted mid-spin and resumes backdated by the flight duration.
+- **Dual-arc, tangent POV** flies the camera eye on the Hermite path while looking strictly along its flight tangent mid-arc. Near each dock, Rodrigues rotation turns the view direction at a constant rate into the real endpoint view—never through independent heading and tilt interpolation.
+- **Moving-target interception** solves the rider's future follow-camera pose for each candidate flight duration instead of aiming where the rider was when the transition began.
+- **Centripetal banking** derives roll from the path's lateral acceleration, producing aircraft-like banking into turns.
+- **Physical constraints** bound turn radius, climb and dive angle, and velocity-control offsets. A duration solver chooses the shortest valid arc and rejects geometry that would loop or break exact docking.
+- **Principal Component Analysis (PCA)** finds the route footprint's true axis of greatest spread, giving stable framing to diagonal routes, loops, lollipops, and out-and-backs.
+- **Frustum projection and binary search** calculate the tightest camera range that keeps the complete route inside the real viewport.
+- **Arc-length parameterization** keeps Fly-by and Fly-over ground speed consistent around their curves.
+
+The pure transition solver is isolated in [`app/camera/transition-arc.mjs`](app/camera/transition-arc.mjs) and exercised by tests for endpoint docking, velocity continuity, physical limits, orientation smoothness, moving-target interception, and impossible-flight rejection. The browser-facing driver lives in [`app/camera/transition-camera.mjs`](app/camera/transition-camera.mjs). Every behavior knob is documented under `camera_transition` in [`app/core/tuning.yaml`](app/core/tuning.yaml).
+
+### Architecture
+
+- **Zero build step, vanilla ES modules, no package dependencies.** The deployed `app/` directory is static HTML, CSS, JavaScript, and assets.
+- Code is organized by feature: camera, route processing, ride execution, trainer hardware, map rendering, HUD, persistence, gallery, and demo mode.
+- Pure geometry, routing, climb, ETA, units, FIT, and simulation logic is separated from browser and DOM coordination and tested with Node's built-in test runner.
+- A deliberately thin `app.js` performs startup and event wiring; it does not contain feature logic.
+- Shared mutable application state lives in one documented foundation module.
+- Adjustable physics, thresholds, defaults, colors, timings, and paths live in `app/core/tuning.yaml`.
+- A central screen manager lays out dynamic HUD components without feature-specific positioning hacks.
+- IndexedDB stores routes and long recordings, with `localStorage` as a compatibility fallback.
+- The app has no account system, application server, or database backend.
+
+For the complete module map, import boundaries, contributor rules, and browser-verification checklist, see [`AGENTS.md`](AGENTS.md).
+
+## Run locally
 
 ```sh
-git clone https://github.com/ziizii/gpx-rider.git
+git clone git@github.com:gpx-rider/gpx-rider.github.io.git
 cd gpx-rider
 make run
 ```
 
-`make run` prints two URLs: the **landing page** (`…/app/`) and the **app itself** (`…/app/app.html`, also one click away via "Launch GPX Rider" on the landing). Open either in **Chrome or Edge on macOS**. Safari does not support Web Bluetooth, so it cannot talk to a trainer. If you are running your own copy, paste in a free [Google Maps API key](https://developers.google.com/maps/documentation/javascript/get-api-key) when prompted.
+`make run` starts a no-cache development server and prints two URLs:
 
-Run the unit tests with:
+- the landing page at `http://127.0.0.1:5173/app/`;
+- the application at `http://127.0.0.1:5173/app/app.html`.
+
+Local development needs a Google Maps API key with the **Maps JavaScript API** and **Photorealistic 3D Maps** enabled. Save the key as a single line in the gitignored `.maps-api-key` file at the repository root, then run `make run`. The development server injects it into the served `app/config.mjs` response without modifying the file on disk. The `MAPS_API_KEY` environment variable is also supported and takes precedence.
+
+Run the tests with:
 
 ```sh
 make test
 ```
 
-Or run the default target:
+Or run the default project check:
 
 ```sh
 make
 ```
 
-That regenerates derived gallery data and runs the tests. The deploy GitHub Action performs the same generation before publishing.
+The default target regenerates derived gallery data and runs the tests. The GitHub Pages deployment performs the same generation before publishing.
 
-## How to ride
+## Hosting your own copy
 
-The best tool for creating routes is [Mapy.com](https://mapy.com/). It supports bicycle routing, displays an elevation profile, and exports GPX files ready for GPX Rider.
+The `app/` directory is a complete static site and can be served from GitHub Pages, Netlify, Vercel, S3, or a machine on your local network. Its entry points are:
 
-1. Open GPX Rider in Chrome or Edge.
-2. Paste your Google Maps API key if prompted. The key is saved locally in your browser and is only sent to Google Maps.
-3. Open a GPX file with track points and elevation, or choose a route from `Browse gallery`. If nothing is loaded yet, GPX Rider automatically loads the first gallery route.
-4. Click `Connect` on the smart trainer row and select your trainer. Optionally connect a Bluetooth heart-rate strap the same way.
-5. Start pedaling. GPX Rider follows your real trainer speed and converts route grade into FTMS indoor-bike simulation parameters.
-6. Export the ride from the FIT data card whenever you want a `.fit` file for Strava, Garmin Connect, intervals.icu, or similar tools.
+- `app/index.html` — public landing page;
+- `app/app.html` — GPX Rider application.
 
-Not on the bike? Use the Simulation card's `Start` button to preview the route at a fixed speed.
+The included [GitHub Pages workflow](.github/workflows/deploy-pages.yml) publishes `app/` after regenerating gallery data. To use it in a fork, select **GitHub Actions** as the Pages source in the repository settings.
 
-## Route Intelligence
+Self-hosted deployments can request a visitor-supplied Maps key. It is stored in that browser and sent only to Google Maps.
 
-When a route loads, GPX Rider shows the route name, distance, terrain type, and difficulty classification. The elevation panel lists detected sustained climbs with length, gain, and average grade, and each climb is clickable so you can jump to its start. You can also drag across any interval on the elevation profile to select a custom route segment. The normal hover readout becomes a segment readout with start, stop, length, ascent, and descent; clicking the profile clears the selection. While parked in overview this drills into the same focused segment camera used for climbs, and while riding it keeps the rider camera and shows the same segment stats in the map HUD.
+## Data and privacy
 
-During the ride, the same panel switches from planning to live context. On a climb, it shows remaining distance, remaining ascent, and remaining average grade to the top. Between climbs, it shows the next climb and the distance until it begins.
+GPX Rider has no user accounts and no application backend. Routes, settings, ride progress, sensor preferences, and recorded samples remain in browser storage. Trainer and heart-rate communication happens directly between the browser and the selected Bluetooth devices.
 
-The classification uses distance and elevation gain only; it does not depend on power, speed, or weather. Thresholds and tuning constants live in [`app/core/tuning.mjs`](app/core/tuning.mjs), including ascent filtering, climb detection, ETA factors, camera physics, and trainer behavior.
+The hosted application's Maps key is restricted to the GPX Rider domain. Self-hosted installations use their own key.
 
-## Camera And HUD
+## Browser, hardware, and limitations
 
-A freshly loaded route starts in a whole-route overview, framed from above so you can understand the shape of the ride before moving. The map action bar has a split overview button: the plane toggles between overview and the rider camera, and the chevron opens the overview style menu. The overview has six styles (also available in Settings › Camera & view → Route overview):
+- The complete visual app and Simulation mode work without cycling hardware.
+- Trainer and heart-rate connections require a secure context and a browser with [Web Bluetooth support](https://developer.chrome.com/docs/capabilities/bluetooth). Chrome and Edge are the intended browsers.
+- Bluetooth device selection, permissions, and remembered-device access are controlled by the browser. If a saved device is unavailable, select **Connect** again.
+- FTMS-compatible trainers are the primary hardware target. Older firmware and proprietary control protocols may require trainer-specific work.
+- Total ascent and descent are calculated from noise-filtered GPX elevation and may differ from another planner or head unit.
+- Smart ETA needs about a minute of real pedaling before it trusts the measured pace; until then it projects from current speed.
+- Calories are shown and exported only when the trainer reports FTMS Expended Energy.
+- Heart rate comes from a paired strap or, as a fallback, the trainer's own heart-rate field.
+- Terrain avoidance estimates ground height from route elevation rather than a separate Elevation API, so it works best where the route itself follows the hillside.
+- Test resistance changes at low speed and keep the bike and trainer area clear before a real workout.
 
-- **Static** — the classic framed still shot.
-- **Orbit** — a slow turntable rotation around the route.
-- **Fly-by** — a camera flies a PCA-aligned ellipse around the route, looking along its direction of travel.
-- **Fly-over** — a camera flies a figure-eight over the route, crossing the middle once per loop. It shares every fly-by setting; only the path differs. Because the eight changes turn direction between its two lobes, the camera banks and looks into whichever turn it's in — leaning slightly left on one lobe, straightening through the crossing, then slightly right on the other.
-- **Satellite** — a straight-down view with the route turned to lie across the screen and made as large as it fits.
-- **Satellite (north up)** — the same straight-down view, but locked north-up.
+## Tested hardware
 
-The fly-by ellipse (and the fly-over figure-eight) can intentionally be smaller than the route footprint; altitude, pitch, field of view, inward horizontal look offset, and view distance determine how much of the route stays visible from the air. Direction, lap time, maximum speed, ellipse scale, minimum turning radius, baseline height, minimum terrain clearance, pitch, view distance, field of view, inward look offset, and maximum bank angle are configurable in `app/core/tuning.mjs`.
+The primary development and real-ride setup is:
 
-Once you start pedaling or simulation begins, the camera flies down behind the rider and follows the route using GPX bearing. The overview turns on automatically when a route loads and turns off automatically the moment you start moving — but it's never locked out: the overview button stays available during a ride, so you can flip back to any overview style mid-ride if you want to watch the whole route, then flip back to the rider camera.
+- **Wahoo KICKR v4** — smart trainer;
+- **Wahoo TICKR** — Bluetooth heart-rate monitor.
 
-The overview ↔ rider handoff itself is flown, not cut: the camera follows a single physical arc that matches the position *and* velocity of both endpoint cameras — it looks along its own flight path like a projectile mid-flight, banks into its turns, intercepts the moving rider where they will be rather than where they were, and can merge into a spinning orbit mid-rotation. The flight obeys configurable physical limits (minimum turn radius, maximum climb/dive angle — see `camera_transition` in [`app/core/tuning.yaml`](app/core/tuning.yaml)); geometry that can't be flown within them falls back to the classic camera flight.
+Other FTMS-compatible trainers and standard Bluetooth heart-rate sensors are expected to work, but this is the reference hardware tested against the app.
 
-The map reset-camera button restores the currently chosen camera surface after a manual drag. It does not turn the rider camera back into the route overview unless the overview button is active.
+Successfully tested another trainer or heart-rate sensor? Please open a pull request to add it to this list, including the exact model, firmware version when available, and the features you verified.
 
-The ride HUD is part of the map viewport in both setup and fullscreen: metric tiles, the road-ahead elevation profile, distance progress, climbing progress, elapsed time, minimap, and climb/segment banner are intentionally the same overlays before and after fullscreen. Fullscreen only expands the map viewport to fill the screen and hides surrounding page chrome; it does not switch to a different HUD mode. You can collapse the data dock when you want maximum map.
+## Routes and gallery
 
-Settings are grouped into practical categories: camera and view, rendering, HUD and data fields, units, trainer and sensors, screenshots, data storage, and debug. Preferences are remembered locally.
+The built-in gallery contains ready-to-ride GPX routes. Each source route lives under `gallery/<route-id>/` with an `export.gpx` and `metadata.json`. Running:
 
-The debug category has a **camera debug overlay** — a collapsible translucent box on the map showing the live camera values the 3D map actually applies (tilt, range, heading, roll, field of view, look-at center, eye altitude) alongside ride progress. When the selected overview mode is Orbit, Fly-by, or Fly-over, it also draws that mode's travel path in red, including after you drag the camera into manual mode.
+```sh
+make gallery-data
+```
 
-## Hosting Your Own Copy
+generates `app/gallery.json`, including descriptions, preview cameras, route statistics, difficulty, and miniature elevation profiles.
 
-The `app/` folder is a fully static site. It can be hosted anywhere that serves static files: GitHub Pages, Netlify, Vercel, S3, or a laptop on your home network. Its entry point (`app/index.html`) is the landing page; the app itself is `app/app.html`.
+To add or refresh a route, open its GPX in the app, position the 3D camera for the preview, complete the **Export to gallery** card, and select **Copy JSON** to produce a `metadata.json` draft. Descriptions support simple Markdown, and gallery previews use live interactive 3D maps.
 
-This repo includes a GitHub Actions workflow at [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) that deploys `app/` to GitHub Pages on every push to `main`. To enable it for your fork, go to **Settings -> Pages -> Source: GitHub Actions**.
+## Map imagery, routes, and trademarks
 
-Self-hosted copies can ask each visitor for their own Google Maps API key. The key is saved only in that visitor's browser storage and is never sent anywhere except Google Maps.
+GPX Rider uses Google Maps Platform and Google Photorealistic 3D Maps. Google Maps, Google Earth, and related imagery are owned by Google and/or its data providers. Keep all required attribution visible in the app.
 
-## Notes And Limitations
-
-- GPX Rider uses Google Photorealistic 3D Maps. Enable the **Maps JavaScript API** and **Photorealistic 3D Maps** for your Google Cloud project.
-- Route, ride progress, and recorded ride data are stored in IndexedDB. Browsers without working IndexedDB fall back to `localStorage`, where very long rides may exceed storage limits.
-- Total ascent and descent are computed from GPX elevation with a small noise filter, so totals can differ from another planner or head unit.
-- Smart ETA needs about a minute of real pedaling before it trusts your measured pace. Until then it projects from current speed.
-- Calories are shown and exported only if the trainer reports FTMS Expended Energy.
-- Heart rate comes from a paired strap or, as a fallback, from the trainer's own heart-rate field.
-- Trainer and heart-rate reconnect rely on Chrome's remembered Web Bluetooth devices. If Chrome does not expose a saved device, click `Connect KICKR` or `Connect HR` again.
-- Target hardware is FTMS-compatible trainers. Older firmware or proprietary-only control paths may need trainer-specific protocol work.
-- Camera terrain avoidance estimates ground height from the route's own elevation points rather than the Elevation API, so it works best when the road itself follows the hillside.
-- This is an early project. Test resistance changes at low speed and keep the bike/trainer area clear before a real workout.
-
-## Map Imagery, Routes, And Trademarks
-
-GPX Rider uses Google Maps Platform and Google Photorealistic 3D Maps when you provide an API key. Google Maps, Google Earth, and related imagery are owned by Google and/or its data providers. Keep all map attribution visible in the app and in screenshots.
-
-The GPX files in this repository are independently created demo routes for personal training and testing. They are unofficial and are not affiliated with, endorsed by, or sponsored by any race organizer, venue, mapping provider, equipment manufacturer, or other third party.
+The GPX files in this repository are independently created demonstration routes for personal training and testing. They are unofficial and are not affiliated with, endorsed by, or sponsored by any race organizer, venue, mapping provider, equipment manufacturer, or other third party.
 
 Route and place names identify real-world locations only. Third-party trademarks belong to their respective owners.
 
-## Routes
-
-The in-app gallery ships with a small collection of ready-to-ride GPX routes. Each route lives under `gallery/<route-id>/` with `export.gpx` and `metadata.json`; `make gallery-data` parses those files into `app/gallery.json` for the static app.
-
-To add or refresh a gallery route, load the GPX in GPX Rider, position the 3D map camera to frame the route, then use the setup page's **Export to gallery** card to copy a `metadata.json` draft. Descriptions can use simple Markdown formatting, and the gallery renders the preview as a live interactive Google Photorealistic 3D Map instead of a screenshot.
-
 ## Contributing
 
-This is an early-stage prototype and could use help in a lot of directions: more trainer protocols, a non-Google map renderer option, route libraries, imports from Strava or Komoot, better mobile support, tests, docs, and ride reports from real trainers.
+Issues and pull requests are welcome. Please open an issue before beginning a large architectural or product change so the intended behavior can be discussed first.
 
-Issues and PRs are welcome. Please open an issue before diving into a large change so the design can be discussed first.
+GPX Rider is developed through human-directed AI collaboration. Architecture, module ownership, test expectations, and browser-verification procedures are documented in [`AGENTS.md`](AGENTS.md), so changes remain reviewable and reproducible regardless of who—or what—implements them.
+
+Useful contribution areas include additional trainer protocols, real-hardware ride reports, broader browser and device testing, route libraries, import integrations, accessibility, mobile improvements, alternative map-rendering experiments, and more automated tests.
 
 ## License
 

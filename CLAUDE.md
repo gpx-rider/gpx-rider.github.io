@@ -5,6 +5,11 @@ no bundler, no framework, no `node_modules`. Keep it that way — do not
 introduce a build step, TypeScript, npm dependencies, or a framework unless
 the user explicitly asks for one.
 
+Use **American English** throughout the repository, including UI copy,
+documentation, code comments, test names, and generated metadata. Preserve
+official product names, quoted third-party text, and source data when their
+original spelling must remain exact.
+
 ## Commands
 
 ```sh
