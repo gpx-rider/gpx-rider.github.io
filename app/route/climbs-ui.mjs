@@ -189,7 +189,7 @@ export function updateClimbStatus(point) {
 // Plain-language climb category from average grade alone (see CLIMB_CATEGORIES).
 function climbCategory(averageGradePercent) {
   return (
-    CLIMB_CATEGORIES.find((category) => averageGradePercent <= category.maxAverageGradePercent) ??
+    CLIMB_CATEGORIES.find((category) => averageGradePercent <= category.max_average_grade_percent) ??
     CLIMB_CATEGORIES.at(-1)
   );
 }

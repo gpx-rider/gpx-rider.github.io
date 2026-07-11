@@ -27,220 +27,230 @@ async function loadConfigText() {
 
 const config = parseYaml(await loadConfigText());
 
-// Every export is looked up strictly: a typo or a missing key in tuning.yaml
-// fails loudly at startup instead of silently becoming undefined somewhere
-// deep in the app.
-function req(name) {
-  if (!(name in config)) throw new Error(`tuning.yaml is missing "${name}".`);
-  return config[name];
+// Every export navigates a nested snake_case path in tuning.yaml and is
+// looked up strictly: a typo or a missing key fails loudly at startup with
+// the full path, instead of silently becoming undefined somewhere deep in the
+// app. The UPPER_SNAKE export names are the historical constant names the rest
+// of the app imports; only the mapping below knows the yaml layout.
+function req(...path) {
+  let node = config;
+  const trail = [];
+  for (const key of path) {
+    trail.push(key);
+    if (node == null || typeof node !== "object" || !(key in node)) {
+      throw new Error(`tuning.yaml is missing "${trail.join(".")}".`);
+    }
+    node = node[key];
+  }
+  return node;
 }
 
-export const APP_NAME = req("APP_NAME");
+export const APP_NAME = req("app", "name");
 
 // Movement & pedaling
-export const PEDALING_START_KPH = req("PEDALING_START_KPH");
-export const PEDALING_STOP_KPH = req("PEDALING_STOP_KPH");
-export const SIMULATION_SPEED_MIN_KPH = req("SIMULATION_SPEED_MIN_KPH");
-export const SIMULATION_SPEED_MAX_KPH = req("SIMULATION_SPEED_MAX_KPH");
-export const DEFAULT_SIMULATION_SPEED_KPH = req("DEFAULT_SIMULATION_SPEED_KPH");
-export const MAX_TICK_SECONDS = req("MAX_TICK_SECONDS");
-export const SLOW_UI_INTERVAL_MS = req("SLOW_UI_INTERVAL_MS");
-export const RIDE_SAVE_THROTTLE_MS = req("RIDE_SAVE_THROTTLE_MS");
+export const PEDALING_START_KPH = req("movement", "pedaling", "start_kph");
+export const PEDALING_STOP_KPH = req("movement", "pedaling", "stop_kph");
+export const SIMULATION_SPEED_MIN_KPH = req("movement", "simulation_speed", "min_kph");
+export const SIMULATION_SPEED_MAX_KPH = req("movement", "simulation_speed", "max_kph");
+export const DEFAULT_SIMULATION_SPEED_KPH = req("movement", "simulation_speed", "default_kph");
+export const MAX_TICK_SECONDS = req("movement", "max_tick_seconds");
+export const SLOW_UI_INTERVAL_MS = req("movement", "slow_ui_interval_ms");
+export const RIDE_SAVE_THROTTLE_MS = req("movement", "ride_save_throttle_ms");
 
 // Trainer grade updates
-export const DEFAULT_GRADE_INTERVAL_SECONDS = req("DEFAULT_GRADE_INTERVAL_SECONDS");
-export const GRADE_INTERVAL_MIN_SECONDS = req("GRADE_INTERVAL_MIN_SECONDS");
-export const GRADE_INTERVAL_MAX_SECONDS = req("GRADE_INTERVAL_MAX_SECONDS");
+export const DEFAULT_GRADE_INTERVAL_SECONDS = req("trainer", "grade_interval", "default_seconds");
+export const GRADE_INTERVAL_MIN_SECONDS = req("trainer", "grade_interval", "min_seconds");
+export const GRADE_INTERVAL_MAX_SECONDS = req("trainer", "grade_interval", "max_seconds");
 
 // Route math
-export const GRADE_LOOKAROUND_METERS = req("GRADE_LOOKAROUND_METERS");
-export const GRADE_MIN_PERCENT = req("GRADE_MIN_PERCENT");
-export const GRADE_MAX_PERCENT = req("GRADE_MAX_PERCENT");
-export const GRADE_METER_MIN_PERCENT = req("GRADE_METER_MIN_PERCENT");
-export const GRADE_METER_MAX_PERCENT = req("GRADE_METER_MAX_PERCENT");
-export const CLIMB_NOISE_THRESHOLD_METERS = req("CLIMB_NOISE_THRESHOLD_METERS");
+export const GRADE_LOOKAROUND_METERS = req("route_math", "grade_lookaround_meters");
+export const GRADE_MIN_PERCENT = req("route_math", "grade", "min_percent");
+export const GRADE_MAX_PERCENT = req("route_math", "grade", "max_percent");
+export const GRADE_METER_MIN_PERCENT = req("route_math", "grade", "meter_min_percent");
+export const GRADE_METER_MAX_PERCENT = req("route_math", "grade", "meter_max_percent");
+export const CLIMB_NOISE_THRESHOLD_METERS = req("route_math", "climb_noise_threshold_meters");
 
 // Grade color palette (shared with the Python gallery generator)
-export const GRADE_PROFILE_THRESHOLDS = req("GRADE_PROFILE_THRESHOLDS");
-export const GRADE_PROFILE_COLORS = req("GRADE_PROFILE_COLORS");
+export const GRADE_PROFILE_THRESHOLDS = req("grade_palette", "thresholds");
+export const GRADE_PROFILE_COLORS = req("grade_palette", "colors");
 
 // Smart ETA
-export const ETA_CLIMB_EQUIVALENT_FACTOR = req("ETA_CLIMB_EQUIVALENT_FACTOR");
-export const ETA_DESCENT_CREDIT_FACTOR = req("ETA_DESCENT_CREDIT_FACTOR");
-export const ETA_MIN_HISTORY_SECONDS = req("ETA_MIN_HISTORY_SECONDS");
-export const ETA_MIN_HISTORY_METERS = req("ETA_MIN_HISTORY_METERS");
+export const ETA_CLIMB_EQUIVALENT_FACTOR = req("eta", "climb_equivalent_factor");
+export const ETA_DESCENT_CREDIT_FACTOR = req("eta", "descent_credit_factor");
+export const ETA_MIN_HISTORY_SECONDS = req("eta", "min_history_seconds");
+export const ETA_MIN_HISTORY_METERS = req("eta", "min_history_meters");
 
 // Camera defaults & bounds
-export const DEFAULT_CAMERA_ZOOM = req("DEFAULT_CAMERA_ZOOM");
-export const DEFAULT_CAMERA_ANGLE_DEGREES = req("DEFAULT_CAMERA_ANGLE_DEGREES");
-export const DEFAULT_CAMERA_BEHIND_METERS = req("DEFAULT_CAMERA_BEHIND_METERS");
-export const DEFAULT_FIRST_PERSON_CAMERA_HEIGHT_METERS = req("DEFAULT_FIRST_PERSON_CAMERA_HEIGHT_METERS");
-export const FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS = req("FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS");
-export const FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS = req("FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS");
-export const FIRST_PERSON_LOOK_AHEAD_METERS = req("FIRST_PERSON_LOOK_AHEAD_METERS");
-export const FIRST_PERSON_CAMERA_TILT_DEGREES = req("FIRST_PERSON_CAMERA_TILT_DEGREES");
-export const OVERVIEW_TILT_DEGREES = req("OVERVIEW_TILT_DEGREES");
-export const OVERVIEW_HEADING_OFFSET_DEGREES = req("OVERVIEW_HEADING_OFFSET_DEGREES");
-export const OVERVIEW_MARGIN_FACTOR = req("OVERVIEW_MARGIN_FACTOR");
-export const OVERVIEW_RANGE_FACTOR = req("OVERVIEW_RANGE_FACTOR");
-export const OVERVIEW_MIN_RANGE_METERS = req("OVERVIEW_MIN_RANGE_METERS");
-export const OVERVIEW_MAX_RANGE_METERS = req("OVERVIEW_MAX_RANGE_METERS");
+export const DEFAULT_CAMERA_ZOOM = req("camera", "follow_defaults", "zoom");
+export const DEFAULT_CAMERA_ANGLE_DEGREES = req("camera", "follow_defaults", "angle_degrees");
+export const DEFAULT_CAMERA_BEHIND_METERS = req("camera", "follow_defaults", "behind_meters");
+export const DEFAULT_FIRST_PERSON_CAMERA_HEIGHT_METERS = req("camera", "first_person", "default_height_meters");
+export const FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS = req("camera", "first_person", "min_height_meters");
+export const FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS = req("camera", "first_person", "max_height_meters");
+export const FIRST_PERSON_LOOK_AHEAD_METERS = req("camera", "first_person", "look_ahead_meters");
+export const FIRST_PERSON_CAMERA_TILT_DEGREES = req("camera", "first_person", "tilt_degrees");
+export const OVERVIEW_TILT_DEGREES = req("overview", "tilt_degrees");
+export const OVERVIEW_HEADING_OFFSET_DEGREES = req("overview", "heading_offset_degrees");
+export const OVERVIEW_MARGIN_FACTOR = req("overview", "margin_factor");
+export const OVERVIEW_RANGE_FACTOR = req("overview", "range_factor");
+export const OVERVIEW_MIN_RANGE_METERS = req("overview", "min_range_meters");
+export const OVERVIEW_MAX_RANGE_METERS = req("overview", "max_range_meters");
 
 // Overview motion
-export const DEFAULT_OVERVIEW_MODE = req("DEFAULT_OVERVIEW_MODE");
-export const DEFAULT_CLIMB_FOCUS_MODE = req("DEFAULT_CLIMB_FOCUS_MODE");
-export const OVERVIEW_ORBIT_SECONDS_PER_REV = req("OVERVIEW_ORBIT_SECONDS_PER_REV");
-export const OVERVIEW_ORBIT_DIRECTION = req("OVERVIEW_ORBIT_DIRECTION");
-export const DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV = req("DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV");
-export const CLIMB_ORBIT_SECONDS_PER_REV_MIN = req("CLIMB_ORBIT_SECONDS_PER_REV_MIN");
-export const CLIMB_ORBIT_SECONDS_PER_REV_MAX = req("CLIMB_ORBIT_SECONDS_PER_REV_MAX");
+export const DEFAULT_OVERVIEW_MODE = req("overview_motion", "default_mode");
+export const DEFAULT_CLIMB_FOCUS_MODE = req("overview_motion", "default_climb_focus_mode");
+export const OVERVIEW_ORBIT_SECONDS_PER_REV = req("overview_motion", "orbit", "seconds_per_rev");
+export const OVERVIEW_ORBIT_DIRECTION = req("overview_motion", "orbit", "direction");
+export const DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV = req("overview_motion", "climb_orbit", "default_seconds_per_rev");
+export const CLIMB_ORBIT_SECONDS_PER_REV_MIN = req("overview_motion", "climb_orbit", "min_seconds_per_rev");
+export const CLIMB_ORBIT_SECONDS_PER_REV_MAX = req("overview_motion", "climb_orbit", "max_seconds_per_rev");
 
 // Finish-line orbit
-export const DEFAULT_FINISH_ORBIT_ENABLED = req("DEFAULT_FINISH_ORBIT_ENABLED");
-export const FINISH_ORBIT_RANGE_METERS = req("FINISH_ORBIT_RANGE_METERS");
-export const FINISH_ORBIT_TILT_DEGREES = req("FINISH_ORBIT_TILT_DEGREES");
-export const FINISH_ORBIT_SECONDS_PER_REV = req("FINISH_ORBIT_SECONDS_PER_REV");
-export const FINISH_ORBIT_DIRECTION = req("FINISH_ORBIT_DIRECTION");
-export const FINISH_ORBIT_LOOKAT_HEIGHT_METERS = req("FINISH_ORBIT_LOOKAT_HEIGHT_METERS");
+export const DEFAULT_FINISH_ORBIT_ENABLED = req("finish_orbit", "enabled");
+export const FINISH_ORBIT_RANGE_METERS = req("finish_orbit", "range_meters");
+export const FINISH_ORBIT_TILT_DEGREES = req("finish_orbit", "tilt_degrees");
+export const FINISH_ORBIT_SECONDS_PER_REV = req("finish_orbit", "seconds_per_rev");
+export const FINISH_ORBIT_DIRECTION = req("finish_orbit", "direction");
+export const FINISH_ORBIT_LOOKAT_HEIGHT_METERS = req("finish_orbit", "lookat_height_meters");
 
 // Profile segment selection
-export const PROFILE_SEGMENT_SELECTION_DRAG_PIXELS = req("PROFILE_SEGMENT_SELECTION_DRAG_PIXELS");
-export const PROFILE_SEGMENT_SELECTION_MIN_METERS = req("PROFILE_SEGMENT_SELECTION_MIN_METERS");
-export const PROFILE_SEGMENT_SELECTION_MIN_ROUTE_FRACTION = req("PROFILE_SEGMENT_SELECTION_MIN_ROUTE_FRACTION");
+export const PROFILE_SEGMENT_SELECTION_DRAG_PIXELS = req("profile_segment_selection", "drag_pixels");
+export const PROFILE_SEGMENT_SELECTION_MIN_METERS = req("profile_segment_selection", "min_meters");
+export const PROFILE_SEGMENT_SELECTION_MIN_ROUTE_FRACTION = req("profile_segment_selection", "min_route_fraction");
 
 // Overview debug line
-export const OVERVIEW_DEBUG_LINE_COLOR = req("OVERVIEW_DEBUG_LINE_COLOR");
-export const OVERVIEW_DEBUG_LINE_WIDTH = req("OVERVIEW_DEBUG_LINE_WIDTH");
-export const OVERVIEW_DEBUG_LINE_ALTITUDE_METERS = req("OVERVIEW_DEBUG_LINE_ALTITUDE_METERS");
-export const OVERVIEW_DEBUG_LINE_SAMPLE_COUNT = req("OVERVIEW_DEBUG_LINE_SAMPLE_COUNT");
+export const OVERVIEW_DEBUG_LINE_COLOR = req("overview_debug_line", "color");
+export const OVERVIEW_DEBUG_LINE_WIDTH = req("overview_debug_line", "width");
+export const OVERVIEW_DEBUG_LINE_ALTITUDE_METERS = req("overview_debug_line", "altitude_meters");
+export const OVERVIEW_DEBUG_LINE_SAMPLE_COUNT = req("overview_debug_line", "sample_count");
 
-export const DEFAULT_MAP_FOV_DEGREES = req("DEFAULT_MAP_FOV_DEGREES");
-export const OVERVIEW_ANIM_INTRO_SECONDS = req("OVERVIEW_ANIM_INTRO_SECONDS");
-export const SATELLITE_TILT_DEGREES = req("SATELLITE_TILT_DEGREES");
-export const SATELLITE_MARGIN_FACTOR = req("SATELLITE_MARGIN_FACTOR");
-export const ELLIPSE_FLYBY = req("ELLIPSE_FLYBY");
-export const HEADING_SAMPLE_METERS = req("HEADING_SAMPLE_METERS");
-export const INTERACTION_SETTLE_MS = req("INTERACTION_SETTLE_MS");
-export const CAMERA_ZOOM_MIN = req("CAMERA_ZOOM_MIN");
-export const CAMERA_ZOOM_MAX = req("CAMERA_ZOOM_MAX");
-export const CAMERA_PAN_LIMIT_METERS = req("CAMERA_PAN_LIMIT_METERS");
-export const CAMERA_CENTER_ALTITUDE_LIMIT_METERS = req("CAMERA_CENTER_ALTITUDE_LIMIT_METERS");
-export const CAMERA_TILT_MIN = req("CAMERA_TILT_MIN");
-export const CAMERA_TILT_MAX = req("CAMERA_TILT_MAX");
+export const DEFAULT_MAP_FOV_DEGREES = req("camera", "default_map_fov_degrees");
+export const OVERVIEW_ANIM_INTRO_SECONDS = req("overview_motion", "anim_intro_seconds");
+export const SATELLITE_TILT_DEGREES = req("overview_motion", "satellite", "tilt_degrees");
+export const SATELLITE_MARGIN_FACTOR = req("overview_motion", "satellite", "margin_factor");
+export const ELLIPSE_FLYBY = req("overview_motion", "ellipse_flyby");
+export const HEADING_SAMPLE_METERS = req("camera", "heading_sample_meters");
+export const INTERACTION_SETTLE_MS = req("camera", "interaction_settle_ms");
+export const CAMERA_ZOOM_MIN = req("camera", "bounds", "zoom_min");
+export const CAMERA_ZOOM_MAX = req("camera", "bounds", "zoom_max");
+export const CAMERA_PAN_LIMIT_METERS = req("camera", "bounds", "pan_limit_meters");
+export const CAMERA_CENTER_ALTITUDE_LIMIT_METERS = req("camera", "bounds", "center_altitude_limit_meters");
+export const CAMERA_TILT_MIN = req("camera", "bounds", "tilt_min");
+export const CAMERA_TILT_MAX = req("camera", "bounds", "tilt_max");
 
 // Camera terrain avoidance
-export const DEFAULT_TERRAIN_AVOID_ENABLED = req("DEFAULT_TERRAIN_AVOID_ENABLED");
-export const DEFAULT_TERRAIN_CLEARANCE_METERS = req("DEFAULT_TERRAIN_CLEARANCE_METERS");
-export const TERRAIN_SAMPLE_RADIUS_METERS = req("TERRAIN_SAMPLE_RADIUS_METERS");
-export const TERRAIN_LIFT_RECOMPUTE_MS = req("TERRAIN_LIFT_RECOMPUTE_MS");
-export const TERRAIN_LIFT_RISE_TAU_SECONDS = req("TERRAIN_LIFT_RISE_TAU_SECONDS");
-export const TERRAIN_LIFT_FALL_TAU_SECONDS = req("TERRAIN_LIFT_FALL_TAU_SECONDS");
+export const DEFAULT_TERRAIN_AVOID_ENABLED = req("terrain_avoidance", "enabled");
+export const DEFAULT_TERRAIN_CLEARANCE_METERS = req("terrain_avoidance", "clearance_meters");
+export const TERRAIN_SAMPLE_RADIUS_METERS = req("terrain_avoidance", "sample_radius_meters");
+export const TERRAIN_LIFT_RECOMPUTE_MS = req("terrain_avoidance", "lift_recompute_ms");
+export const TERRAIN_LIFT_RISE_TAU_SECONDS = req("terrain_avoidance", "lift_rise_tau_seconds");
+export const TERRAIN_LIFT_FALL_TAU_SECONDS = req("terrain_avoidance", "lift_fall_tau_seconds");
 
 // Rider beacon
-export const DEFAULT_BEACON_ENABLED = req("DEFAULT_BEACON_ENABLED");
-export const DEFAULT_BEACON_DIAMETER_METERS = req("DEFAULT_BEACON_DIAMETER_METERS");
-export const DEFAULT_BEACON_HEIGHT_METERS = req("DEFAULT_BEACON_HEIGHT_METERS");
-export const DEFAULT_BEACON_OPACITY = req("DEFAULT_BEACON_OPACITY");
-export const DEFAULT_BEACON_COLOR = req("DEFAULT_BEACON_COLOR");
+export const DEFAULT_BEACON_ENABLED = req("rider_beacon", "enabled");
+export const DEFAULT_BEACON_DIAMETER_METERS = req("rider_beacon", "diameter_meters");
+export const DEFAULT_BEACON_HEIGHT_METERS = req("rider_beacon", "height_meters");
+export const DEFAULT_BEACON_OPACITY = req("rider_beacon", "opacity");
+export const DEFAULT_BEACON_COLOR = req("rider_beacon", "color");
 
 // Rider dot
-export const RIDER_DOT_MODEL_PATH = req("RIDER_DOT_MODEL_PATH");
-export const RIDER_DOT_ORIENTATION = req("RIDER_DOT_ORIENTATION");
-export const RIDER_DOT_SCALE = req("RIDER_DOT_SCALE");
-export const RIDER_DOT_OVERVIEW_SCALE_FACTOR = req("RIDER_DOT_OVERVIEW_SCALE_FACTOR");
-export const RIDER_DOT_DIAMETER_METERS = req("RIDER_DOT_DIAMETER_METERS");
-export const RIDER_DOT_ALTITUDE_METERS = req("RIDER_DOT_ALTITUDE_METERS");
+export const RIDER_DOT_MODEL_PATH = req("rider_dot", "model_path");
+export const RIDER_DOT_ORIENTATION = req("rider_dot", "orientation");
+export const RIDER_DOT_SCALE = req("rider_dot", "scale");
+export const RIDER_DOT_OVERVIEW_SCALE_FACTOR = req("rider_dot", "overview_scale_factor");
+export const RIDER_DOT_DIAMETER_METERS = req("rider_dot", "diameter_meters");
+export const RIDER_DOT_ALTITUDE_METERS = req("rider_dot", "altitude_meters");
 
 // Route line rendering
-export const DEFAULT_ROUTE_GRADE_COLORS_ENABLED = req("DEFAULT_ROUTE_GRADE_COLORS_ENABLED");
-export const ROUTE_LINE_ALTITUDE_METERS = req("ROUTE_LINE_ALTITUDE_METERS");
-export const ROUTE_LINE_COLOR = req("ROUTE_LINE_COLOR");
-export const ROUTE_LINE_WIDTH = req("ROUTE_LINE_WIDTH");
-export const ROUTE_LINE_OUTER_COLOR = req("ROUTE_LINE_OUTER_COLOR");
-export const ROUTE_LINE_OUTER_WIDTH = req("ROUTE_LINE_OUTER_WIDTH");
-export const ROUTE_FOCUS_LINE_WIDTH = req("ROUTE_FOCUS_LINE_WIDTH");
-export const ROUTE_FOCUS_OUTER_COLOR = req("ROUTE_FOCUS_OUTER_COLOR");
-export const ROUTE_FOCUS_OUTER_WIDTH = req("ROUTE_FOCUS_OUTER_WIDTH");
-export const ROUTE_LINE_SPACING_METERS = req("ROUTE_LINE_SPACING_METERS");
-export const ROUTE_LINE_MAX_POINTS = req("ROUTE_LINE_MAX_POINTS");
+export const DEFAULT_ROUTE_GRADE_COLORS_ENABLED = req("route_line", "grade_colors_enabled");
+export const ROUTE_LINE_ALTITUDE_METERS = req("route_line", "altitude_meters");
+export const ROUTE_LINE_COLOR = req("route_line", "color");
+export const ROUTE_LINE_WIDTH = req("route_line", "width");
+export const ROUTE_LINE_OUTER_COLOR = req("route_line", "outer_color");
+export const ROUTE_LINE_OUTER_WIDTH = req("route_line", "outer_width");
+export const ROUTE_FOCUS_LINE_WIDTH = req("route_line", "focus_line_width");
+export const ROUTE_FOCUS_OUTER_COLOR = req("route_line", "focus_outer_color");
+export const ROUTE_FOCUS_OUTER_WIDTH = req("route_line", "focus_outer_width");
+export const ROUTE_LINE_SPACING_METERS = req("route_line", "spacing_meters");
+export const ROUTE_LINE_MAX_POINTS = req("route_line", "max_points");
 
 // Gallery previews & mini profiles
-export const GALLERY_PREVIEW_MAP_TYPE = req("GALLERY_PREVIEW_MAP_TYPE");
-export const GALLERY_PREVIEW_FIT_PADDING_PIXELS = req("GALLERY_PREVIEW_FIT_PADDING_PIXELS");
-export const GALLERY_PREVIEW_ROUTE_COLOR = req("GALLERY_PREVIEW_ROUTE_COLOR");
-export const GALLERY_PREVIEW_2D_ROUTE_WIDTH = req("GALLERY_PREVIEW_2D_ROUTE_WIDTH");
-export const GALLERY_PREVIEW_3D_ROUTE_WIDTH = req("GALLERY_PREVIEW_3D_ROUTE_WIDTH");
-export const GALLERY_PREVIEW_3D_ROUTE_OUTER_COLOR = req("GALLERY_PREVIEW_3D_ROUTE_OUTER_COLOR");
-export const GALLERY_PREVIEW_3D_ROUTE_OUTER_WIDTH = req("GALLERY_PREVIEW_3D_ROUTE_OUTER_WIDTH");
-export const GALLERY_MINI_PROFILE_BAR_COUNT = req("GALLERY_MINI_PROFILE_BAR_COUNT");
-export const GALLERY_MINI_PROFILE_FLAT_COLOR = req("GALLERY_MINI_PROFILE_FLAT_COLOR");
+export const GALLERY_PREVIEW_MAP_TYPE = req("gallery", "preview", "map_type");
+export const GALLERY_PREVIEW_FIT_PADDING_PIXELS = req("gallery", "preview", "fit_padding_pixels");
+export const GALLERY_PREVIEW_ROUTE_COLOR = req("gallery", "preview", "route_color");
+export const GALLERY_PREVIEW_2D_ROUTE_WIDTH = req("gallery", "preview", "route_width_2d");
+export const GALLERY_PREVIEW_3D_ROUTE_WIDTH = req("gallery", "preview", "route_width_3d");
+export const GALLERY_PREVIEW_3D_ROUTE_OUTER_COLOR = req("gallery", "preview", "route_outer_color_3d");
+export const GALLERY_PREVIEW_3D_ROUTE_OUTER_WIDTH = req("gallery", "preview", "route_outer_width_3d");
+export const GALLERY_MINI_PROFILE_BAR_COUNT = req("gallery", "mini_profile", "bar_count");
+export const GALLERY_MINI_PROFILE_FLAT_COLOR = req("gallery", "mini_profile", "flat_color");
 
 // Screenshots & theater mode
-export const DEFAULT_SHOW_SCREENSHOT_BUTTON = req("DEFAULT_SHOW_SCREENSHOT_BUTTON");
-export const DEFAULT_SCREENSHOT_ASPECT = req("DEFAULT_SCREENSHOT_ASPECT");
-export const DEFAULT_SCREENSHOT_WIDTH = req("DEFAULT_SCREENSHOT_WIDTH");
-export const SCREENSHOT_WIDTH_MIN = req("SCREENSHOT_WIDTH_MIN");
-export const SCREENSHOT_WIDTH_MAX = req("SCREENSHOT_WIDTH_MAX");
-export const RECORDING_MAP_VIEWPORT_WIDTH_PIXELS = req("RECORDING_MAP_VIEWPORT_WIDTH_PIXELS");
-export const RECORDING_MAP_VIEWPORT_HEIGHT_PIXELS = req("RECORDING_MAP_VIEWPORT_HEIGHT_PIXELS");
-export const RECORDING_MAP_VIEWPORT_TOLERANCE_PIXELS = req("RECORDING_MAP_VIEWPORT_TOLERANCE_PIXELS");
-export const DEFAULT_THEATER_HIDE_CLOCK = req("DEFAULT_THEATER_HIDE_CLOCK");
-export const DEFAULT_THEATER_HIDE_METERS = req("DEFAULT_THEATER_HIDE_METERS");
-export const DEFAULT_THEATER_HIDE_DOCK = req("DEFAULT_THEATER_HIDE_DOCK");
-export const DEFAULT_THEATER_HIDE_CLIMB_BANNER = req("DEFAULT_THEATER_HIDE_CLIMB_BANNER");
-export const DEFAULT_THEATER_HIDE_DEMO_CHIP = req("DEFAULT_THEATER_HIDE_DEMO_CHIP");
-export const DEFAULT_THEATER_HIDE_CONTROLS = req("DEFAULT_THEATER_HIDE_CONTROLS");
-export const DEFAULT_THEATER_HIDE_MINIMAP = req("DEFAULT_THEATER_HIDE_MINIMAP");
+export const DEFAULT_SHOW_SCREENSHOT_BUTTON = req("screenshots", "show_button");
+export const DEFAULT_SCREENSHOT_ASPECT = req("screenshots", "aspect");
+export const DEFAULT_SCREENSHOT_WIDTH = req("screenshots", "default_width");
+export const SCREENSHOT_WIDTH_MIN = req("screenshots", "width_min");
+export const SCREENSHOT_WIDTH_MAX = req("screenshots", "width_max");
+export const RECORDING_MAP_VIEWPORT_WIDTH_PIXELS = req("recording", "map_viewport", "width_pixels");
+export const RECORDING_MAP_VIEWPORT_HEIGHT_PIXELS = req("recording", "map_viewport", "height_pixels");
+export const RECORDING_MAP_VIEWPORT_TOLERANCE_PIXELS = req("recording", "map_viewport", "tolerance_pixels");
+export const DEFAULT_THEATER_HIDE_CLOCK = req("recording", "theater_hide", "clock");
+export const DEFAULT_THEATER_HIDE_METERS = req("recording", "theater_hide", "meters");
+export const DEFAULT_THEATER_HIDE_DOCK = req("recording", "theater_hide", "dock");
+export const DEFAULT_THEATER_HIDE_CLIMB_BANNER = req("recording", "theater_hide", "climb_banner");
+export const DEFAULT_THEATER_HIDE_DEMO_CHIP = req("recording", "theater_hide", "demo_chip");
+export const DEFAULT_THEATER_HIDE_CONTROLS = req("recording", "theater_hide", "controls");
+export const DEFAULT_THEATER_HIDE_MINIMAP = req("recording", "theater_hide", "minimap");
 
 // Display & HUD defaults
-export const DEFAULT_SHOW_MINIMAP = req("DEFAULT_SHOW_MINIMAP");
-export const DEFAULT_MAP_LABELS_ENABLED = req("DEFAULT_MAP_LABELS_ENABLED");
-export const DEFAULT_TIME_FORMAT = req("DEFAULT_TIME_FORMAT");
-export const DEFAULT_DURATION_FORMAT = req("DEFAULT_DURATION_FORMAT");
-export const FULLSCREEN_CLOCK_REFRESH_MS = req("FULLSCREEN_CLOCK_REFRESH_MS");
-export const HEART_RATE_REFRESH_MS = req("HEART_RATE_REFRESH_MS");
-export const DEFAULT_CAMERA_DEBUG_ENABLED = req("DEFAULT_CAMERA_DEBUG_ENABLED");
-export const CAMERA_DEBUG_REFRESH_MS = req("CAMERA_DEBUG_REFRESH_MS");
-export const GALLERY_METADATA_CAMERA_REFRESH_MS = req("GALLERY_METADATA_CAMERA_REFRESH_MS");
-export const DEFAULT_HUD_FIELD_ORDER = req("DEFAULT_HUD_FIELD_ORDER");
-export const DEFAULT_HUD_VISIBLE_COUNT = req("DEFAULT_HUD_VISIBLE_COUNT");
-export const DEFAULT_HUD_DOCK_COLLAPSED = req("DEFAULT_HUD_DOCK_COLLAPSED");
+export const DEFAULT_SHOW_MINIMAP = req("display_hud", "show_minimap");
+export const DEFAULT_MAP_LABELS_ENABLED = req("display_hud", "map_labels_enabled");
+export const DEFAULT_TIME_FORMAT = req("display_hud", "time_format");
+export const DEFAULT_DURATION_FORMAT = req("display_hud", "duration_format");
+export const FULLSCREEN_CLOCK_REFRESH_MS = req("display_hud", "fullscreen_clock_refresh_ms");
+export const HEART_RATE_REFRESH_MS = req("display_hud", "heart_rate_refresh_ms");
+export const DEFAULT_CAMERA_DEBUG_ENABLED = req("display_hud", "camera_debug", "enabled");
+export const CAMERA_DEBUG_REFRESH_MS = req("display_hud", "camera_debug", "refresh_ms");
+export const GALLERY_METADATA_CAMERA_REFRESH_MS = req("display_hud", "gallery_metadata_camera_refresh_ms");
+export const DEFAULT_HUD_FIELD_ORDER = req("display_hud", "field_order");
+export const DEFAULT_HUD_VISIBLE_COUNT = req("display_hud", "visible_count");
+export const DEFAULT_HUD_DOCK_COLLAPSED = req("display_hud", "dock_collapsed");
 
-// Training zones
-export const DEFAULT_RESTING_HEART_RATE_BPM = req("DEFAULT_RESTING_HEART_RATE_BPM");
-export const DEFAULT_MAX_HEART_RATE_BPM = req("DEFAULT_MAX_HEART_RATE_BPM");
-export const POWER_ZONE_DEFINITIONS = req("POWER_ZONE_DEFINITIONS");
-export const HEART_RATE_ZONE_DEFINITIONS = req("HEART_RATE_ZONE_DEFINITIONS");
-export const HEART_RATE_MAX_AGE_FORMULA_BASE = req("HEART_RATE_MAX_AGE_FORMULA_BASE");
-export const PROFILE_HISTORY_SAMPLE_LIMIT = req("PROFILE_HISTORY_SAMPLE_LIMIT");
-export const CYCLING_GROSS_EFFICIENCY = req("CYCLING_GROSS_EFFICIENCY");
+// Training zones & calories
+export const DEFAULT_RESTING_HEART_RATE_BPM = req("training_zones", "resting_heart_rate_bpm");
+export const DEFAULT_MAX_HEART_RATE_BPM = req("training_zones", "max_heart_rate_bpm");
+export const POWER_ZONE_DEFINITIONS = req("training_zones", "power_zone_definitions");
+export const HEART_RATE_ZONE_DEFINITIONS = req("training_zones", "heart_rate_zone_definitions");
+export const HEART_RATE_MAX_AGE_FORMULA_BASE = req("training_zones", "heart_rate_max_age_formula_base");
+export const PROFILE_HISTORY_SAMPLE_LIMIT = req("training_zones", "profile_history_sample_limit");
+export const CYCLING_GROSS_EFFICIENCY = req("training_zones", "cycling_gross_efficiency");
 
 // Climb banner
-export const CLIMB_BANNER_APPROACH_METERS = req("CLIMB_BANNER_APPROACH_METERS");
-export const CLIMB_BANNER_MINI_BAR_COUNT = req("CLIMB_BANNER_MINI_BAR_COUNT");
-export const CLIMB_CATEGORIES = req("CLIMB_CATEGORIES");
+export const CLIMB_BANNER_APPROACH_METERS = req("climb_banner", "approach_meters");
+export const CLIMB_BANNER_MINI_BAR_COUNT = req("climb_banner", "mini_bar_count");
+export const CLIMB_CATEGORIES = req("climb_banner", "categories");
 
 // Route difficulty classification (shared with the Python gallery generator)
-export const EQUIVALENT_KM_CLIMB_METERS = req("EQUIVALENT_KM_CLIMB_METERS");
-export const DISTANCE_CLASS_THRESHOLDS_KM = req("DISTANCE_CLASS_THRESHOLDS_KM");
-export const TERRAIN_CLASS_THRESHOLDS_M_PER_KM = req("TERRAIN_CLASS_THRESHOLDS_M_PER_KM");
-export const DIFFICULTY_THRESHOLDS_EQUIVALENT_KM = req("DIFFICULTY_THRESHOLDS_EQUIVALENT_KM");
+export const EQUIVALENT_KM_CLIMB_METERS = req("route_difficulty", "equivalent_km_climb_meters");
+export const DISTANCE_CLASS_THRESHOLDS_KM = req("route_difficulty", "distance_class_thresholds_km");
+export const TERRAIN_CLASS_THRESHOLDS_M_PER_KM = req("route_difficulty", "terrain_class_thresholds_m_per_km");
+export const DIFFICULTY_THRESHOLDS_EQUIVALENT_KM = req("route_difficulty", "difficulty_thresholds_equivalent_km");
 
 // Climb detection (leaky-bucket fatigue integrator — see tuning.yaml)
-export const CLIMB_FATIGUE_THRESHOLD = req("CLIMB_FATIGUE_THRESHOLD");
-export const CLIMB_MAX_FATIGUE = req("CLIMB_MAX_FATIGUE");
-export const CLIMB_RESTING_GRADIENT_PERCENT = req("CLIMB_RESTING_GRADIENT_PERCENT");
-export const CLIMB_RECOVERY_MULTIPLIER = req("CLIMB_RECOVERY_MULTIPLIER");
-export const CLIMB_SMOOTHING_WINDOW_SIZE = req("CLIMB_SMOOTHING_WINDOW_SIZE");
-export const CLIMB_MIN_GAIN_METERS = req("CLIMB_MIN_GAIN_METERS");
-export const CLIMB_MIN_AVERAGE_GRADE_PERCENT = req("CLIMB_MIN_AVERAGE_GRADE_PERCENT");
+export const CLIMB_FATIGUE_THRESHOLD = req("climb_detection", "fatigue_threshold");
+export const CLIMB_MAX_FATIGUE = req("climb_detection", "max_fatigue");
+export const CLIMB_RESTING_GRADIENT_PERCENT = req("climb_detection", "resting_gradient_percent");
+export const CLIMB_RECOVERY_MULTIPLIER = req("climb_detection", "recovery_multiplier");
+export const CLIMB_SMOOTHING_WINDOW_SIZE = req("climb_detection", "smoothing_window_size");
+export const CLIMB_MIN_GAIN_METERS = req("climb_detection", "min_gain_meters");
+export const CLIMB_MIN_AVERAGE_GRADE_PERCENT = req("climb_detection", "min_average_grade_percent");
 
 // Demo mode
-export const DEMO_RIDE = req("DEMO_RIDE");
+export const DEMO_RIDE = req("demo_ride");
 
 // Ride recording
-export const RIDE_SAMPLE_INTERVAL_MS = req("RIDE_SAMPLE_INTERVAL_MS");
-export const RIDE_PERSIST_INTERVAL_MS = req("RIDE_PERSIST_INTERVAL_MS");
+export const RIDE_SAMPLE_INTERVAL_MS = req("ride_recording", "sample_interval_ms");
+export const RIDE_PERSIST_INTERVAL_MS = req("ride_recording", "persist_interval_ms");
 
 // Landing page hero replay
-export const LANDING_HERO = req("LANDING_HERO");
+export const LANDING_HERO = req("landing_hero");

@@ -10,9 +10,9 @@ export function createDemoRideModel(config = DEMO_RIDE) {
   return {
     elapsedSeconds: 0,
     speedKph: 0,
-    powerWatts: config.flatPowerWatts,
-    heartRateCoreBpm: config.restingHeartRateBpm,
-    heartRateBpm: config.restingHeartRateBpm,
+    powerWatts: config.flat_power_watts,
+    heartRateCoreBpm: config.resting_heart_rate_bpm,
+    heartRateBpm: config.resting_heart_rate_bpm,
     lastHeartRateUpdateSeconds: -Infinity,
     heartRateNoiseBpm: 0,
     fallDelaySeconds: 0,
@@ -25,15 +25,15 @@ export function createDemoRideModel(config = DEMO_RIDE) {
 export function demoTargetPowerWatts(gradePercent, config = DEMO_RIDE) {
   const grade = Number.isFinite(gradePercent) ? gradePercent : 0;
   const watts = grade >= 0
-    ? config.flatPowerWatts + grade * config.climbWattsPerGradePercent
-    : config.flatPowerWatts + grade * config.descentWattsPerGradePercent;
-  return clamp(watts, config.minPowerWatts, config.maxPowerWatts);
+    ? config.flat_power_watts + grade * config.climb_watts_per_grade_percent
+    : config.flat_power_watts + grade * config.descent_watts_per_grade_percent;
+  return clamp(watts, config.min_power_watts, config.max_power_watts);
 }
 
 export function demoSpeedForPower(powerWatts, gradePercent, config = DEMO_RIDE) {
-  const usefulPower = Math.max(0, powerWatts) * config.drivetrainEfficiency;
-  const low = config.minSpeedKph / KPH_PER_MPS;
-  const high = config.maxSpeedKph / KPH_PER_MPS;
+  const usefulPower = Math.max(0, powerWatts) * config.drivetrain_efficiency;
+  const low = config.min_speed_kph / KPH_PER_MPS;
+  const high = config.max_speed_kph / KPH_PER_MPS;
   let lo = low;
   let hi = high;
 
@@ -43,7 +43,7 @@ export function demoSpeedForPower(powerWatts, gradePercent, config = DEMO_RIDE) 
     else lo = mid;
   }
 
-  return clamp(((lo + hi) / 2) * KPH_PER_MPS, config.minSpeedKph, config.maxSpeedKph);
+  return clamp(((lo + hi) / 2) * KPH_PER_MPS, config.min_speed_kph, config.max_speed_kph);
 }
 
 export function advanceDemoRide(model, {
@@ -61,10 +61,10 @@ export function advanceDemoRide(model, {
   model.elapsedSeconds += dt;
 
   const targetPower = demoTargetPowerWatts(gradePercent, config);
-  model.powerWatts = smoothToward(model.powerWatts, targetPower, dt, config.powerSmoothingTauSeconds);
+  model.powerWatts = smoothToward(model.powerWatts, targetPower, dt, config.power_smoothing_tau_seconds);
 
   const targetSpeedKph = demoSpeedForPower(model.powerWatts, gradePercent, config);
-  model.speedKph = smoothToward(model.speedKph || targetSpeedKph, targetSpeedKph, dt, config.speedSmoothingTauSeconds);
+  model.speedKph = smoothToward(model.speedKph || targetSpeedKph, targetSpeedKph, dt, config.speed_smoothing_tau_seconds);
 
   if (Number.isFinite(caloriesFromPower)) {
     model.caloriesKcal += Math.max(0, caloriesFromPower);
@@ -95,7 +95,7 @@ export function seedDemoHistory(model, {
   }
 
   const targetMeters = clamp(progressMeters, 0, route.at(-1).distance ?? 0);
-  const startSeconds = nowSeconds - Math.max(1, Math.ceil(targetMeters / Math.max(1, config.minSpeedKph / 3.6)));
+  const startSeconds = nowSeconds - Math.max(1, Math.ceil(targetMeters / Math.max(1, config.min_speed_kph / 3.6)));
   let distanceMeters = 0;
 
   while (distanceMeters < targetMeters) {
@@ -134,51 +134,51 @@ export function seedDemoHistory(model, {
     });
   }
 
-  model.historySamples = thinHistorySamples(model.historySamples, config.maxHistorySamples);
+  model.historySamples = thinHistorySamples(model.historySamples, config.max_history_samples);
 }
 
 function requiredPowerWatts(speedMps, gradePercent, config) {
-  const massKg = config.riderWeightKg + config.bikeWeightKg;
+  const massKg = config.rider_weight_kg + config.bike_weight_kg;
   const grade = clamp((Number.isFinite(gradePercent) ? gradePercent : 0) / 100, -0.3, 0.3);
   const slopeCos = 1 / Math.sqrt(1 + grade * grade);
   const gravityForce = massKg * GRAVITY * grade;
-  const rollingForce = massKg * GRAVITY * config.rollingResistanceCoefficient * slopeCos;
-  const aeroForce = 0.5 * config.airDensityKgPerCubicMeter * config.dragAreaSquareMeters * speedMps * speedMps;
+  const rollingForce = massKg * GRAVITY * config.rolling_resistance_coefficient * slopeCos;
+  const aeroForce = 0.5 * config.air_density_kg_per_cubic_meter * config.drag_area_square_meters * speedMps * speedMps;
   return Math.max(0, (gravityForce + rollingForce + aeroForce) * speedMps);
 }
 
 function updateDemoHeartRate(model, elapsedSeconds, config) {
-  const effortRatio = clamp(model.powerWatts / config.ftpWatts, 0, 1.45);
-  const thresholdReserve = config.thresholdHeartRateBpm - config.restingHeartRateBpm;
+  const effortRatio = clamp(model.powerWatts / config.ftp_watts, 0, 1.45);
+  const thresholdReserve = config.threshold_heart_rate_bpm - config.resting_heart_rate_bpm;
   const targetAtEffort = effortRatio <= 1
-    ? config.restingHeartRateBpm + thresholdReserve * Math.pow(effortRatio, 0.86)
-    : config.thresholdHeartRateBpm + (config.maxHeartRateBpm - config.thresholdHeartRateBpm) * clamp((effortRatio - 1) / 0.45, 0, 1);
-  const lowEffortTarget = config.restingHeartRateBpm + 7;
+    ? config.resting_heart_rate_bpm + thresholdReserve * Math.pow(effortRatio, 0.86)
+    : config.threshold_heart_rate_bpm + (config.max_heart_rate_bpm - config.threshold_heart_rate_bpm) * clamp((effortRatio - 1) / 0.45, 0, 1);
+  const lowEffortTarget = config.resting_heart_rate_bpm + 7;
 
-  model.lowEffortSeconds = model.powerWatts <= config.minPowerWatts + 25
+  model.lowEffortSeconds = model.powerWatts <= config.min_power_watts + 25
     ? model.lowEffortSeconds + elapsedSeconds
     : 0;
-  const target = model.lowEffortSeconds >= config.lowEffortReturnDelaySeconds
-    ? config.restingHeartRateBpm
+  const target = model.lowEffortSeconds >= config.low_effort_return_delay_seconds
+    ? config.resting_heart_rate_bpm
     : targetAtEffort;
 
   if (target >= model.heartRateCoreBpm) {
     model.fallDelaySeconds = 0;
-    model.heartRateCoreBpm = smoothToward(model.heartRateCoreBpm, target, elapsedSeconds, config.heartRateRiseTauSeconds);
+    model.heartRateCoreBpm = smoothToward(model.heartRateCoreBpm, target, elapsedSeconds, config.heart_rate_rise_tau_seconds);
   } else {
     model.fallDelaySeconds += elapsedSeconds;
-    if (model.fallDelaySeconds >= config.heartRateFallDelaySeconds || target <= lowEffortTarget) {
-      model.heartRateCoreBpm = smoothToward(model.heartRateCoreBpm, target, elapsedSeconds, config.heartRateFallTauSeconds);
+    if (model.fallDelaySeconds >= config.heart_rate_fall_delay_seconds || target <= lowEffortTarget) {
+      model.heartRateCoreBpm = smoothToward(model.heartRateCoreBpm, target, elapsedSeconds, config.heart_rate_fall_tau_seconds);
     }
   }
 
-  if (model.elapsedSeconds - model.lastHeartRateUpdateSeconds >= config.heartRateUpdateIntervalSeconds) {
+  if (model.elapsedSeconds - model.lastHeartRateUpdateSeconds >= config.heart_rate_update_interval_seconds) {
     model.lastHeartRateUpdateSeconds = model.elapsedSeconds;
-    model.heartRateNoiseBpm = (Math.random() * 2 - 1) * config.heartRateNoiseBpm;
+    model.heartRateNoiseBpm = (Math.random() * 2 - 1) * config.heart_rate_noise_bpm;
     model.heartRateBpm = clamp(
       model.heartRateCoreBpm + model.heartRateNoiseBpm,
-      config.restingHeartRateBpm,
-      config.maxHeartRateBpm,
+      config.resting_heart_rate_bpm,
+      config.max_heart_rate_bpm,
     );
   }
 }

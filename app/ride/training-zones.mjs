@@ -97,15 +97,15 @@ export function currentPowerZones() {
 }
 
 function effectiveFtpWatts() {
-  return state.demoModeActive ? DEMO_RIDE.ftpWatts : state.ftpWatts;
+  return state.demoModeActive ? DEMO_RIDE.ftp_watts : state.ftpWatts;
 }
 
 function effectiveMaxHeartRateBpm() {
-  return state.demoModeActive ? DEMO_RIDE.maxHeartRateBpm : state.maxHeartRateBpm;
+  return state.demoModeActive ? DEMO_RIDE.max_heart_rate_bpm : state.maxHeartRateBpm;
 }
 
 function effectiveRestingHeartRateBpm() {
-  return state.demoModeActive ? DEMO_RIDE.restingHeartRateBpm : state.restingHeartRateBpm;
+  return state.demoModeActive ? DEMO_RIDE.resting_heart_rate_bpm : state.restingHeartRateBpm;
 }
 
 function calculateHeartRateZones(maxHr, restingHr = DEFAULT_RESTING_HEART_RATE_BPM) {

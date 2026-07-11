@@ -57,14 +57,14 @@ class HeroReplay {
 
   // --- Background-app treatment (dim + blur + scrim) --------------------------
   applyAppFx() {
-    const fx = `blur(${H.appBlurPx}px) brightness(${(1 - H.appDim).toFixed(3)})`;
+    const fx = `blur(${H.app_blur_px}px) brightness(${(1 - H.app_dim).toFixed(3)})`;
     const map = this.$("gpxr-map");
     if (map) map.style.filter = fx;
     const hud = this.$("gpxr-hud");
     if (hud) hud.style.filter = fx;
     const scrim = this.$("gpxr-scrim");
     if (scrim) {
-      const s = H.headlineScrim;
+      const s = H.headline_scrim;
       const top = Math.min(0.5, s * 0.8);
       scrim.style.background =
         `linear-gradient(180deg, rgba(10,11,13,${top.toFixed(3)}) 0%, rgba(10,11,13,0) 24%, ` +
@@ -90,7 +90,7 @@ class HeroReplay {
     this.totalAsc = this.cumAsc[n - 1] || 1;
     // Detected climbs (start/end distance in meters). Configured spans, with the
     // end clamped to the route length (Infinity means "to the summit").
-    this.climbs = H.climbSpansMeters.map((span, i) => {
+    this.climbs = H.climb_spans_meters.map((span, i) => {
       const s = span[0];
       const e = Math.min(this.total, span[1]);
       const ascent = this.ascAt(e) - this.ascAt(s);
@@ -148,7 +148,7 @@ class HeroReplay {
   camHeadingAt(s) {
     // Forward travel direction. A short baseline gives a stable "current heading";
     // camLookaheadMeters extends how far ahead the camera aims into the turn.
-    const look = H.camLookaheadMeters;
+    const look = H.cam_lookahead_meters;
     const base = 12;
     const a = this.interp(Math.max(0, s - base * 0.5));
     const b = this.interp(Math.min(this.total, s + base * 0.5 + look));
@@ -222,7 +222,7 @@ class HeroReplay {
       console.warn("[GPX Rider] map unavailable:", e && e.message);
       this.mapReady = false;
       const fb = this.$("gpxr-fallback");
-      if (fb && H.fallbackImagePath) { fb.src = H.fallbackImagePath; fb.style.opacity = "1"; }
+      if (fb && H.fallback_image_path) { fb.src = H.fallback_image_path; fb.style.opacity = "1"; }
       this.set("v-mode", "Preview");
     }
     this.startLoop();
@@ -264,7 +264,7 @@ class HeroReplay {
     if (this.Model) {
       try {
         this.rider = new this.Model({
-          src: H.riderModelPath, position: p0, altitudeMode: alt,
+          src: H.rider_model_path, position: p0, altitudeMode: alt,
           orientation: { heading: 0, tilt: 90, roll: 0 }, scale: 9,
         });
         this.map.append(this.rider);
@@ -280,8 +280,8 @@ class HeroReplay {
   }
 
   rideStartS() {
-    const v = H.finaleSpeedKmh / 3.6;
-    const secs = H.finaleSeconds;
+    const v = H.finale_speed_kmh / 3.6;
+    const secs = H.finale_seconds;
     return Math.max(0, this.total - Math.min(this.total, v * secs));
   }
 
@@ -302,13 +302,13 @@ class HeroReplay {
     if (this.phase === "ride" || this.phase === "ridein") {
       // constant ride speed; start point is placed so load→summit takes
       // finaleSeconds at this speed
-      const v = H.finaleSpeedKmh / 3.6;
+      const v = H.finale_speed_kmh / 3.6;
       const ds = v * dt; this.s += ds; this.dsThisFrame = ds; this.rideTime += dt;
       if (this.s >= this.total) {
         this.s = this.total;
         if (this.phase === "ride") {
           this.phase = "orbit"; this.orbitT = 0; this.orbitHeading = this.camHeading;
-          this.orbitFrom = { tilt: H.chaseTiltDegrees, range: H.chaseRangeMeters };
+          this.orbitFrom = { tilt: H.chase_tilt_degrees, range: H.chase_range_meters };
           this.powDisp = 0; this.hrAtFinish = this.hrDisp;
         }
       }
@@ -318,12 +318,12 @@ class HeroReplay {
       this.updateRide(dt, now);
     } else if (this.phase === "orbit") {
       this.orbitT += dt;
-      this.orbitHeading = (this.orbitHeading + dt * (360 / H.orbitSecondsPerRev)) % 360;
+      this.orbitHeading = (this.orbitHeading + dt * (360 / H.orbit_seconds_per_rev)) % 360;
       this.updateOrbit(dt, now);
-      if (this.orbitT >= H.orbitSeconds) { this.phase = "fadeout"; this.fadeT = 0; }
+      if (this.orbitT >= H.orbit_seconds) { this.phase = "fadeout"; this.fadeT = 0; }
     } else if (this.phase === "fadeout") {
       this.fadeT += dt; const o = Math.min(1, this.fadeT / 0.7); this.setFade(o);
-      this.orbitHeading = (this.orbitHeading + dt * (360 / H.orbitSecondsPerRev)) % 360;
+      this.orbitHeading = (this.orbitHeading + dt * (360 / H.orbit_seconds_per_rev)) % 360;
       this.updateOrbit(dt, now);
       if (o >= 1) {
         this.s = this.rideStartS(); this.rideTime = 0; this.camHeading = this.headingAt(this.s);
@@ -354,7 +354,7 @@ class HeroReplay {
 
   stepSim(dt) {
     const gradeNow = this.gradeAt(this.s);
-    const avg = H.avgSpeedKmh;
+    const avg = H.avg_speed_kmh;
     const ridingKmh = Math.max(8, avg - Math.max(0, gradeNow) * 0.9);
     const ridingMps = ridingKmh / 3.6;
     // power from grade-aware physics
@@ -369,7 +369,7 @@ class HeroReplay {
     const FTP = 273, rest = 60, hrmax = 182;
     const intensity = Math.min(1.06, this.powDisp / (FTP * 1.05));
     const hrTar = rest + (hrmax - rest) * Math.max(0.14, intensity);
-    const lag = H.hrLagSeconds;
+    const lag = H.hr_lag_seconds;
     this.hrDisp += (hrTar - this.hrDisp) * (1 - Math.exp(-dt / lag));
     return gradeNow;
   }
@@ -407,8 +407,8 @@ class HeroReplay {
     // Smooth pan: velocity eases in/out (limited acceleration) and slows as it
     // nears the rider's heading, capped at the max turn rate.
     let d = ((tgt - this.camHeading + 540) % 360) - 180;
-    const maxRate = H.camTurnRateDegPerSec;
-    const maxAccel = H.camTurnAccelDegPerSec2;
+    const maxRate = H.cam_turn_rate_deg_per_sec;
+    const maxAccel = H.cam_turn_accel_deg_per_sec2;
     const sign = d < 0 ? -1 : 1;
     // never exceed the speed from which we can still brake to a stop before the target
     const brakeVel = Math.sqrt(2 * maxAccel * Math.abs(d));
@@ -423,8 +423,8 @@ class HeroReplay {
       try {
         this.map.center = { lat: pos.lat, lng: pos.lng, altitude: pos.ele };
         this.map.heading = this.camHeading;
-        this.map.tilt = H.chaseTiltDegrees;
-        this.map.range = H.chaseRangeMeters;
+        this.map.tilt = H.chase_tilt_degrees;
+        this.map.range = H.chase_range_meters;
       } catch (e) {}
       this.moveRider(pos);
     }
@@ -435,8 +435,8 @@ class HeroReplay {
     const sum = this.pts[this.pts.length - 1];
     // power dropped to 0 at the finish; HR holds for the lag, then eases to 80
     this.powDisp = 0;
-    const lag = H.hrLagSeconds;
-    const span = Math.max(1, H.orbitSeconds);
+    const lag = H.hr_lag_seconds;
+    const span = Math.max(1, H.orbit_seconds);
     const from = (this.hrAtFinish != null) ? this.hrAtFinish : this.hrDisp;
     const p = Math.max(0, Math.min(1, (this.orbitT - lag) / span));
     const eased = p * p * (3 - 2 * p);
@@ -445,11 +445,11 @@ class HeroReplay {
       try {
         // ease tilt + range from the exact chase values into orbit values so
         // there is no abrupt switch
-        const fromCam = this.orbitFrom || { tilt: H.chaseTiltDegrees, range: H.chaseRangeMeters };
+        const fromCam = this.orbitFrom || { tilt: H.chase_tilt_degrees, range: H.chase_range_meters };
         const k = Math.min(1, this.orbitT / 3.2);
         const ease = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-        const r = fromCam.range + (H.orbitRangeMeters - fromCam.range) * ease;
-        const tilt = fromCam.tilt + (H.orbitTiltDegrees - fromCam.tilt) * ease;
+        const r = fromCam.range + (H.orbit_range_meters - fromCam.range) * ease;
+        const tilt = fromCam.tilt + (H.orbit_tilt_degrees - fromCam.tilt) * ease;
         this.map.center = { lat: sum.lat, lng: sum.lng, altitude: sum.ele };
         this.map.heading = this.orbitHeading;
         this.map.tilt = tilt;

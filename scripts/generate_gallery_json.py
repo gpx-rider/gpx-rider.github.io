@@ -21,6 +21,20 @@ from tuning_config import load_tuning
 
 TUNING = load_tuning()
 
+
+def tuning(*path):
+    """Walk a nested snake_case path in tuning.yaml (see app/core/tuning.mjs
+    for the same idea on the JS side), failing loudly on a missing key."""
+    node = TUNING
+    trail = []
+    for key in path:
+        trail.append(key)
+        if not isinstance(node, dict) or key not in node:
+            raise KeyError(f'tuning.yaml is missing "{".".join(trail)}".')
+        node = node[key]
+    return node
+
+
 GALLERY_DIR = pathlib.Path("gallery")
 APP_DIR = pathlib.Path("app")
 OUTPUT_JSON = APP_DIR / "gallery.json"
@@ -28,21 +42,21 @@ APP_GALLERY_DIR = APP_DIR / "gallery"
 
 # Everything below comes straight from tuning.yaml — the same values the app
 # loads — so gallery cards always agree with the running app.
-CLIMB_NOISE_THRESHOLD_METERS = TUNING["CLIMB_NOISE_THRESHOLD_METERS"]
-PROFILE_BARS = TUNING["GALLERY_MINI_PROFILE_BAR_COUNT"]
+CLIMB_NOISE_THRESHOLD_METERS = tuning("route_math", "climb_noise_threshold_meters")
+PROFILE_BARS = tuning("gallery", "mini_profile", "bar_count")
 
-EQUIVALENT_KM_CLIMB_METERS = TUNING["EQUIVALENT_KM_CLIMB_METERS"]
-DISTANCE_CLASS_THRESHOLDS_KM = [(row["min"], row["label"]) for row in TUNING["DISTANCE_CLASS_THRESHOLDS_KM"]]
-TERRAIN_CLASS_THRESHOLDS_M_PER_KM = [(row["min"], row["label"]) for row in TUNING["TERRAIN_CLASS_THRESHOLDS_M_PER_KM"]]
-DIFFICULTY_THRESHOLDS_EQUIVALENT_KM = [(row["min"], row["label"]) for row in TUNING["DIFFICULTY_THRESHOLDS_EQUIVALENT_KM"]]
+EQUIVALENT_KM_CLIMB_METERS = tuning("route_difficulty", "equivalent_km_climb_meters")
+DISTANCE_CLASS_THRESHOLDS_KM = [(row["min"], row["label"]) for row in tuning("route_difficulty", "distance_class_thresholds_km")]
+TERRAIN_CLASS_THRESHOLDS_M_PER_KM = [(row["min"], row["label"]) for row in tuning("route_difficulty", "terrain_class_thresholds_m_per_km")]
+DIFFICULTY_THRESHOLDS_EQUIVALENT_KM = [(row["min"], row["label"]) for row in tuning("route_difficulty", "difficulty_thresholds_equivalent_km")]
 
-# Shared grade palette (see GRADE_PROFILE_* in tuning.yaml). Cards deviate
+# Shared grade palette (see grade_palette in tuning.yaml). Cards deviate
 # from the app's profile in two deliberate ways: both descent buckets use the
 # lighter green, and the flat bucket uses a lighter tone that reads better on
 # the card background.
-GRADE_THRESHOLDS = TUNING["GRADE_PROFILE_THRESHOLDS"]
-GRADE_COLORS = TUNING["GRADE_PROFILE_COLORS"]
-FLAT_BAR_COLOR = TUNING["GALLERY_MINI_PROFILE_FLAT_COLOR"]
+GRADE_THRESHOLDS = tuning("grade_palette", "thresholds")
+GRADE_COLORS = tuning("grade_palette", "colors")
+FLAT_BAR_COLOR = tuning("gallery", "mini_profile", "flat_color")
 
 EARTH_RADIUS_M = 6371000
 

@@ -548,26 +548,26 @@ in place).
   switching modes never jumps. The ellipse fly-by (`app/camera/flyby.mjs`, configured by
   `ELLIPSE_FLYBY` in `tuning.mjs`) fits a PCA-aligned ellipse to the route
   footprint, scales it independently of the route bounds, enforces
-  `minTurnRadiusMeters`, and supports `direction` (`1` clockwise seen from
+  `min_turn_radius_meters`, and supports `direction` (`1` clockwise seen from
   above, `-1` counter-clockwise). Its camera looks along the direction of travel
-  and pitches down by `mountPitchDegrees`; `secondsPerLap`, `maxSpeedMps`,
-  `flyHeightMetersMin`, `flyHeightMetersAboveTerrainMin`, `cameraFovDegrees`,
-  `inwardLookDegrees`, `viewDistanceMeters`, `ellipseScale`, `minSemiMajorMeters`,
-  `minSemiMinorMeters`, `sampleCount`, and `startAngleDegrees` are all tunable.
-  `inwardLookDegrees` rotates the horizontal look direction toward the ellipse
+  and pitches down by `mount_pitch_degrees`; `seconds_per_lap`, `max_speed_mps`,
+  `fly_height_meters_min`, `fly_height_meters_above_terrain_min`, `camera_fov_degrees`,
+  `inward_look_degrees`, `view_distance_meters`, `ellipse_scale`, `min_semi_major_meters`,
+  `min_semi_minor_meters`, `sample_count`, and `start_angle_degrees` are all tunable.
+  `inward_look_degrees` rotates the horizontal look direction toward the ellipse
   interior (clockwise = right, counter-clockwise = left), while the route travel
   direction still drives the baseline heading.
   The actual fly height is the higher of the baseline height and the height
   needed to clear the highest route elevation sample under the fitted ellipse by
-  `flyHeightMetersAboveTerrainMin`. `maxBankDegrees` scales the bank angle from
+  `fly_height_meters_above_terrain_min`. `max_bank_degrees` scales the bank angle from
   the current turn radius
-  (`minTurnRadiusMeters` = max bank), and `overview-camera.mjs` applies it to `state.map.roll`.
+  (`min_turn_radius_meters` = max bank), and `overview-camera.mjs` applies it to `state.map.roll`.
   Fly-over (`createFigureEightFlyover`) reuses the exact same footprint fit,
   `ELLIPSE_FLYBY` config, and camera-frame/pacing driver — only the path differs:
   a Gerono figure-eight (`along = a·cos u`, `cross = b·sin 2u`) that crosses the
   footprint center twice per lap. Every tunable above applies identically, with
   one behavioral twist: because the eight *changes turn direction* between its
-  two lobes, `bankAt`/`inwardLookDegrees` follow the **local** turn (via the
+  two lobes, `bankAt`/`inward_look_degrees` follow the **local** turn (via the
   curve's `signedCurvatureAt` and the `tracksTurnDirection` flag) instead of the
   ellipse's fixed handedness — so the camera banks and looks into whichever turn
   it is actually in (right on one lobe, left on the other) and eases smoothly

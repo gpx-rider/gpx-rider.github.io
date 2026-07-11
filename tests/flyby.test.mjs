@@ -19,21 +19,21 @@ for (let i = 0; i <= 80; i++) {
 }
 
 const BASE = {
-  ellipseScale: 0.75,
-  minSemiMajorMeters: 100,
-  minSemiMinorMeters: 100,
-  minTurnRadiusMeters: 900,
+  ellipse_scale: 0.75,
+  min_semi_major_meters: 100,
+  min_semi_minor_meters: 100,
+  min_turn_radius_meters: 900,
   direction: 1,
-  secondsPerLap: 90,
-  maxSpeedMps: 80,
-  flyHeightMetersMin: 1200,
-  flyHeightMetersAboveTerrainMin: 250,
-  cameraFovDegrees: 50,
-  inwardLookDegrees: 0,
-  mountPitchDegrees: 30,
-  viewDistanceMeters: 2500,
-  maxBankDegrees: 45,
-  sampleCount: 240,
+  seconds_per_lap: 90,
+  max_speed_mps: 80,
+  fly_height_meters_min: 1200,
+  fly_height_meters_above_terrain_min: 250,
+  camera_fov_degrees: 50,
+  inward_look_degrees: 0,
+  mount_pitch_degrees: 30,
+  view_distance_meters: 2500,
+  max_bank_degrees: 45,
+  sample_count: 240,
 };
 
 test("ellipse flyby returns null for routes too small to fly", () => {
@@ -44,8 +44,8 @@ test("ellipse flyby returns null for routes too small to fly", () => {
 test("ellipse scale can place the flight path inside the route footprint", () => {
   const ellipse = fitFlybyEllipse(route, {
     ...BASE,
-    ellipseScale: 0.55,
-    minTurnRadiusMeters: 0,
+    ellipse_scale: 0.55,
+    min_turn_radius_meters: 0,
   });
   assert.ok(ellipse);
   assert.ok(ellipse.semiMajor < ellipse.routeHalfMajor, "semi-major can be smaller than route half-major");
@@ -56,15 +56,15 @@ test("ellipse respects the configured minimum turning radius", () => {
   const ellipse = fitFlybyEllipse(route, BASE);
   assert.ok(ellipse);
   assert.ok(
-    ellipse.actualMinTurnRadiusMeters >= BASE.minTurnRadiusMeters - 1e-6,
-    `turn radius ${ellipse.actualMinTurnRadiusMeters} >= ${BASE.minTurnRadiusMeters}`,
+    ellipse.actualMinTurnRadiusMeters >= BASE.min_turn_radius_meters - 1e-6,
+    `turn radius ${ellipse.actualMinTurnRadiusMeters} >= ${BASE.min_turn_radius_meters}`,
   );
 });
 
 test("fly height honours the absolute minimum when terrain clearance is already enough", () => {
   const flyby = createEllipseFlyby(route, BASE);
-  assert.equal(flyby.flyHeightMeters, BASE.flyHeightMetersMin);
-  assert.ok(flyby.terrainClearanceMeters >= BASE.flyHeightMetersAboveTerrainMin);
+  assert.equal(flyby.flyHeightMeters, BASE.fly_height_meters_min);
+  assert.ok(flyby.terrainClearanceMeters >= BASE.fly_height_meters_above_terrain_min);
 });
 
 test("fly height climbs to clear the highest terrain under the ellipse", () => {
@@ -74,10 +74,10 @@ test("fly height climbs to clear the highest terrain under the ellipse", () => {
   }));
   const flyby = createEllipseFlyby(highRoute, {
     ...BASE,
-    flyHeightMetersMin: 100,
-    flyHeightMetersAboveTerrainMin: 700,
-    ellipseScale: 1,
-    minTurnRadiusMeters: 0,
+    fly_height_meters_min: 100,
+    fly_height_meters_above_terrain_min: 700,
+    ellipse_scale: 1,
+    min_turn_radius_meters: 0,
   });
   assert.ok(flyby);
 
@@ -89,9 +89,9 @@ test("fly height climbs to clear the highest terrain under the ellipse", () => {
 });
 
 test("camera FOV is configurable and clamped to Map3D's supported range", () => {
-  assert.equal(createEllipseFlyby(route, { ...BASE, cameraFovDegrees: 65 }).cameraFovDegrees, 65);
-  assert.equal(createEllipseFlyby(route, { ...BASE, cameraFovDegrees: 1 }).cameraFovDegrees, 5);
-  assert.equal(createEllipseFlyby(route, { ...BASE, cameraFovDegrees: 100 }).cameraFovDegrees, 80);
+  assert.equal(createEllipseFlyby(route, { ...BASE, camera_fov_degrees: 65 }).cameraFovDegrees, 65);
+  assert.equal(createEllipseFlyby(route, { ...BASE, camera_fov_degrees: 1 }).cameraFovDegrees, 5);
+  assert.equal(createEllipseFlyby(route, { ...BASE, camera_fov_degrees: 100 }).cameraFovDegrees, 80);
 });
 
 test("ellipse path sampling emits a closed path for debug drawing", () => {
@@ -107,8 +107,8 @@ test("ellipse path sampling emits a closed path for debug drawing", () => {
 test("flyby speed targets the configured lap time", () => {
   const flyby = createEllipseFlyby(route, {
     ...BASE,
-    secondsPerLap: 120,
-    maxSpeedMps: 1000,
+    seconds_per_lap: 120,
+    max_speed_mps: 1000,
   });
   assert.ok(Math.abs(flyby.lapSeconds - 120) < 1e-6);
   assert.ok(Math.abs(flyby.speedAt(0) - flyby.loopLength / 120) < 1e-6);
@@ -117,8 +117,8 @@ test("flyby speed targets the configured lap time", () => {
 test("flyby speed is capped by the configured maximum", () => {
   const flyby = createEllipseFlyby(route, {
     ...BASE,
-    secondsPerLap: 1,
-    maxSpeedMps: 30,
+    seconds_per_lap: 1,
+    max_speed_mps: 30,
   });
   assert.equal(flyby.speedAt(0), 30);
   assert.ok(flyby.lapSeconds > 1);
@@ -140,10 +140,10 @@ test("ellipse flyby emits finite frames and advances around the loop", () => {
     assert.ok(Number.isFinite(frame.lookAt[key]), `lookAt.${key} finite`);
   }
   assert.equal(frame.speedMps, flyby.speedAt(s));
-  assert.ok(frame.speedMps <= BASE.maxSpeedMps);
+  assert.ok(frame.speedMps <= BASE.max_speed_mps);
   assert.equal(frame.flyHeightMeters, flyby.flyHeightMeters);
   assert.equal(frame.terrainClearanceMeters, flyby.terrainClearanceMeters);
-  assert.equal(frame.cameraFovDegrees, BASE.cameraFovDegrees);
+  assert.equal(frame.cameraFovDegrees, BASE.camera_fov_degrees);
   assert.ok(frame.eye.altitude > frame.lookAt.altitude, "camera is pitched down");
 });
 
@@ -165,8 +165,8 @@ test("ellipse flyby looks in the direction of travel", () => {
 test("inward look offset rotates clockwise right and counter-clockwise left", () => {
   const offset = 12;
   const sRatio = 0.2;
-  const clockwise = createEllipseFlyby(route, { ...BASE, direction: 1, inwardLookDegrees: offset });
-  const counter = createEllipseFlyby(route, { ...BASE, direction: -1, inwardLookDegrees: offset });
+  const clockwise = createEllipseFlyby(route, { ...BASE, direction: 1, inward_look_degrees: offset });
+  const counter = createEllipseFlyby(route, { ...BASE, direction: -1, inward_look_degrees: offset });
 
   for (const [flyby, expected] of [[clockwise, offset], [counter, -offset]]) {
     const s = flyby.loopLength * sRatio;
@@ -198,7 +198,7 @@ test("bank is strongest at the tightest turn", () => {
   const tight = Math.abs(flyby.bankAt(0));
   const broad = Math.abs(flyby.bankAt(flyby.loopLength / 4));
   assert.ok(tight > broad, `tight bank ${tight} > broad bank ${broad}`);
-  assert.ok(tight <= BASE.maxBankDegrees + 1e-6);
+  assert.ok(tight <= BASE.max_bank_degrees + 1e-6);
 });
 
 test("figure-eight fly-over returns null for routes too small to fly", () => {
@@ -243,7 +243,7 @@ test("figure-eight fly-over emits finite frames and advances around the loop", (
 });
 
 test("figure-eight fly-over looks in the direction of travel", () => {
-  const flyover = createFigureEightFlyover(route, { ...BASE, inwardLookDegrees: 0 });
+  const flyover = createFigureEightFlyover(route, { ...BASE, inward_look_degrees: 0 });
   const s = flyover.loopLength * 0.15;
   const frame = flyover.frameAt(s);
   const viewBearing = bearingLocal(frame.eye, frame.lookAt);
@@ -256,7 +256,7 @@ test("figure-eight fly-over looks in the direction of travel", () => {
 
 test("figure-eight inward look follows the changing turn direction", () => {
   const offset = 20;
-  const flyover = createFigureEightFlyover(route, { ...BASE, inwardLookDegrees: offset });
+  const flyover = createFigureEightFlyover(route, { ...BASE, inward_look_degrees: offset });
   const samples = 240;
   let maxRight = -Infinity;
   let maxLeft = Infinity;
@@ -289,7 +289,7 @@ test("figure-eight bank reverses between the two lobes", () => {
     const bank = flyover.bankAt(flyover.loopLength * (i / samples));
     maxBank = Math.max(maxBank, bank);
     minBank = Math.min(minBank, bank);
-    assert.ok(Math.abs(bank) <= BASE.maxBankDegrees + 1e-6);
+    assert.ok(Math.abs(bank) <= BASE.max_bank_degrees + 1e-6);
   }
   assert.ok(maxBank > 1, `banks one way (${maxBank}°)`);
   assert.ok(minBank < -1, `banks the other way (${minBank}°)`);

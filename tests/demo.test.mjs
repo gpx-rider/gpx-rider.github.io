@@ -12,32 +12,32 @@ import {
 // A pinned rider profile so the tests exercise the physics/HR model, never
 // the shipped DEMO_RIDE tuning — retuning demo mode must not break this suite.
 const TEST_RIDE = {
-  riderWeightKg: 100,
-  bikeWeightKg: 9,
-  ftpWatts: 270,
-  maxHeartRateBpm: 180,
-  restingHeartRateBpm: 86,
-  thresholdHeartRateBpm: 155,
-  maxHistorySamples: 3600,
-  flatPowerWatts: 205,
-  climbWattsPerGradePercent: 13.5,
-  descentWattsPerGradePercent: 24,
-  minPowerWatts: 85,
-  maxPowerWatts: 360,
-  powerSmoothingTauSeconds: 7,
-  rollingResistanceCoefficient: 0.005,
-  dragAreaSquareMeters: 0.48,
-  airDensityKgPerCubicMeter: 1.225,
-  drivetrainEfficiency: 0.96,
-  minSpeedKph: 5,
-  maxSpeedKph: 72,
-  speedSmoothingTauSeconds: 5,
-  heartRateUpdateIntervalSeconds: 1,
-  heartRateRiseTauSeconds: 30,
-  heartRateFallDelaySeconds: 16,
-  heartRateFallTauSeconds: 78,
-  lowEffortReturnDelaySeconds: 120,
-  heartRateNoiseBpm: 1,
+  rider_weight_kg: 100,
+  bike_weight_kg: 9,
+  ftp_watts: 270,
+  max_heart_rate_bpm: 180,
+  resting_heart_rate_bpm: 86,
+  threshold_heart_rate_bpm: 155,
+  max_history_samples: 3600,
+  flat_power_watts: 205,
+  climb_watts_per_grade_percent: 13.5,
+  descent_watts_per_grade_percent: 24,
+  min_power_watts: 85,
+  max_power_watts: 360,
+  power_smoothing_tau_seconds: 7,
+  rolling_resistance_coefficient: 0.005,
+  drag_area_square_meters: 0.48,
+  air_density_kg_per_cubic_meter: 1.225,
+  drivetrain_efficiency: 0.96,
+  min_speed_kph: 5,
+  max_speed_kph: 72,
+  speed_smoothing_tau_seconds: 5,
+  heart_rate_update_interval_seconds: 1,
+  heart_rate_rise_tau_seconds: 30,
+  heart_rate_fall_delay_seconds: 16,
+  heart_rate_fall_tau_seconds: 78,
+  low_effort_return_delay_seconds: 120,
+  heart_rate_noise_bpm: 1,
 };
 
 test("demo target power rises on climbs and backs off on descents", () => {
@@ -58,7 +58,7 @@ test("demo heart rate settles near threshold HR at FTP power", () => {
   const originalRandom = Math.random;
   Math.random = () => 0.5;
   try {
-    const config = { ...TEST_RIDE, flatPowerWatts: TEST_RIDE.ftpWatts };
+    const config = { ...TEST_RIDE, flat_power_watts: TEST_RIDE.ftp_watts };
     const model = createDemoRideModel(config);
 
     for (let i = 0; i < 240; i += 1) {
@@ -73,7 +73,7 @@ test("demo heart rate settles near threshold HR at FTP power", () => {
       });
     }
 
-    assert.ok(Math.abs(model.heartRateBpm - TEST_RIDE.thresholdHeartRateBpm) <= 3);
+    assert.ok(Math.abs(model.heartRateBpm - TEST_RIDE.threshold_heart_rate_bpm) <= 3);
   } finally {
     Math.random = originalRandom;
   }

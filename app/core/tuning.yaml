@@ -8,6 +8,13 @@
 # from here — a value already saved in the browser (see app/storage/
 # storage.mjs) wins until the user resets it (or clears site data).
 #
+# Layout: values are grouped into snake_case sections, at most two levels
+# deep (section → group → key). app/core/tuning.mjs maps each nested path
+# back to the historical UPPER_SNAKE constant name the rest of the app still
+# imports, and scripts/tuning_config.py walks the same tree — so the two
+# languages read the exact same file. Move or rename a key here and you only
+# touch those two mappers, not every call site.
+#
 # Read by app/core/tuning.mjs (browser + tests) and scripts/tuning_config.py
 # (generators). Both implement the same deliberately small YAML subset:
 #   - "#" comments (full-line or after whitespace)
@@ -26,79 +33,83 @@
 #     operations is a hardware-safety concern, tuned against real trainers;
 #     read the comments there before touching them.
 
-# The product name shown in the UI and written into exported files.
-APP_NAME: "GPX Rider"
+app:
+  # The product name shown in the UI and written into exported files.
+  name: "GPX Rider"
 
 # --- Movement & pedaling -----------------------------------------------------
+movement:
+  # Pedaling detection with hysteresis: the rider counts as "pedaling" once the
+  # trainer reports at least start_kph, and stops counting only after speed
+  # falls to stop_kph. The gap keeps a spinning-down flywheel from flapping
+  # the movement source on/off around a single threshold.
+  pedaling:
+    start_kph: 3
+    stop_kph: 1
 
-# Pedaling detection with hysteresis: the rider counts as "pedaling" once the
-# trainer reports at least START km/h, and stops counting only after speed
-# falls to STOP km/h. The gap keeps a spinning-down flywheel from flapping
-# the movement source on/off around a single threshold.
-PEDALING_START_KPH: 3
-PEDALING_STOP_KPH: 1
+  # Simulation speed slider: the artificial speed used to auto-ride a route
+  # with no trainer. default_kph is where the slider starts; min/max bound both
+  # the slider and any saved value. These drive the range input's attributes
+  # at startup, so this is the single source of truth for the slider's range.
+  simulation_speed:
+    min_kph: 8
+    max_kph: 100
+    default_kph: 24
 
-# Simulation speed slider: the artificial speed used to auto-ride a route
-# with no trainer. DEFAULT is where the slider starts; MIN/MAX bound both
-# the slider and any saved value. These drive the range input's attributes
-# at startup, so this is the single source of truth for the slider's range.
-SIMULATION_SPEED_MIN_KPH: 8
-SIMULATION_SPEED_MAX_KPH: 100
-DEFAULT_SIMULATION_SPEED_KPH: 24
+  # A backgrounded tab stops requestAnimationFrame; without this cap the first
+  # frame after returning would teleport the rider minutes down the road.
+  # Raising it makes background riding smoother-looking on return but risks a
+  # visible jump after long pauses.
+  max_tick_seconds: 5
 
-# A backgrounded tab stops requestAnimationFrame; without this cap the first
-# frame after returning would teleport the rider minutes down the road.
-# Raising it makes background riding smoother-looking on return but risks a
-# visible jump after long pauses.
-MAX_TICK_SECONDS: 5
+  # How often the slow parts of the ride UI (DOM stats, elevation profile,
+  # minimap marker) refresh while moving. The map camera still updates every
+  # frame; this only throttles text/canvas work.
+  slow_ui_interval_ms: 250
 
-# How often the slow parts of the ride UI (DOM stats, elevation profile,
-# minimap marker) refresh while moving. The map camera still updates every
-# frame; this only throttles text/canvas work.
-SLOW_UI_INTERVAL_MS: 250
+  # How often the ride (route + progress) is persisted to browser storage
+  # while moving. Lower = less progress lost on a crash, more storage churn.
+  ride_save_throttle_ms: 1500
 
-# How often the ride (route + progress) is persisted to browser storage
-# while moving. Lower = less progress lost on a crash, more storage churn.
-RIDE_SAVE_THROTTLE_MS: 1500
+# --- Trainer grade updates ---------------------------------------------------
+trainer:
+  # How often the averaged route grade is written to the trainer, in seconds.
+  # default_seconds is what the settings slider starts at; min/max bound both
+  # the slider and any saved value. Faster updates track terrain more closely
+  # but make the trainer hunt on noisy GPX elevation.
+  grade_interval:
+    default_seconds: 2
+    min_seconds: 1
+    max_seconds: 5
 
-# --- Trainer grade updates -----------------------------------------------------
+# --- Route math (grade, ascent/descent) --------------------------------------
+route_math:
+  # The live grade is measured over a window this many meters behind and ahead
+  # of the rider. Longer = smoother grade that lags hill starts; shorter =
+  # snappier but noisier with imperfect GPX elevation.
+  grade_lookaround_meters: 18
 
-# How often the averaged route grade is written to the trainer, in seconds.
-# The default is what the settings slider starts at; MIN/MAX bound both the
-# slider and any saved value. Faster updates track terrain more closely but
-# make the trainer hunt on noisy GPX elevation.
-DEFAULT_GRADE_INTERVAL_SECONDS: 2
-GRADE_INTERVAL_MIN_SECONDS: 1
-GRADE_INTERVAL_MAX_SECONDS: 5
+  grade:
+    # The grade sent to the trainer and shown in the stats is clamped to this
+    # range (in percent) so one bad elevation point can't slam the trainer.
+    min_percent: -15
+    max_percent: 20
+    # The HUD grade meter caps its visual scale more tightly than the clamp
+    # above. Values beyond these endpoints pin to the edge, keeping the outer
+    # green/red bands comparable in width to the middle bands.
+    meter_min_percent: -6
+    meter_max_percent: 10
 
-# --- Route math (grade, ascent/descent) ----------------------------------------
+  # Total ascent/descent noise filter: an elevation change only counts toward
+  # the cumulative ascent/descent once it exceeds this many meters in one
+  # direction. GPX elevation jitters by a meter or so point-to-point; summing
+  # it raw would badly overestimate climbing. Bigger values under-count short
+  # rollers, smaller values over-count noise. 2 m matches what most route
+  # planners report. (Also used by the gallery generator so cards report the
+  # same totals the app shows once the route is loaded.)
+  climb_noise_threshold_meters: 2
 
-# The live grade is measured over a window this many meters behind and ahead
-# of the rider. Longer = smoother grade that lags hill starts; shorter =
-# snappier but noisier with imperfect GPX elevation.
-GRADE_LOOKAROUND_METERS: 18
-
-# The grade sent to the trainer and shown in the stats is clamped to this
-# range (in percent) so one bad elevation point can't slam the trainer.
-GRADE_MIN_PERCENT: -15
-GRADE_MAX_PERCENT: 20
-
-# The HUD grade meter caps its visual scale more tightly than the underlying
-# trainer/stat clamp above. Values beyond these endpoints pin to the edge,
-# keeping the outer green/red bands comparable in width to the middle bands.
-GRADE_METER_MIN_PERCENT: -6
-GRADE_METER_MAX_PERCENT: 10
-
-# Total ascent/descent noise filter: an elevation change only counts toward
-# the cumulative ascent/descent once it exceeds this many meters in one
-# direction. GPX elevation jitters by a meter or so point-to-point; summing
-# it raw would badly overestimate climbing. Bigger values under-count short
-# rollers, smaller values over-count noise. 2 m matches what most route
-# planners report. (Also used by the gallery generator so cards report the
-# same totals the app shows once the route is loaded.)
-CLIMB_NOISE_THRESHOLD_METERS: 2
-
-# --- Grade color palette ---------------------------------------------------------
+# --- Grade color palette -----------------------------------------------------
 #
 # Stepped grade palette shared by the elevation profile, the map route
 # coloring, the HUD meters, the climb banner mini-profile, AND the gallery
@@ -107,287 +118,295 @@ CLIMB_NOISE_THRESHOLD_METERS: 2
 # styles.css are the one remaining hand-synced copy (CSS cannot read this
 # file). Buckets read: green for descents, gray for flat, amber -> orange ->
 # red as the climb steepens.
+grade_palette:
+  # Bucket boundary grades, in percent: descent | easy descent | flat | gentle
+  # | moderate | steep. A grade at or below the first threshold gets the first
+  # color, and so on; anything past the last threshold gets the last color.
+  thresholds: [-3, -0.6, 0.8, 3.5, 7]
 
-# Bucket boundary grades, in percent: descent | easy descent | flat | gentle |
-# moderate | steep. A grade at or below the first threshold gets the first
-# color, and so on; anything past the last threshold gets the last color.
-GRADE_PROFILE_THRESHOLDS: [-3, -0.6, 0.8, 3.5, 7]
+  # One color per bucket (thresholds above define the 5 boundaries between
+  # these 6 colors).
+  colors:
+    - "#3fae6a"
+    - "#57b877"
+    - "rgba(125, 138, 134, 0.55)"
+    - "#e8b74e"
+    - "#e8823c"
+    - "#d9542f"
 
-# One color per bucket (thresholds above define the 5 boundaries between
-# these 6 colors).
-GRADE_PROFILE_COLORS:
-  - "#3fae6a"
-  - "#57b877"
-  - "rgba(125, 138, 134, 0.55)"
-  - "#e8b74e"
-  - "#e8823c"
-  - "#d9542f"
-
-# --- Smart ETA -----------------------------------------------------------------
+# --- Smart ETA ---------------------------------------------------------------
 #
 # The ETA converts the route into "flat-equivalent meters": every meter of
 # climbing still ahead counts as extra flat distance, every meter of descent
 # gives a little back. Your pace in flat-equivalent meters per second is
 # measured over the ride so far, then applied to what's left — so a slow
 # pass over the top of a climb doesn't project a slow descent.
+eta:
+  # How many flat meters one vertical meter of climbing costs. ~25 matches a
+  # recreational rider around 150 W (1 km at 8% ≈ 1 km + 80 m × 25 = 3 km
+  # flat-equivalent). Strong riders effectively "pay" less — lower it if the
+  # ETA overshoots on climbs for you.
+  climb_equivalent_factor: 25
 
-# How many flat meters one vertical meter of climbing costs. ~25 matches a
-# recreational rider around 150 W (1 km at 8% ≈ 1 km + 80 m × 25 = 3 km
-# flat-equivalent). Strong riders effectively "pay" less — lower it if the
-# ETA overshoots on climbs for you.
-ETA_CLIMB_EQUIVALENT_FACTOR: 25
+  # How many flat meters one vertical meter of descent gives back. Descending
+  # is faster than flat riding but not free (braking, corners). Must stay well
+  # below 1/max-descent-grade (~6.7 at the -15% clamp) or a steep descent
+  # could count as negative distance.
+  descent_credit_factor: 5
 
-# How many flat meters one vertical meter of descent gives back. Descending
-# is faster than flat riding but not free (braking, corners). Must stay well
-# below 1/max-descent-grade (~6.7 at the -15% clamp) or a steep descent
-# could count as negative distance.
-ETA_DESCENT_CREDIT_FACTOR: 5
+  # The measured pace is trusted only after this much riding; before that the
+  # ETA falls back to the current speed (rough, but better than nothing).
+  min_history_seconds: 45
+  min_history_meters: 150
 
-# The measured pace is trusted only after this much riding; before that the
-# ETA falls back to the current speed (rough, but better than nothing).
-ETA_MIN_HISTORY_SECONDS: 45
-ETA_MIN_HISTORY_METERS: 150
+# --- Camera defaults & bounds ------------------------------------------------
+camera:
+  # Follow-camera defaults (the settings sliders start here; "Reset camera"
+  # returns here). zoom is a multiplier on the base viewing distance,
+  # angle_degrees is the tilt from straight-down, behind_meters is how many
+  # meters the camera trails the rider.
+  follow_defaults:
+    zoom: 2.5
+    angle_degrees: 75
+    behind_meters: 800
 
-# --- Camera defaults & bounds ----------------------------------------------------
+  # First-person camera preset. default_height_meters approximates a seated
+  # rider's eye line; min/max bound the configurable eye height. The camera eye
+  # is placed at the rider and looks look_ahead_meters ahead on the route.
+  # tilt_degrees keeps the ordinary Camera angle slider near the horizon while
+  # the preset is selected.
+  first_person:
+    default_height_meters: 1.7
+    min_height_meters: 0.8
+    max_height_meters: 2.2
+    look_ahead_meters: 20
+    tilt_degrees: 88
 
-# Follow-camera defaults (the settings sliders start here; "Reset camera"
-# returns here). Zoom is a multiplier on the base viewing distance, angle is
-# the tilt from straight-down in degrees, behind is how many meters the
-# camera trails the rider.
-DEFAULT_CAMERA_ZOOM: 2.5
-DEFAULT_CAMERA_ANGLE_DEGREES: 75
-DEFAULT_CAMERA_BEHIND_METERS: 800
+  # Deliberately huge bounds: they exist only to keep corrupted saved settings
+  # from wedging the camera, not to restrict framing — wide shots for
+  # screenshots need extreme zoom-outs and pans.
+  bounds:
+    zoom_min: 0.001
+    zoom_max: 1000
+    pan_limit_meters: 100000
+    center_altitude_limit_meters: 20000
+    tilt_min: 1
+    tilt_max: 89
 
-# First-person camera preset: eye height above the rider/route surface. The
-# default approximates a seated rider's eye line; the Settings slider lets the
-# user tune it for their position.
-DEFAULT_FIRST_PERSON_CAMERA_HEIGHT_METERS: 1.7
+  # The rider's heading is sampled this many meters behind/ahead of the rider,
+  # so the camera points the way the rider moves rather than at a distant spot.
+  heading_sample_meters: 4
 
-# Bounds for the configurable first-person eye height.
-FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS: 0.8
-FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS: 2.2
+  # After the user stops touching the map, the app waits this long before
+  # capturing the manual camera and resuming automatic control.
+  interaction_settle_ms: 600
 
-# First-person preset geometry. The camera eye is placed at the rider and looks
-# at a point this far ahead on the route. The tilt value keeps the ordinary
-# Camera angle slider near the horizon while the preset is selected.
-FIRST_PERSON_LOOK_AHEAD_METERS: 20
-FIRST_PERSON_CAMERA_TILT_DEGREES: 88
+  # Map3DElement's documented default field of view, in degrees. Used to reset
+  # camera modes that do not deliberately tune FOV.
+  default_map_fov_degrees: 35
 
-# Route overview shown when a route loads: whole route framed from this tilt.
-# Tilt is degrees from straight-down — 0 is top-down, ~89 is nearly at the
-# horizon (a low, terrain-revealing angle). NOTE: Google's 3D map limits how
-# far it will tilt toward the horizon when the camera is far out, so at the
-# large range needed to frame a long route a high tilt may be pulled back
-# toward top-down. Use the range knobs below to bring the camera closer if a
-# steeper tilt isn't taking effect (watch the Debug camera overlay).
-OVERVIEW_TILT_DEGREES: 70
-
-# Which side the overview looks from, as a rotation (degrees) on top of the
-# side the algorithm auto-picks (which puts the route's bulk away from the
-# viewer, start-left/end-right). 0 = the auto choice; 180 = the exact opposite
-# side, still with the route's long axis horizontal — this is how you flip a
-# route to see it "from the other side". Other values swing the view to any
-# azimuth (the route then reads diagonally, but it's still fully framed).
-OVERVIEW_HEADING_OFFSET_DEGREES: 0
-
-# Slack around the route when fitting it to the viewport. 1.0 hugs the route
-# to the screen edges; higher leaves more empty margin (camera further out).
-OVERVIEW_MARGIN_FACTOR: 0.9
-
-# Multiplier on the fitted overview range. 1 frames the whole route; below 1
-# pulls the camera in closer (route edges crop off, but terrain relief reads
-# much better at a low tilt); above 1 pushes it further out. This is the main
-# knob for trading "see the whole route" against "see the 3D terrain".
-OVERVIEW_RANGE_FACTOR: 0.75
-
-# Hard bounds (meters) on the overview range, applied after the factor. The
-# max cap is the other way to force a closer, more terrain-rich view on long
-# routes (at the cost of not framing the whole thing); leave it at .inf to
-# always frame the entire route. Min keeps tiny routes from zooming in absurdly.
-OVERVIEW_MIN_RANGE_METERS: 250
-OVERVIEW_MAX_RANGE_METERS: .inf
-
-# --- Overview motion (static / orbit / ellipse flyby) -----------------------------
+# --- Route overview framing --------------------------------------------------
 #
-# How the whole-route overview behaves when a route loads. This is a user
-# setting (Settings › Camera & view); the value here is only the default.
-#   "static"           — the framed still shot (the classic overview)
-#   "orbit"            — turntable: the static shot slowly rotates around the route
-#   "flyby"            — a camera flies a PCA-aligned ellipse around the route
-#   "flyover"          — a camera flies a figure-eight over the route (shares ELLIPSE_FLYBY)
-#   "satellite"        — straight-down, north-up view with the route framed as big as fits
-DEFAULT_OVERVIEW_MODE: "orbit"
-# Camera behavior after selecting a detected climb: "static" holds the
-# fitted climb view; "orbit" circles it; "satellite" shows it north-up.
-DEFAULT_CLIMB_FOCUS_MODE: "static"
+# Route overview shown when a route loads: whole route framed from this tilt.
+overview:
+  # Degrees from straight-down — 0 is top-down, ~89 is nearly at the horizon (a
+  # low, terrain-revealing angle). NOTE: Google's 3D map limits how far it will
+  # tilt toward the horizon when the camera is far out, so at the large range
+  # needed to frame a long route a high tilt may be pulled back toward
+  # top-down. Use the range knobs below to bring the camera closer if a steeper
+  # tilt isn't taking effect (watch the Debug camera overlay).
+  tilt_degrees: 70
 
-# Orbit mode: seconds for one full revolution, and spin direction (1 =
-# clockwise seen from above, -1 = counter-clockwise). Longer = statelier.
-OVERVIEW_ORBIT_SECONDS_PER_REV: 75
-OVERVIEW_ORBIT_DIRECTION: 1
+  # Which side the overview looks from, as a rotation (degrees) on top of the
+  # side the algorithm auto-picks (which puts the route's bulk away from the
+  # viewer, start-left/end-right). 0 = the auto choice; 180 = the exact opposite
+  # side, still with the route's long axis horizontal — this is how you flip a
+  # route to see it "from the other side". Other values swing the view to any
+  # azimuth (the route then reads diagonally, but it's still fully framed).
+  heading_offset_degrees: 0
 
-# Selected climbs are much smaller than whole routes, so their orbit gets its
-# own faster, user-adjustable revolution time.
-DEFAULT_CLIMB_ORBIT_SECONDS_PER_REV: 30
-CLIMB_ORBIT_SECONDS_PER_REV_MIN: 10
-CLIMB_ORBIT_SECONDS_PER_REV_MAX: 90
+  # Slack around the route when fitting it to the viewport. 1.0 hugs the route
+  # to the screen edges; higher leaves more empty margin (camera further out).
+  margin_factor: 0.9
 
-# --- Finish-line orbit -------------------------------------------------------------
+  # Multiplier on the fitted overview range. 1 frames the whole route; below 1
+  # pulls the camera in closer (route edges crop off, but terrain relief reads
+  # much better at a low tilt); above 1 pushes it further out. This is the main
+  # knob for trading "see the whole route" against "see the 3D terrain".
+  range_factor: 0.75
+
+  # Hard bounds (meters) on the overview range, applied after the factor. The
+  # max cap is the other way to force a closer, more terrain-rich view on long
+  # routes (at the cost of not framing the whole thing); leave it at .inf to
+  # always frame the entire route. Min keeps tiny routes from zooming in absurdly.
+  min_range_meters: 250
+  max_range_meters: .inf
+
+# --- Overview motion (static / orbit / ellipse flyby) ------------------------
+overview_motion:
+  # How the whole-route overview behaves when a route loads. This is a user
+  # setting (Settings › Camera & view); the value here is only the default.
+  #   "static"           — the framed still shot (the classic overview)
+  #   "orbit"            — turntable: the static shot slowly rotates around the route
+  #   "flyby"            — a camera flies a PCA-aligned ellipse around the route
+  #   "flyover"          — a camera flies a figure-eight over the route (shares ellipse_flyby)
+  #   "satellite"        — straight-down, north-up view with the route framed as big as fits
+  default_mode: "orbit"
+
+  # Camera behavior after selecting a detected climb: "static" holds the
+  # fitted climb view; "orbit" circles it; "satellite" shows it north-up.
+  default_climb_focus_mode: "static"
+
+  # When an animated overview (orbit/flyby) starts from a different camera
+  # pose, ease into the motion over this many seconds instead of jumping.
+  anim_intro_seconds: 1.5
+
+  # Whole-route orbit: seconds for one full revolution, and spin direction
+  # (1 = clockwise seen from above, -1 = counter-clockwise). Longer = statelier.
+  orbit:
+    seconds_per_rev: 75
+    direction: 1
+
+  # Selected climbs are much smaller than whole routes, so their orbit gets its
+  # own faster, user-adjustable revolution time.
+  climb_orbit:
+    default_seconds_per_rev: 30
+    min_seconds_per_rev: 10
+    max_seconds_per_rev: 90
+
+  # Satellite overview: a straight-down (near-vertical), north-up still framing
+  # the whole route as large as it fits. tilt_degrees is how far from vertical
+  # the camera leans — 1 is the closest to true top-down Map3D allows (0 breaks
+  # the framing math). margin_factor is the fit margin: 1 fills the viewport
+  # edge-to-edge, higher leaves more breathing room.
+  satellite:
+    tilt_degrees: 1
+    margin_factor: 1.12
+
+  # Ellipse flyby (also drives the figure-eight "flyover" — same settings, only
+  # the path shape differs): a camera flies along an ellipse aligned to the
+  # route's principal axis and looks along its direction of travel. ellipse_scale
+  # below 1 lets the flight path cut inside the route footprint; higher altitude,
+  # view_distance, and a flatter mount_pitch keep more of the route in view.
+  # seconds_per_lap controls the target time for one complete ellipse circuit,
+  # like orbit's revolution duration. max_speed_mps caps the resulting speed; if
+  # the cap is hit, the actual lap takes longer than seconds_per_lap.
+  # fly_height_meters_min is the baseline height above the route's center
+  # altitude; fly_height_meters_above_terrain_min keeps the camera at least that
+  # far above the highest route terrain point under the ellipse. The actual fly
+  # height uses whichever minimum requires the higher camera.
+  # camera_fov_degrees is passed to Map3D's `fov` property while the fly-by runs;
+  # 5 is telephoto, 80 is wide-angle, 35 matches the normal Map3D default.
+  # inward_look_degrees rotates the fly-by camera horizontally toward the inside
+  # of the ellipse: clockwise flights look right, counter-clockwise flights left.
+  # The fly-over (figure-eight) reuses this value but, since it changes turn
+  # direction each lobe, looks into whichever turn it is currently in and eases
+  # back to straight-ahead through the center crossings — so the same degrees
+  # read as "slightly left, then straight, then slightly right" over one lap.
+  # direction is 1 for clockwise seen from above, -1 for counter-clockwise.
+  # min_turn_radius_meters is a radius: 2500 m means the tightest possible circle
+  # would be 5 km across. max_bank_degrees is the roll applied at that tightest
+  # turn; broader turns roll proportionally less.
+  ellipse_flyby:
+    ellipse_scale: 0.78
+    min_semi_major_meters: 1200
+    min_semi_minor_meters: 700
+    min_turn_radius_meters: 750
+    direction: 1
+    seconds_per_lap: 40
+    max_speed_mps: 10000
+    fly_height_meters_min: 1400
+    fly_height_meters_above_terrain_min: 300
+    camera_fov_degrees: 60
+    inward_look_degrees: 20
+    mount_pitch_degrees: 15
+    view_distance_meters: 3200
+    max_bank_degrees: 60
+    sample_count: 360
+    start_angle_degrees: 0
+
+# --- Finish-line orbit -------------------------------------------------------
 #
 # The instant a ride (pedaled, simulated, or demo) reaches the end of the
 # route, the camera leaves the rider and orbits the finish point instead of
 # freezing on the follow camera's last frame. It reuses the same animated
-# orbit driver as the modes above (same intro ease-in, same
-# manual-drag/toggle exit) but is centered directly on the finish point
-# rather than a route-shape fit, since "the route" at the finish line is a
-# single point with nothing to frame.
-DEFAULT_FINISH_ORBIT_ENABLED: true
-FINISH_ORBIT_RANGE_METERS: 1200
-FINISH_ORBIT_TILT_DEGREES: 75
-FINISH_ORBIT_SECONDS_PER_REV: 60
-FINISH_ORBIT_DIRECTION: 1
-# Height (meters) above the finish point's ground elevation the camera looks
-# at, so the orbit centers roughly on rider-eye height instead of bare ground.
-FINISH_ORBIT_LOOKAT_HEIGHT_METERS: 10
+# orbit driver as the modes above (same intro ease-in, same manual-drag/toggle
+# exit) but is centered directly on the finish point rather than a route-shape
+# fit, since "the route" at the finish line is a single point with nothing to
+# frame.
+finish_orbit:
+  enabled: true
+  range_meters: 1200
+  tilt_degrees: 75
+  seconds_per_rev: 60
+  direction: 1
+  # Height (meters) above the finish point's ground elevation the camera looks
+  # at, so the orbit centers roughly on rider-eye height instead of bare ground.
+  lookat_height_meters: 10
 
-# Horizontal pointer movement before a profile interaction becomes a segment
-# selection instead of a normal click-to-seek.
-PROFILE_SEGMENT_SELECTION_DRAG_PIXELS: 8
-
-# The smallest elevation-profile drag interval accepted as a selected segment.
-# Very short routes scale this down by PROFILE_SEGMENT_SELECTION_MIN_ROUTE_FRACTION.
-PROFILE_SEGMENT_SELECTION_MIN_METERS: 50
-PROFILE_SEGMENT_SELECTION_MIN_ROUTE_FRACTION: 0.01
-
+# --- Overview debug travel line ----------------------------------------------
+#
 # Red overview travel line drawn while the camera debug overlay is enabled.
 # Orbit draws the orbit eye ground track; Fly-by draws its fitted ellipse.
-OVERVIEW_DEBUG_LINE_COLOR: "#ff2d2d"
+overview_debug_line:
+  color: "#ff2d2d"
+  width: 8
+  altitude_meters: 8
+  sample_count: 240
 
-# Pixel width of the red overview debug line.
-OVERVIEW_DEBUG_LINE_WIDTH: 8
-
-# Height above terrain for the red overview debug line.
-OVERVIEW_DEBUG_LINE_ALTITUDE_METERS: 8
-
-# Number of samples used for the red overview debug line.
-OVERVIEW_DEBUG_LINE_SAMPLE_COUNT: 240
-
-# Map3DElement's documented default field of view, in degrees. Used to reset
-# camera modes that do not deliberately tune FOV.
-DEFAULT_MAP_FOV_DEGREES: 35
-
-# When an animated overview (orbit/flyby) starts from a different
-# camera pose, ease into the motion over this many seconds instead of jumping.
-OVERVIEW_ANIM_INTRO_SECONDS: 1.5
-
-# Satellite overview: a straight-down (near-vertical), north-up still framing
-# the whole route as large as it fits. SATELLITE_TILT_DEGREES is how far from
-# vertical the camera leans — 1 is the closest to true top-down Map3D allows (0
-# breaks the framing math). SATELLITE_MARGIN_FACTOR is the fit margin: 1 fills
-# the viewport edge-to-edge, higher leaves more breathing room.
-SATELLITE_TILT_DEGREES: 1
-SATELLITE_MARGIN_FACTOR: 1.12
-
-# Ellipse flyby (also drives the figure-eight "flyover" — same settings, only
-# the path shape differs): a camera flies along an ellipse aligned to the
-# route's principal axis and looks along its direction of travel. ellipseScale
-# below 1 lets the flight path cut inside the route footprint; higher altitude,
-# viewDistance, and a flatter mountPitch keep more of the route in view.
-# secondsPerLap controls the target time for one complete ellipse circuit, like
-# orbit's revolution duration. maxSpeedMps caps the resulting speed; if the cap
-# is hit, the actual lap takes longer than secondsPerLap.
-# flyHeightMetersMin is the baseline height above the route's center altitude;
-# flyHeightMetersAboveTerrainMin keeps the camera at least that far above the
-# highest route terrain point under the ellipse. The actual fly height uses
-# whichever minimum requires the higher camera.
-# cameraFovDegrees is passed to Map3D's `fov` property while the fly-by runs;
-# 5 is telephoto, 80 is wide-angle, 35 matches the normal Map3D default.
-# inwardLookDegrees rotates the fly-by camera horizontally toward the inside
-# of the ellipse: clockwise flights look right, counter-clockwise flights left.
-# The fly-over (figure-eight) reuses this value but, since it changes turn
-# direction each lobe, looks into whichever turn it is currently in and eases
-# back to straight-ahead through the center crossings — so the same degrees
-# read as "slightly left, then straight, then slightly right" over one lap.
-# direction is 1 for clockwise seen from above, -1 for counter-clockwise.
-# minTurnRadiusMeters is a radius: 2500 m means the tightest possible circle
-# would be 5 km across. maxBankDegrees is the roll applied at that tightest
-# turn; broader turns roll proportionally less.
-ELLIPSE_FLYBY:
-  ellipseScale: 0.78
-  minSemiMajorMeters: 1200
-  minSemiMinorMeters: 700
-  minTurnRadiusMeters: 750
-  direction: 1
-  secondsPerLap: 40
-  maxSpeedMps: 10000
-  flyHeightMetersMin: 1400
-  flyHeightMetersAboveTerrainMin: 300
-  cameraFovDegrees: 60
-  inwardLookDegrees: 20
-  mountPitchDegrees: 15
-  viewDistanceMeters: 3200
-  maxBankDegrees: 60
-  sampleCount: 360
-  startAngleDegrees: 0
-
-# The rider's heading is sampled this many meters behind/ahead of the rider,
-# so the camera points the way the rider moves rather than at a distant spot.
-HEADING_SAMPLE_METERS: 4
-
-# After the user stops touching the map, the app waits this long before
-# capturing the manual camera and resuming automatic control.
-INTERACTION_SETTLE_MS: 600
-
-# Deliberately huge bounds: they exist only to keep corrupted saved settings
-# from wedging the camera, not to restrict framing — wide shots for
-# screenshots need extreme zoom-outs and pans.
-CAMERA_ZOOM_MIN: 0.001
-CAMERA_ZOOM_MAX: 1000
-CAMERA_PAN_LIMIT_METERS: 100000
-CAMERA_CENTER_ALTITUDE_LIMIT_METERS: 20000
-CAMERA_TILT_MIN: 1
-CAMERA_TILT_MAX: 89
-
-# --- Camera terrain avoidance ----------------------------------------------------
-
+# --- Camera terrain avoidance ------------------------------------------------
+#
 # Lift the camera when its view ray would sink into a hillside, easing back
 # down once the terrain allows. The terrain estimate comes from the route's
 # own elevation points — deliberately NOT the Google Elevation API, which
 # would cost real money at follow-camera query rates.
-DEFAULT_TERRAIN_AVOID_ENABLED: true
-DEFAULT_TERRAIN_CLEARANCE_METERS: 20
+terrain_avoidance:
+  enabled: true
+  clearance_meters: 20
 
-# Switchback roads (e.g. the Amalfi Coast) fold back on themselves, so a
-# hairpin's higher hillside can sit a couple of hundred meters away in
-# straight-line terms while being far along the route path — a narrow radius
-# only ever sees the (lower) stretch of road right at the sample point and
-# misses that the ground behind it keeps climbing. Cast a wide net; slightly
-# overestimating nearby terrain just holds the camera a bit higher; missing
-# it puts the eye inside the hillside.
-TERRAIN_SAMPLE_RADIUS_METERS: 400
+  # Switchback roads (e.g. the Amalfi Coast) fold back on themselves, so a
+  # hairpin's higher hillside can sit a couple of hundred meters away in
+  # straight-line terms while being far along the route path — a narrow radius
+  # only ever sees the (lower) stretch of road right at the sample point and
+  # misses that the ground behind it keeps climbing. Cast a wide net; slightly
+  # overestimating nearby terrain just holds the camera a bit higher; missing
+  # it puts the eye inside the hillside.
+  sample_radius_meters: 400
 
-# How often the (relatively expensive) terrain scan reruns.
-TERRAIN_LIFT_RECOMPUTE_MS: 150
+  # How often the (relatively expensive) terrain scan reruns.
+  lift_recompute_ms: 150
 
-# Rise fast enough to clear an approaching hill, settle back slowly so the
-# camera does not pump up and down on rolling terrain. Time constants in
-# seconds of exponential smoothing.
-TERRAIN_LIFT_RISE_TAU_SECONDS: 0.3
-TERRAIN_LIFT_FALL_TAU_SECONDS: 4
+  # Rise fast enough to clear an approaching hill, settle back slowly so the
+  # camera does not pump up and down on rolling terrain. Time constants in
+  # seconds of exponential smoothing.
+  lift_rise_tau_seconds: 0.3
+  lift_fall_tau_seconds: 4
 
-# --- Rider beacon (defaults for the Rendering settings) ---------------------------
+# --- Profile segment selection -----------------------------------------------
+profile_segment_selection:
+  # Horizontal pointer movement before a profile interaction becomes a segment
+  # selection instead of a normal click-to-seek.
+  drag_pixels: 8
 
-# A translucent extruded cylinder standing on the rider so the position
-# stays visible when trees or buildings hide the ground dot. Off by default
-# — it's visually heavy; opt in from the Rendering settings.
-DEFAULT_BEACON_ENABLED: false
-DEFAULT_BEACON_DIAMETER_METERS: 5
-DEFAULT_BEACON_HEIGHT_METERS: 20
-DEFAULT_BEACON_OPACITY: 0.35
-DEFAULT_BEACON_COLOR: "#ffffff"
+  # The smallest elevation-profile drag interval accepted as a selected segment.
+  # Very short routes scale this down by min_route_fraction.
+  min_meters: 50
+  min_route_fraction: 0.01
 
-# --- Rider dot ---------------------------------------------------------------------
+# --- Rider beacon (defaults for the Rendering settings) ----------------------
+#
+# A translucent extruded cylinder standing on the rider so the position stays
+# visible when trees or buildings hide the ground dot. Off by default — it's
+# visually heavy; opt in from the Rendering settings.
+rider_beacon:
+  enabled: false
+  diameter_meters: 5
+  height_meters: 20
+  opacity: 0.35
+  color: "#ffffff"
 
+# --- Rider dot ---------------------------------------------------------------
+#
 # The ground marker showing the rider's position is a Model3DElement (see
 # renderRiderDot in map/route-render.mjs), not a filled Polygon3DElement.
 # Polygon3DElement is meant for static terrain-draped areas; re-tessellating
@@ -398,249 +417,267 @@ DEFAULT_BEACON_COLOR: "#ffffff"
 # `extruded: true` (a short cylinder instead of a flat disc), none of which
 # changed it — and a faceted/streaky look from the constant re-triangulation.
 # A real mesh sidesteps both.
+rider_dot:
+  # A path relative to app/, resolved by map/route-render.mjs against the app
+  # root (not the page), so it loads correctly regardless of what path GPX Rider
+  # is served from. Swap this to experiment with other models — a couple of
+  # things to expect when trying a new one, both confirmed by testing, neither
+  # documented anywhere we could find:
+  #   - A model's local "up" axis does not necessarily map to world-up; if a
+  #     new model stands on its edge instead of lying flat, adjust orientation
+  #     below (the shipped puck needed tilt: 90).
+  #   - An ordinary lit PBR material can render solid black on this renderer
+  #     regardless of normals/winding/texturing — if a replacement model
+  #     renders black, look for (or add) a KHR_materials_unlit extension on
+  #     its materials, the same fix the shipped puck needed.
+  model_path: "assets/rider-dot.glb"
 
-# A path relative to app/, resolved by map/route-render.mjs against the app
-# root (not the page), so it loads correctly regardless of what path GPX Rider
-# is served from. Swap this to experiment with other models — a couple of
-# things to expect when trying a new one, both confirmed by testing, neither
-# documented anywhere we could find:
-#   - A model's local "up" axis does not necessarily map to world-up; if a
-#     new model stands on its edge instead of lying flat, adjust
-#     RIDER_DOT_ORIENTATION below (the shipped puck needed tilt: 90).
-#   - An ordinary lit PBR material can render solid black on this renderer
-#     regardless of normals/winding/texturing — if a replacement model
-#     renders black, look for (or add) a KHR_materials_unlit extension on
-#     its materials, the same fix the shipped puck needed.
-RIDER_DOT_MODEL_PATH: "assets/rider-dot.glb"
+  # heading/tilt/roll passed straight to Model3DElement's `orientation`. Not
+  # meaningful in isolation — it corrects for the specific model at model_path's
+  # own local axes, so re-tune this whenever that model changes (see the note
+  # above).
+  orientation:
+    heading: 0
+    tilt: 90
+    roll: 0
 
-# heading/tilt/roll passed straight to Model3DElement's `orientation`. Not
-# meaningful in isolation — it corrects for the specific model at
-# RIDER_DOT_MODEL_PATH's own local axes, so re-tune this whenever that model
-# changes (see the note above).
-RIDER_DOT_ORIENTATION:
-  heading: 0
-  tilt: 90
-  roll: 0
+  # The model at model_path is baked to a true 1 meter diameter, so this is a
+  # plain real-world size multiplier, not a unitless fudge factor — unlike a
+  # screen-space billboard (Marker3DElement + PinElement, tried and rejected:
+  # doesn't grow/shrink with camera distance the way a real ground object
+  # should, and a map-pin shape doesn't read as a location dot anyway). A
+  # different model baked to a different base size will need this retuned.
+  scale: 5
 
-# The model at RIDER_DOT_MODEL_PATH is baked to a true 1 meter diameter, so
-# this is a plain real-world size multiplier, not a unitless fudge factor —
-# unlike a screen-space billboard (Marker3DElement + PinElement, tried and
-# rejected: doesn't grow/shrink with camera distance the way a real ground
-# object should, and a map-pin shape doesn't read as a location dot anyway).
-# A different model baked to a different base size will need this retuned.
-RIDER_DOT_SCALE: 5
-# Extra size multiplier while the whole-route overview is active. The camera
-# is much farther away there, so the normal ride-scale dot can become hard to
-# spot.
-RIDER_DOT_OVERVIEW_SCALE_FACTOR: 2.4
+  # Extra size multiplier while the whole-route overview is active. The camera
+  # is much farther away there, so the normal ride-scale dot can become hard to
+  # spot.
+  overview_scale_factor: 2.4
 
-# Only used by the Polyline3DElement fallback for browsers without
-# Model3DElement (see renderRiderDot) — an outlined ring instead of a filled
-# dot, since Polyline3DElement has no fill. Diameter in meters.
-RIDER_DOT_DIAMETER_METERS: 5
+  # Only used by the Polyline3DElement fallback for browsers without
+  # Model3DElement (see renderRiderDot) — an outlined ring instead of a filled
+  # dot, since Polyline3DElement has no fill. Diameter in meters.
+  diameter_meters: 5
 
-# How high the dot's origin sits above the terrain, in meters. Independent
-# of ROUTE_LINE_ALTITUDE_METERS on purpose: the route line has to float well
-# clear of the terrain because a thin drawn line clamped to the ground
-# smears down slopes, but a real mesh (Model3DElement) doesn't have that
-# problem, so there's no reason to lift it off the ground the way the line
-# is. Not 0 though (confirmed by testing, not just assumed): the shipped
-# puck's origin is at its vertical center (0.15m tall, see
-# scripts/generate_rider_dot_model.py), so at 0 its bottom half was buried
-# in the terrain — and the model needed clearing by more than just its own
-# half-height (0.075m) to fully stop clipping on steep terrain, most likely
-# because the terrain mesh itself isn't perfectly smooth/precise at close
-# range. 0.5 was the smallest value that cleared cleanly on a steep
-# switchback in testing. Retune per model at RIDER_DOT_MODEL_PATH — start
-# from that model's own half-height above 0 and increase from there if it
-# still clips, especially on steep terrain.
-RIDER_DOT_ALTITUDE_METERS: 0.5
+  # How high the dot's origin sits above the terrain, in meters. Independent
+  # of route_line.altitude_meters on purpose: the route line has to float well
+  # clear of the terrain because a thin drawn line clamped to the ground
+  # smears down slopes, but a real mesh (Model3DElement) doesn't have that
+  # problem, so there's no reason to lift it off the ground the way the line
+  # is. Not 0 though (confirmed by testing, not just assumed): the shipped
+  # puck's origin is at its vertical center (0.15m tall, see
+  # scripts/generate_rider_dot_model.py), so at 0 its bottom half was buried
+  # in the terrain — and the model needed clearing by more than just its own
+  # half-height (0.075m) to fully stop clipping on steep terrain, most likely
+  # because the terrain mesh itself isn't perfectly smooth/precise at close
+  # range. 0.5 was the smallest value that cleared cleanly on a steep
+  # switchback in testing. Retune per model at model_path — start from that
+  # model's own half-height above 0 and increase from there if it still clips,
+  # especially on steep terrain.
+  altitude_meters: 0.5
 
-# --- Route line rendering -----------------------------------------------------------
+# --- Route line rendering ----------------------------------------------------
+route_line:
+  # Color the map route by the same grade buckets as the elevation profile.
+  # Turning this off restores the single blue route trace.
+  grade_colors_enabled: true
 
-# Color the map route by the same grade buckets as the elevation profile.
-# Turning this off restores the single blue route trace.
-DEFAULT_ROUTE_GRADE_COLORS_ENABLED: true
+  # The route line floats this high above the terrain instead of being draped
+  # onto it (draped strokes smear down steep slopes into wide blobs).
+  altitude_meters: 2.5
+  color: "#0a84ff"
+  width: 14
+  outer_color: "rgba(255, 255, 255, 0.72)"
+  outer_width: 0.35
 
-# The route line floats this high above the terrain instead of being draped
-# onto it (draped strokes smear down steep slopes into wide blobs).
-ROUTE_LINE_ALTITUDE_METERS: 2.5
-ROUTE_LINE_COLOR: "#0a84ff"
-ROUTE_LINE_WIDTH: 14
-ROUTE_LINE_OUTER_COLOR: "rgba(255, 255, 255, 0.72)"
-ROUTE_LINE_OUTER_WIDTH: 0.35
-# Selected climbs replace their normal route segments with this wider,
-# brighter-cased treatment. No second stacked line is used, avoiding z-fight.
-ROUTE_FOCUS_LINE_WIDTH: 19
-ROUTE_FOCUS_OUTER_COLOR: "rgba(255, 255, 255, 0.96)"
-ROUTE_FOCUS_OUTER_WIDTH: 0.8
+  # Selected climbs replace their normal route segments with this wider,
+  # brighter-cased treatment. No second stacked line is used, avoiding z-fight.
+  focus_line_width: 19
+  focus_outer_color: "rgba(255, 255, 255, 0.96)"
+  focus_outer_width: 0.8
 
-# The path is densified so elevated segments follow the ground between GPX
-# points; spacing grows on very long routes to cap the vertex count the map
-# engine has to handle.
-ROUTE_LINE_SPACING_METERS: 15
-ROUTE_LINE_MAX_POINTS: 5000
+  # The path is densified so elevated segments follow the ground between GPX
+  # points; spacing grows on very long routes to cap the vertex count the map
+  # engine has to handle.
+  spacing_meters: 15
+  max_points: 5000
 
-# Gallery cards start with lightweight classic satellite maps. Padding keeps
-# each route clear of the thumbnail edges after fitting its bounds.
-GALLERY_PREVIEW_MAP_TYPE: "satellite"
-GALLERY_PREVIEW_FIT_PADDING_PIXELS: 20
+# --- Gallery previews & mini profiles ----------------------------------------
+gallery:
+  preview:
+    # Gallery cards start with lightweight classic satellite maps. fit_padding
+    # keeps each route clear of the thumbnail edges after fitting its bounds.
+    map_type: "satellite"
+    fit_padding_pixels: 20
+    # Route styling shared by the gallery's classic and opt-in 3D previews.
+    route_color: "#0a84ff"
+    route_width_2d: 5
+    route_width_3d: 14
+    route_outer_color_3d: "rgba(255, 255, 255, 0.72)"
+    route_outer_width_3d: 0.35
 
-# Route styling shared by the gallery's classic and opt-in 3D previews.
-GALLERY_PREVIEW_ROUTE_COLOR: "#0a84ff"
-GALLERY_PREVIEW_2D_ROUTE_WIDTH: 5
-GALLERY_PREVIEW_3D_ROUTE_WIDTH: 14
-GALLERY_PREVIEW_3D_ROUTE_OUTER_COLOR: "rgba(255, 255, 255, 0.72)"
-GALLERY_PREVIEW_3D_ROUTE_OUTER_WIDTH: 0.35
+  # Gallery card mini elevation profile (baked into app/gallery.json by
+  # scripts/generate_gallery_json.py — rerun `make gallery-data` after changing
+  # these): how many bars each card's strip has, and the lighter flat-bucket
+  # tone used on cards (the standard palette's flat gray reads too dark on the
+  # card background; all other buckets use grade_palette.colors).
+  mini_profile:
+    bar_count: 44
+    flat_color: "rgba(200, 206, 214, 0.55)"
 
-# Gallery card mini elevation profile (baked into app/gallery.json by
-# scripts/generate_gallery_json.py — rerun `make gallery-data` after changing
-# these): how many bars each card's strip has, and the lighter flat-bucket
-# tone used on cards (the standard palette's flat gray reads too dark on the
-# card background; all other buckets use GRADE_PROFILE_COLORS).
-GALLERY_MINI_PROFILE_BAR_COUNT: 44
-GALLERY_MINI_PROFILE_FLAT_COLOR: "rgba(200, 206, 214, 0.55)"
+# --- Screenshots -------------------------------------------------------------
+screenshots:
+  # Ride screenshots come out at a constant size so gallery shots line up.
+  # The button is opt-in — most riders never need it on the map.
+  show_button: false
+  aspect: "16:9"
+  default_width: 1920
+  width_min: 640
+  width_max: 3840
 
-# --- Screenshots ---------------------------------------------------------------------
+# --- Recording (theater mode) ------------------------------------------------
+recording:
+  # One-click recording preset: a CSS-pinned "theater mode" that fixes the map
+  # viewport to exactly this size (dimming the rest of the app behind it) so
+  # screen captures come out at a consistent size. Not exported JPG dimensions,
+  # and not an actual browser-window resize — most browsers block scripted
+  # resizing of a window/tab they didn't open themselves via window.open().
+  # The UI labels/messages naming this size are derived from these values.
+  map_viewport:
+    width_pixels: 1200
+    height_pixels: 630
+    tolerance_pixels: 1
 
-# Ride screenshots come out at a constant size so gallery shots line up.
-# The button is opt-in — most riders never need it on the map.
-DEFAULT_SHOW_SCREENSHOT_BUTTON: false
-DEFAULT_SCREENSHOT_ASPECT: "16:9"
-DEFAULT_SCREENSHOT_WIDTH: 1920
-SCREENSHOT_WIDTH_MIN: 640
-SCREENSHOT_WIDTH_MAX: 3840
+  # Optional checkboxes (Demo mode panel) that hide specific HUD overlays while
+  # theater mode is active, so a screen recording can be a clean, showcase-ready
+  # shot of just the map, route and rider — no data tiles, banners or buttons.
+  theater_hide:
+    clock: false
+    meters: false
+    dock: false
+    climb_banner: false
+    demo_chip: false
+    controls: false
+    minimap: false
 
-# One-click recording preset: a CSS-pinned "theater mode" that fixes the map
-# viewport to exactly this size (dimming the rest of the app behind it) so
-# screen captures come out at a consistent size. Not exported JPG dimensions,
-# and not an actual browser-window resize — most browsers block scripted
-# resizing of a window/tab they didn't open themselves via window.open().
-# The UI labels/messages naming this size are derived from these values.
-RECORDING_MAP_VIEWPORT_WIDTH_PIXELS: 1200
-RECORDING_MAP_VIEWPORT_HEIGHT_PIXELS: 630
-RECORDING_MAP_VIEWPORT_TOLERANCE_PIXELS: 1
+# --- Display & HUD defaults --------------------------------------------------
+display_hud:
+  # Satellite minimap overlay above the fullscreen data dock.
+  show_minimap: false
 
-# Optional checkboxes (Demo mode panel) that hide specific HUD overlays while
-# theater mode is active, so a screen recording can be a clean, showcase-ready
-# shot of just the map, route and rider — no data tiles, banners or buttons.
-DEFAULT_THEATER_HIDE_CLOCK: false
-DEFAULT_THEATER_HIDE_METERS: false
-DEFAULT_THEATER_HIDE_DOCK: false
-DEFAULT_THEATER_HIDE_CLIMB_BANNER: false
-DEFAULT_THEATER_HIDE_DEMO_CHIP: false
-DEFAULT_THEATER_HIDE_CONTROLS: false
-DEFAULT_THEATER_HIDE_MINIMAP: false
+  # Place labels (roads, towns, POIs) on the main 3D map. Off = clean
+  # satellite imagery, on = Google's hybrid mode with labels.
+  map_labels_enabled: false
 
-# --- Display & HUD defaults ------------------------------------------------------------
+  # Local clock format used by the fullscreen top-left stats chip. The user's
+  # choice is persisted with the other display settings.
+  time_format: "24"
 
-# Satellite minimap overlay above the fullscreen data dock.
-DEFAULT_SHOW_MINIMAP: false
+  # Duration readouts default to explicit hour/minute labels (1h30m) so ETAs
+  # cannot be mistaken for minute/second clocks. "clock" keeps the old 1:30:00
+  # style for users who prefer stopwatch formatting.
+  duration_format: "compact"
 
-# Place labels (roads, towns, POIs) on the main 3D map. Off = clean
-# satellite imagery, on = Google's hybrid mode with labels.
-DEFAULT_MAP_LABELS_ENABLED: false
+  # Wall-clock refresh cadence while the fullscreen HUD is visible.
+  fullscreen_clock_refresh_ms: 1000
 
-# Local clock format used by the fullscreen top-left stats chip. The user's
-# choice is persisted with the other display settings.
-DEFAULT_TIME_FORMAT: "24"
-# Duration readouts default to explicit hour/minute labels (1h30m) so ETAs
-# cannot be mistaken for minute/second clocks. "clock" keeps the old 1:30:00
-# style for users who prefer stopwatch formatting.
-DEFAULT_DURATION_FORMAT: "compact"
-# Wall-clock refresh cadence while the fullscreen HUD is visible.
-FULLSCREEN_CLOCK_REFRESH_MS: 1000
-# Heart-rate UI refresh cadence while a dedicated strap is connected. Strap
-# notifications remain the data source; this loop republishes the current
-# strap truth to every display even while the ride/map UI is otherwise idle.
-HEART_RATE_REFRESH_MS: 1000
+  # Heart-rate UI refresh cadence while a dedicated strap is connected. Strap
+  # notifications remain the data source; this loop republishes the current
+  # strap truth to every display even while the ride/map UI is otherwise idle.
+  heart_rate_refresh_ms: 1000
 
-# Developer overlay: a small translucent box on the map showing the live
-# camera values the 3D map actually applies (tilt/range/heading/center),
-# plus ride progress. Off by default — it's a diagnostics aid, e.g. for
-# reading what tilt Google honours after a manual drag versus what we ask
-# for. The overlay refreshes on this interval while it's visible.
-DEFAULT_CAMERA_DEBUG_ENABLED: false
-CAMERA_DEBUG_REFRESH_MS: 100
-# Keep the gallery metadata camera readout live during animated overviews
-# without rebuilding its formatted JSON on every animation frame.
-GALLERY_METADATA_CAMERA_REFRESH_MS: 100
+  # Developer overlay: a small translucent box on the map showing the live
+  # camera values the 3D map actually applies (tilt/range/heading/center),
+  # plus ride progress. Off by default — it's a diagnostics aid, e.g. for
+  # reading what tilt Google honours after a manual drag versus what we ask
+  # for. The overlay refreshes on refresh_ms while it's visible.
+  camera_debug:
+    enabled: false
+    refresh_ms: 100
 
-# Ordered fullscreen bottom-dock data fields. Keys must match the
-# data-hud="…" attributes in app.html. The visible count controls how many
-# fields are shown from the front of the order; users can still put every
-# field on-screen if they want a denser dock.
-DEFAULT_HUD_FIELD_ORDER:
-  - speed
-  - ascentLeft
-  - calories
-  - remaining
-  - power
-  - heartRate
-  - grade
-  - ridden
-  - eta
-  - altitude
-  - ascent
-  - elapsed
-DEFAULT_HUD_VISIBLE_COUNT: 4
+  # Keep the gallery metadata camera readout live during animated overviews
+  # without rebuilding its formatted JSON on every animation frame.
+  gallery_metadata_camera_refresh_ms: 100
 
-# The fullscreen ride HUD's bottom data dock can be collapsed to a compact
-# strip (key metrics + the two progress bars) or expanded to the full dock
-# (metric tiles + the road-ahead elevation profile). This is its initial
-# state; the user's choice is persisted with the other display settings.
-DEFAULT_HUD_DOCK_COLLAPSED: false
+  # Ordered fullscreen bottom-dock data fields. Keys must match the
+  # data-hud="…" attributes in app.html. visible_count controls how many
+  # fields are shown from the front of the order; users can still put every
+  # field on-screen if they want a denser dock.
+  field_order:
+    - speed
+    - ascentLeft
+    - calories
+    - remaining
+    - power
+    - heartRate
+    - grade
+    - ridden
+    - eta
+    - altitude
+    - ascent
+    - elapsed
+  visible_count: 4
 
-# Training zones for the fullscreen left-side meters. Heart rate uses
-# Heart Rate Reserve (Karvonen) from resting/max HR; power uses FTP.
-DEFAULT_RESTING_HEART_RATE_BPM: 60
-DEFAULT_MAX_HEART_RATE_BPM: 180
-POWER_ZONE_DEFINITIONS:
-  - { name: "Active Recovery", color: "#8b949e" }
-  - { name: "Endurance", color: "#4f9bff" }
-  - { name: "Tempo", color: "#57b877" }
-  - { name: "Threshold", color: "#e8b74e" }
-  - { name: "VO2 Max", color: "#e8823c" }
-  - { name: "Anaerobic", color: "#d96a3f" }
-  - { name: "Neuromuscular", color: "#d9542f" }
-HEART_RATE_ZONE_DEFINITIONS:
-  - { name: "Recovery", color: "#8b949e" }
-  - { name: "Endurance", color: "#4f9bff" }
-  - { name: "Tempo", color: "#57b877" }
-  - { name: "Threshold", color: "#e8823c" }
-  - { name: "Max", color: "#d9542f" }
-HEART_RATE_MAX_AGE_FORMULA_BASE: 220
-PROFILE_HISTORY_SAMPLE_LIMIT: 1800
+  # The fullscreen ride HUD's bottom data dock can be collapsed to a compact
+  # strip (key metrics + the two progress bars) or expanded to the full dock
+  # (metric tiles + the road-ahead elevation profile). This is its initial
+  # state; the user's choice is persisted with the other display settings.
+  dock_collapsed: false
 
-# Gross metabolic efficiency for converting measured cycling work into active
-# human calories. Power meters report mechanical work at the pedals; humans
-# spend more chemical energy than that to produce it. 0.24 means 24% of the
-# rider's active energy becomes measured mechanical work.
-CYCLING_GROSS_EFFICIENCY: 0.24
+# --- Training zones & calories -----------------------------------------------
+training_zones:
+  # Training zones for the fullscreen left-side meters. Heart rate uses
+  # Heart Rate Reserve (Karvonen) from resting/max HR; power uses FTP.
+  resting_heart_rate_bpm: 60
+  max_heart_rate_bpm: 180
+  power_zone_definitions:
+    - { name: "Active Recovery", color: "#8b949e" }
+    - { name: "Endurance", color: "#4f9bff" }
+    - { name: "Tempo", color: "#57b877" }
+    - { name: "Threshold", color: "#e8b74e" }
+    - { name: "VO2 Max", color: "#e8823c" }
+    - { name: "Anaerobic", color: "#d96a3f" }
+    - { name: "Neuromuscular", color: "#d9542f" }
+  heart_rate_zone_definitions:
+    - { name: "Recovery", color: "#8b949e" }
+    - { name: "Endurance", color: "#4f9bff" }
+    - { name: "Tempo", color: "#57b877" }
+    - { name: "Threshold", color: "#e8823c" }
+    - { name: "Max", color: "#d9542f" }
+  heart_rate_max_age_formula_base: 220
+  profile_history_sample_limit: 1800
 
-# Fullscreen climb banner (top-center of the ride HUD). It appears while the
-# rider is on a detected climb, or while approaching the next one within this
-# distance; it is hidden otherwise.
-CLIMB_BANNER_APPROACH_METERS: 1000
+  # Gross metabolic efficiency for converting measured cycling work into active
+  # human calories. Power meters report mechanical work at the pedals; humans
+  # spend more chemical energy than that to produce it. 0.24 means 24% of the
+  # rider's active energy becomes measured mechanical work.
+  cycling_gross_efficiency: 0.24
 
-# Bars drawn in the climb banner's mini elevation profile of the upcoming
-# climb.
-CLIMB_BANNER_MINI_BAR_COUNT: 30
+# --- Fullscreen climb banner -------------------------------------------------
+climb_banner:
+  # Top-center of the ride HUD. It appears while the rider is on a detected
+  # climb, or while approaching the next one within this distance; it is hidden
+  # otherwise.
+  approach_meters: 1000
 
-# Names and accent colors for the climb banner's category chip, chosen by the
-# climb's average grade: the first entry whose `maxAverageGradePercent` the
-# climb does not exceed wins, and the last (.inf) is the catch-all for
-# anything steeper. Colors track the shared grade palette (gentle → green,
-# brutal → red; see GRADE_PROFILE_COLORS above). This is only a plain-language
-# label derived from average grade — no HC/Cat-1-style road categorization is
-# attempted, matching how difficulty.mjs classifies from geometry alone.
-CLIMB_CATEGORIES:
-  - { maxAverageGradePercent: 4, name: "GENTLE", color: "#57b877" }
-  - { maxAverageGradePercent: 7, name: "MODERATE", color: "#e8b74e" }
-  - { maxAverageGradePercent: 10, name: "STEEP", color: "#e8823c" }
-  - { maxAverageGradePercent: .inf, name: "BRUTAL", color: "#d9542f" }
+  # Bars drawn in the climb banner's mini elevation profile of the upcoming
+  # climb.
+  mini_bar_count: 30
 
-# --- Route difficulty classification --------------------------------------------
+  # Names and accent colors for the climb banner's category chip, chosen by the
+  # climb's average grade: the first entry whose `max_average_grade_percent` the
+  # climb does not exceed wins, and the last (.inf) is the catch-all for
+  # anything steeper. Colors track the shared grade palette (gentle → green,
+  # brutal → red; see grade_palette.colors above). This is only a plain-language
+  # label derived from average grade — no HC/Cat-1-style road categorization is
+  # attempted, matching how difficulty.mjs classifies from geometry alone.
+  categories:
+    - { max_average_grade_percent: 4, name: "GENTLE", color: "#57b877" }
+    - { max_average_grade_percent: 7, name: "MODERATE", color: "#e8b74e" }
+    - { max_average_grade_percent: 10, name: "STEEP", color: "#e8823c" }
+    - { max_average_grade_percent: .inf, name: "BRUTAL", color: "#d9542f" }
+
+# --- Route difficulty classification -----------------------------------------
 #
 # Classifies a loaded route from distance and total elevation gain alone —
 # no power, speed, weight, weather, surface, or ride-effort data. See
@@ -648,40 +685,40 @@ CLIMB_CATEGORIES:
 # bound of its class, in ascending order; edit freely to retune the scale.
 # The gallery generator reads the same tables, so cards and the app always
 # agree.
+route_difficulty:
+  # One "equivalent kilometer" is this many meters of elevation gain, added to
+  # the raw distance as a simple overall-effort estimate. Lower = climbing
+  # counts for more; higher = climbing counts for less.
+  equivalent_km_climb_meters: 100
 
-# One "equivalent kilometer" is this many meters of elevation gain, added to
-# the raw distance as a simple overall-effort estimate. Lower = climbing
-# counts for more; higher = climbing counts for less.
-EQUIVALENT_KM_CLIMB_METERS: 100
+  # Distance class, by route distance in km.
+  distance_class_thresholds_km:
+    - { min: 0, label: "XS" }
+    - { min: 20, label: "S" }
+    - { min: 40, label: "M" }
+    - { min: 70, label: "L" }
+    - { min: 110, label: "XL" }
+    - { min: 160, label: "XXL" }
 
-# Distance class, by route distance in km.
-DISTANCE_CLASS_THRESHOLDS_KM:
-  - { min: 0, label: "XS" }
-  - { min: 20, label: "S" }
-  - { min: 40, label: "M" }
-  - { min: 70, label: "L" }
-  - { min: 110, label: "XL" }
-  - { min: 160, label: "XXL" }
+  # Terrain class, by meters of elevation gain per km of distance.
+  terrain_class_thresholds_m_per_km:
+    - { min: 0, label: "Flat" }
+    - { min: 5, label: "Gentle" }
+    - { min: 10, label: "Rolling" }
+    - { min: 20, label: "Hilly" }
+    - { min: 35, label: "Mountainous" }
 
-# Terrain class, by meters of elevation gain per km of distance.
-TERRAIN_CLASS_THRESHOLDS_M_PER_KM:
-  - { min: 0, label: "Flat" }
-  - { min: 5, label: "Gentle" }
-  - { min: 10, label: "Rolling" }
-  - { min: 20, label: "Hilly" }
-  - { min: 35, label: "Mountainous" }
+  # Overall difficulty, by equivalent km (distance + elevation gain converted
+  # via equivalent_km_climb_meters).
+  difficulty_thresholds_equivalent_km:
+    - { min: 0, label: "Very Easy" }
+    - { min: 25, label: "Easy" }
+    - { min: 50, label: "Moderate" }
+    - { min: 85, label: "Hard" }
+    - { min: 130, label: "Very Hard" }
+    - { min: 190, label: "Epic" }
 
-# Overall difficulty, by equivalent km (distance + elevation gain converted
-# via EQUIVALENT_KM_CLIMB_METERS).
-DIFFICULTY_THRESHOLDS_EQUIVALENT_KM:
-  - { min: 0, label: "Very Easy" }
-  - { min: 25, label: "Easy" }
-  - { min: 50, label: "Moderate" }
-  - { min: 85, label: "Hard" }
-  - { min: 130, label: "Very Hard" }
-  - { min: 190, label: "Epic" }
-
-# --- Climb detection -------------------------------------------------------------
+# --- Climb detection ---------------------------------------------------------
 #
 # Climb detection relies on a "Leaky Bucket" (fatigue integrator) algorithm
 # to emulate human effort. Rather than purely looking at point-to-point
@@ -697,103 +734,104 @@ DIFFICULTY_THRESHOLDS_EQUIVALENT_KM:
 # This model prevents a long climb from being fractured into multiple pieces
 # by brief dips or false flats, while correctly ignoring small, insignificant
 # rollers.
+climb_detection:
+  # The "bucket size" required to officially declare a segment an active climb.
+  # Lowering this makes the algorithm more sensitive to shorter, punchy hills.
+  fatigue_threshold: 300
 
-# The "bucket size" required to officially declare a segment an active climb.
-# Lowering this makes the algorithm more sensitive to shorter, punchy hills.
-CLIMB_FATIGUE_THRESHOLD: 300
+  # The absolute maximum fatigue the bucket can hold. This acts as a "lid,"
+  # ensuring that massive alpine climbs don't accumulate infinite fatigue.
+  # Without this lid, a long mountain descent would not be enough to drain the
+  # bucket and close the climb.
+  max_fatigue: 900
 
-# The absolute maximum fatigue the bucket can hold. This acts as a "lid,"
-# ensuring that massive alpine climbs don't accumulate infinite fatigue.
-# Without this lid, a long mountain descent would not be enough to drain the
-# bucket and close the climb.
-CLIMB_MAX_FATIGUE: 900
+  # The gradient threshold (in percent) where a rider starts accumulating
+  # fatigue. Gradients above this add to the bucket; gradients below this
+  # trigger recovery.
+  resting_gradient_percent: 0.5
 
-# The gradient threshold (in percent) where a rider starts accumulating
-# fatigue. Gradients above this add to the bucket; gradients below this
-# trigger recovery.
-CLIMB_RESTING_GRADIENT_PERCENT: 0.5
+  # The leak rate when resting or descending. A multiplier of 0.4 means the
+  # bucket drains at 40% of the speed it fills. This forgiving drain rate
+  # allows climbs to "hold their breath" through false-flats and brief
+  # downhill dips.
+  recovery_multiplier: 0.4
 
-# The leak rate when resting or descending. A multiplier of 0.4 means the
-# bucket drains at 40% of the speed it fills. This forgiving drain rate
-# allows climbs to "hold their breath" through false-flats and brief
-# downhill dips.
-CLIMB_RECOVERY_MULTIPLIER: 0.4
+  # The number of data points used in the moving average pre-filter. Raw GPS
+  # elevation data is inherently noisy. A 5-point window effectively flattens
+  # micro-jitter without destroying the macro-geometry of the terrain.
+  smoothing_window_size: 5
 
-# The number of data points used in the moving average pre-filter. Raw GPS
-# elevation data is inherently noisy. A 5-point window effectively flattens
-# micro-jitter without destroying the macro-geometry of the terrain.
-CLIMB_SMOOTHING_WINDOW_SIZE: 5
+  # Sanity Check: Minimum accumulated gain (in meters) from the true base to
+  # the true peak. Using accumulated gain ensures that rocky, rolling trails
+  # that net little elevation but require significant upward pedaling are
+  # still recognized.
+  min_gain_meters: 20
 
-# Sanity Check: Minimum accumulated gain (in meters) from the true base to
-# the true peak. Using accumulated gain ensures that rocky, rolling trails
-# that net little elevation but require significant upward pedaling are
-# still recognized.
-CLIMB_MIN_GAIN_METERS: 20
+  # Sanity Check: Minimum average net grade (in percent) from the true base to
+  # the true peak. Prevents extremely long, nearly flat false-drags from being
+  # classified as categorizable climbs.
+  min_average_grade_percent: 1.5
 
-# Sanity Check: Minimum average net grade (in percent) from the true base to
-# the true peak. Prevents extremely long, nearly flat false-drags from being
-# classified as categorizable climbs.
-CLIMB_MIN_AVERAGE_GRADE_PERCENT: 1.5
-
-# --- Demo mode -----------------------------------------------------------------
-
+# --- Demo mode ---------------------------------------------------------------
+#
 # Synthetic trainer + heart-rate strap profile used for screen recordings.
 # It is deliberately separate from user settings: enabling Demo mode never
 # overwrites the rider's stored HR/FTP values or connects to BLE devices.
-DEMO_RIDE:
-  # Fixed showcase rider values. FTP and max HR drive the training meters;
-  # weight drives the grade-to-speed physics model.
-  riderWeightKg: 100
-  bikeWeightKg: 9
-  ftpWatts: 270
-  maxHeartRateBpm: 180
-  restingHeartRateBpm: 86
-  thresholdHeartRateBpm: 155
+demo_ride:
+  # Fixed showcase rider values. ftp_watts and max_heart_rate_bpm drive the
+  # training meters; the weights drive the grade-to-speed physics model.
+  rider_weight_kg: 100
+  bike_weight_kg: 9
+  ftp_watts: 270
+  max_heart_rate_bpm: 180
+  resting_heart_rate_bpm: 86
+  threshold_heart_rate_bpm: 155
   # Upper bound for generated demo history. When starting Demo mode from the
   # middle or end of a route, the synthetic past is thinned to this many
   # samples so the whole route is painted without making profile redraws heavy.
-  maxHistorySamples: 3600
+  max_history_samples: 3600
 
   # Target power model: flats sit below threshold, climbs add work, descents
   # back off. Smoothing keeps power from jumping at every GPX grade wiggle.
-  flatPowerWatts: 205
-  climbWattsPerGradePercent: 13.5
-  descentWattsPerGradePercent: 24
-  minPowerWatts: 85
-  maxPowerWatts: 360
-  powerSmoothingTauSeconds: 7
+  flat_power_watts: 205
+  climb_watts_per_grade_percent: 13.5
+  descent_watts_per_grade_percent: 24
+  min_power_watts: 85
+  max_power_watts: 360
+  power_smoothing_tau_seconds: 7
 
   # Cycling physics inputs for solving speed from power and road grade.
-  # CdA is intentionally upright/hoods-ish so the demo feels like a rider,
-  # not a velodrome time trial.
-  rollingResistanceCoefficient: 0.005
-  dragAreaSquareMeters: 0.48
-  airDensityKgPerCubicMeter: 1.225
-  drivetrainEfficiency: 0.96
-  minSpeedKph: 5
-  maxSpeedKph: 72
-  speedSmoothingTauSeconds: 5
+  # drag_area is intentionally upright/hoods-ish so the demo feels like a
+  # rider, not a velodrome time trial.
+  rolling_resistance_coefficient: 0.005
+  drag_area_square_meters: 0.48
+  air_density_kg_per_cubic_meter: 1.225
+  drivetrain_efficiency: 0.96
+  min_speed_kph: 5
+  max_speed_kph: 72
+  speed_smoothing_tau_seconds: 5
 
   # HR follows effort slowly. It rises after sustained power, waits before
   # dropping, and after two low-effort minutes eases back toward resting HR.
-  heartRateUpdateIntervalSeconds: 1
-  heartRateRiseTauSeconds: 30
-  heartRateFallDelaySeconds: 16
-  heartRateFallTauSeconds: 78
-  lowEffortReturnDelaySeconds: 120
-  heartRateNoiseBpm: 1
+  heart_rate_update_interval_seconds: 1
+  heart_rate_rise_tau_seconds: 30
+  heart_rate_fall_delay_seconds: 16
+  heart_rate_fall_tau_seconds: 78
+  low_effort_return_delay_seconds: 120
+  heart_rate_noise_bpm: 1
 
-# --- Ride recording -----------------------------------------------------------------
-
-# While moving, a track sample is appended roughly every SAMPLE interval and
-# the whole log is persisted to browser storage every PERSIST interval so a
+# --- Ride recording ----------------------------------------------------------
+#
+# While moving, a track sample is appended roughly every sample_interval and
+# the whole log is persisted to browser storage every persist_interval so a
 # reload or crash never loses a ride. Denser samples = bigger FIT files and
 # more storage churn.
-RIDE_SAMPLE_INTERVAL_MS: 1000
-RIDE_PERSIST_INTERVAL_MS: 5000
+ride_recording:
+  sample_interval_ms: 1000
+  persist_interval_ms: 5000
 
-# --- Landing page hero replay -------------------------------------------------
-
+# --- Landing page hero replay ------------------------------------------------
+#
 # The public landing page (app/index.html, driven by app/landing/landing.mjs)
 # plays a looping cinematic replay of one route over the same Google
 # Photorealistic 3D map the app uses, with a faked HUD, then a summit orbit,
@@ -801,52 +839,52 @@ RIDE_PERSIST_INTERVAL_MS: 5000
 # no settings UI, so unlike the rest of this file they are not user-facing
 # defaults, just the one place to retune the hero without touching
 # landing.mjs. All are read through LANDING_HERO in landing.mjs.
-LANDING_HERO:
+landing_hero:
   # Background-app treatment behind the headline: how much the map+HUD are
   # dimmed (0–0.75, higher = darker) and blurred (px), plus the strength of
   # the top/bottom scrim gradient that keeps the headline legible (0–0.9).
-  appDim: 0.18
-  appBlurPx: 0.6
-  headlineScrim: 0.66
+  app_dim: 0.18
+  app_blur_px: 0.6
+  headline_scrim: 0.66
 
   # Faked rider physiology used to animate the HUD numbers during the ride
   # phase: baseline flat speed the sim rides at (grade slows it), and how
   # many seconds heart rate lags a change in effort.
-  avgSpeedKmh: 16
-  hrLagSeconds: 8
+  avg_speed_kmh: 16
+  hr_lag_seconds: 8
 
   # Ride-phase pacing: the replay starts the rider partway up the route so
-  # the load→summit stretch shown takes finaleSeconds at finaleSpeedKmh.
-  finaleSpeedKmh: 16
-  finaleSeconds: 40
+  # the load→summit stretch shown takes finale_seconds at finale_speed_kmh.
+  finale_speed_kmh: 16
+  finale_seconds: 40
 
   # Chase camera during the ride: distance behind (m), tilt toward the
   # horizon (deg), how far ahead of the rider the camera aims into a turn
   # (m), and the pan rate/acceleration limits that keep heading changes
   # smooth (deg/s, deg/s²).
-  chaseRangeMeters: 440
-  chaseTiltDegrees: 75
-  camLookaheadMeters: 0
-  camTurnRateDegPerSec: 40
-  camTurnAccelDegPerSec2: 20
+  chase_range_meters: 440
+  chase_tilt_degrees: 75
+  cam_lookahead_meters: 0
+  cam_turn_rate_deg_per_sec: 40
+  cam_turn_accel_deg_per_sec2: 20
 
   # Summit orbit after finishing: orbit distance (m), tilt (deg), seconds per
   # full revolution, and how long the orbit runs before the fade-out and loop.
-  orbitRangeMeters: 1000
-  orbitTiltDegrees: 75
-  orbitSecondsPerRev: 70
-  orbitSeconds: 22
+  orbit_range_meters: 1000
+  orbit_tilt_degrees: 75
+  orbit_seconds_per_rev: 70
+  orbit_seconds: 22
 
   # Assets the hero pulls in, relative to app/. The rider marker mesh is the
-  # same model the app rides on; set fallbackImagePath to a still image when
+  # same model the app rides on; set fallback_image_path to a still image when
   # the 3D map should have an image fallback for no-key/unsupported cases.
-  riderModelPath: "assets/rider-dot.glb"
-  fallbackImagePath: ""
+  rider_model_path: "assets/rider-dot.glb"
+  fallback_image_path: ""
 
-  # Detected climbs on the replayed route, as [startMeters, endMeters] spans
+  # Detected climbs on the replayed route, as [start_meters, end_meters] spans
   # (end clamped to route length). Matches the Ještěd route's three steps so
   # the faked climb banner reads true; retune alongside LANDING_ROUTE_POINTS.
-  climbSpansMeters:
+  climb_spans_meters:
     - [2300, 3900]
     - [4300, 9300]
     - [10400, .inf]

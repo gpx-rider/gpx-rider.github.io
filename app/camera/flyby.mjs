@@ -31,23 +31,23 @@ export function createFigureEightFlyover(route, config = {}) {
 function buildLoopFlight(curve, config = {}) {
   if (!curve) return null;
 
-  const maxSpeedMps = Math.max(0.1, Number(config.maxSpeedMps ?? config.speedMps) || 70);
-  const targetLapSeconds = Math.max(1, Number(config.secondsPerLap) || 60);
+  const maxSpeedMps = Math.max(0.1, Number(config.max_speed_mps) || 70);
+  const targetLapSeconds = Math.max(1, Number(config.seconds_per_lap) || 60);
   const speedMps = Math.min(maxSpeedMps, curve.loopLength / targetLapSeconds);
-  const flyHeightMin = Math.max(1, Number(config.flyHeightMetersMin ?? config.flyHeightMeters) || 1000);
-  const terrainClearanceMin = Math.max(0, Number(config.flyHeightMetersAboveTerrainMin) || 0);
+  const flyHeightMin = Math.max(1, Number(config.fly_height_meters_min) || 1000);
+  const terrainClearanceMin = Math.max(0, Number(config.fly_height_meters_above_terrain_min) || 0);
   const flyHeight = Math.max(
     flyHeightMin,
     curve.highestTerrainAltitudeMeters + terrainClearanceMin - curve.centerAltitude,
   );
-  const viewDistance = Math.max(1, Number(config.viewDistanceMeters) || 2500);
-  const cameraFovDegrees = clamp(Number(config.cameraFovDegrees) || 35, 5, 80);
-  const mountPitch = toRad(clamp(Number(config.mountPitchDegrees) || 28, 1, 89));
-  const inwardLook = toRad(clamp(Number(config.inwardLookDegrees) || 0, 0, 89));
-  const maxBankDegrees = Math.max(0, Number(config.maxBankDegrees) || 0);
-  const minTurnRadius = Math.max(0, Number(config.minTurnRadiusMeters) || 0);
+  const viewDistance = Math.max(1, Number(config.view_distance_meters) || 2500);
+  const cameraFovDegrees = clamp(Number(config.camera_fov_degrees) || 35, 5, 80);
+  const mountPitch = toRad(clamp(Number(config.mount_pitch_degrees) || 28, 1, 89));
+  const inwardLook = toRad(clamp(Number(config.inward_look_degrees) || 0, 0, 89));
+  const maxBankDegrees = Math.max(0, Number(config.max_bank_degrees) || 0);
+  const minTurnRadius = Math.max(0, Number(config.min_turn_radius_meters) || 0);
   const direction = Number(config.direction) < 0 ? -1 : 1;
-  const startAngle = toRad(Number(config.startAngleDegrees) || 0);
+  const startAngle = toRad(Number(config.start_angle_degrees) || 0);
 
   const travelSign = direction > 0 ? -1 : 1;
   const lapSeconds = curve.loopLength / speedMps;
@@ -224,10 +224,10 @@ function fitFootprint(route, config = {}) {
   const footprint = routeFootprint(local);
   if (!footprint) return null;
 
-  const scale = Math.max(0.05, Number(config.ellipseScale) || 0.8);
-  const minSemiMajor = Math.max(1, Number(config.minSemiMajorMeters) || 1000);
-  const minSemiMinor = Math.max(1, Number(config.minSemiMinorMeters) || 500);
-  const minTurnRadius = Math.max(0, Number(config.minTurnRadiusMeters) || 0);
+  const scale = Math.max(0.05, Number(config.ellipse_scale) || 0.8);
+  const minSemiMajor = Math.max(1, Number(config.min_semi_major_meters) || 1000);
+  const minSemiMinor = Math.max(1, Number(config.min_semi_minor_meters) || 500);
+  const minTurnRadius = Math.max(0, Number(config.min_turn_radius_meters) || 0);
 
   let semiMajor = Math.max(footprint.halfMajor * scale, minSemiMajor);
   let semiMinor = Math.max(footprint.halfMinor * scale, minSemiMinor);
@@ -269,7 +269,7 @@ export function fitFlybyEllipse(route, config = {}) {
     return ((semiMajor * semiMajor * s * s + semiMinor * semiMinor * c * c) ** 1.5) / (semiMajor * semiMinor);
   };
 
-  const arc = buildArcLength(pointAt, config.sampleCount);
+  const arc = buildArcLength(pointAt, config.sample_count);
   if (!arc) return null;
 
   return {
@@ -343,7 +343,7 @@ export function fitFlyoverFigureEight(route, config = {}) {
     return denominator > 1e-9 ? (x1 * y2 - y1 * x2) / denominator : 0;
   };
 
-  const arc = buildArcLength(pointAt, config.sampleCount);
+  const arc = buildArcLength(pointAt, config.sample_count);
   if (!arc) return null;
 
   let minRadius = Infinity;
