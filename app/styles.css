@@ -63,6 +63,18 @@ body {
   50% { opacity: 0.35; }
 }
 
+@keyframes logoPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 5px 1px rgba(246, 165, 44, 0.55);
+    opacity: 0.7;
+  }
+  50% {
+    box-shadow: 0 0 13px 3px rgba(246, 165, 44, 1);
+    opacity: 1;
+  }
+}
+
 /* ---- app shell: top bar + map | control panel ---------------------------- */
 
 .app-shell {
@@ -95,6 +107,7 @@ body {
   display: flex;
   align-items: center;
   gap: 9px;
+  text-decoration: none;
 }
 
 .brand-dot {
@@ -102,7 +115,7 @@ body {
   height: 9px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(246, 165, 44, 0.18);
+  animation: logoPulse 2s ease-in-out infinite;
 }
 
 .brand-name {
