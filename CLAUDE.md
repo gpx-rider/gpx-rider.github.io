@@ -719,11 +719,14 @@ default, so self-hosters and forks without the secret get the exact same
 "paste your key" flow as before — `app/config.mjs` just stays empty. When a
 deployed key is present, `startApp()` hides the whole API-key section in
 Settings (`els.apiKeySection`) instead of showing an empty field nobody
-needs. Never widen the referrer restriction beyond the exact deployed
-origin, and don't add a second, unrestricted key anywhere in the client
-bundle. The landing page (`landing.mjs`) resolves the key the same way —
-visitor's saved key, else the baked-in `config.mjs` key — so it lights up on
-the live demo and in local dev without any separate wiring.
+needs. The referrer restriction may list the exact production origin plus one
+project-scoped preview wildcard (`https://*.gpx-rider.pages.dev/*` — see "PR
+previews" below); never widen it beyond that (e.g. a bare `https://*.pages.dev/*`
+that would work from any Cloudflare Pages site), and never add a second,
+unrestricted key anywhere in the client bundle. The landing page (`landing.mjs`)
+resolves the key the same way — visitor's saved key, else the baked-in
+`config.mjs` key — so it lights up on the live demo, PR previews, and in local
+dev without any separate wiring.
 
 `inject_maps_api_key.py` also injects the optional `HEAD` repository variable
 (deployment-only tags such as analytics) right after `<head>` in
@@ -743,6 +746,28 @@ clone — the file is intentionally not in git), ask the user for their Google
 Maps API key and write it to `.maps-api-key` at the repo root** (a single line,
 no quotes); then `make run` / the preview server will pick it up. Never paste a
 key into a tracked file or commit it.
+
+## PR previews (Cloudflare Pages)
+
+Pull requests get a live preview via Cloudflare Pages (project `gpx-rider`),
+connected directly to this GitHub repo — Cloudflare's own Git integration
+builds every push and PR branch automatically, no GitHub Action needed.
+Project settings (configured in the Cloudflare dashboard, not committed to
+the repo — the Google Cloud referrer restriction below is likewise
+console-side, not repo-side):
+- **Build command**: `python3 scripts/inject_maps_api_key.py && python3 scripts/generate_gallery_json.py`
+  — the same injection script and gallery generator `deploy-pages.yml` runs,
+  so a preview is a faithful copy of production, not a separate path to
+  maintain.
+- **Build output directory**: `app`
+- **Root directory**: repo root (the build command needs `scripts/` alongside `app/`)
+- **Environment variable**: `MAPS_API_KEY`, set as a Cloudflare Pages secret
+  with the same value as the GitHub repository secret — Cloudflare can't read
+  GitHub secrets, so it's entered separately in the Cloudflare project settings.
+
+For the map to work on preview URLs, the Google Maps API key's HTTP referrer
+restriction must also list `https://*.gpx-rider.pages.dev/*` alongside the
+production origin (see the referrer note above).
 
 ## Documentation duties
 
