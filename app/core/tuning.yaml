@@ -299,8 +299,13 @@ overview_motion:
   # the cap is hit, the actual lap takes longer than seconds_per_lap.
   # fly_height_meters_min is the baseline height above the route's center
   # altitude; fly_height_meters_above_terrain_min keeps the camera at least that
-  # far above the highest route terrain point under the ellipse. The actual fly
-  # height uses whichever minimum requires the higher camera.
+  # far above the highest terrain along the flight path. The actual fly height
+  # uses whichever minimum requires the higher camera. The "highest terrain" is
+  # sampled along the whole flight path from online elevation tiles when they
+  # are enabled (so a hill the route detours around is still cleared); with
+  # tiles off it falls back to the highest *route* point under the ellipse,
+  # which can miss off-route hills. sample_count also sets how many points the
+  # flight path is sampled at for this terrain profile.
   # camera_fov_degrees is passed to Map3D's `fov` property while the fly-by runs;
   # 5 is telephoto, 80 is wide-angle, 35 matches the normal Map3D default.
   # inward_look_degrees rotates the fly-by camera horizontally toward the inside
@@ -474,6 +479,74 @@ terrain_avoidance:
   # seconds of exponential smoothing.
   lift_rise_tau_seconds: 0.3
   lift_fall_tau_seconds: 4
+
+# --- Follow-camera rider visibility ------------------------------------------
+#
+# Follow mode only. Terrain lift (above) raises the camera over a hillside its
+# view ray sinks into; this handles the *other* occlusion case — a hill sitting
+# squarely between the eye and the rider even with the eye well above ground,
+# where lifting further would only tip the view uselessly overhead. Instead the
+# camera swings horizontally around the rider (the rider stays centered, only
+# the viewing side changes), taking the least rotation left or right that clears
+# the hill. It reuses terrain_avoidance's clearance and terrain sources (route
+# elevation, plus online tiles when enabled), and eases in/out like the lift.
+# NOT applied in any other camera mode (overview / orbit / fly / transition).
+rider_visibility:
+  enabled: true
+
+  # Search up to this many degrees each way for a clear line of sight, in these
+  # steps. Wider max lets the camera swing further around a big hill; a finer
+  # step finds a tighter clearing swing at the cost of more terrain lookups.
+  max_nudge_degrees: 72
+  step_degrees: 8
+
+  # Points sampled along the eye→rider sightline when testing for occlusion.
+  ray_samples: 6
+
+  # How often the (relatively expensive) occlusion search reruns. Between runs
+  # the applied swing keeps easing toward the last computed target.
+  recompute_ms: 150
+
+  # Swing toward a clearing angle quickly, ease back to straight-behind slowly,
+  # so the camera does not jitter sideways on broken terrain. Seconds.
+  rise_tau_seconds: 0.35
+  fall_tau_seconds: 2.5
+
+# --- Online terrain elevation (Mapzen Terrarium tiles) -----------------------
+#
+# Real ground elevation streamed from the public Mapzen Terrarium terrain-RGB
+# tiles on the AWS Open Data bucket — no API key, no cost, anonymous requests.
+# It augments the route-based estimate above (the camera lift takes the higher
+# of the two) so the follow camera clears hillsides the GPX track itself never
+# climbs. When off, the app falls back to the route-only estimate and no tiles
+# are ever fetched. Google's own 3D map already streams imagery for the same
+# area, so this exposes no location the map didn't already request.
+terrain_tiles:
+  # Default for the "Use online terrain data" toggle in Rendering settings.
+  enabled: true
+
+  # Slippy-map base URL; "{z}/{x}/{y}.png" is appended. The AWS Open Data
+  # bucket is public and serves the tiles with permissive CORS, so the browser
+  # can read their pixels back off a canvas to decode elevation.
+  base_url: "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/"
+
+  # Fetch zoom level. Higher = finer ground detail but more/larger tiles; 12 is
+  # ~9.5 m per pixel at the equator (finer toward the poles), plenty for keeping
+  # the camera above ridgelines, and one tile spans several km so a whole ride
+  # usually stays inside one or two cached tiles.
+  zoom: 12
+
+  # Terrarium tiles are always 256×256 px.
+  tile_size: 256
+
+  # Max decoded tiles kept in memory (each is tile_size² floats ≈ 256 KB at
+  # 256 px), LRU-evicted past this. The browser's own HTTP cache still avoids
+  # re-downloading evicted tiles.
+  max_cache_tiles: 64
+
+  # Open-data attribution shown at the bottom of the setup panel while online
+  # terrain is on (the compiled SRTM/USGS sources ask for a credit line).
+  attribution: "Elevation data courtesy of Mapzen / AWS Open Data"
 
 # --- Profile segment selection -----------------------------------------------
 profile_segment_selection:

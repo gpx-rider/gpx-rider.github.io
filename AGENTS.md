@@ -42,7 +42,7 @@ pages, `styles.css`, `gallery.json`, and `assets/` stay at the app root.
 | Folder | Feature | Modules |
 |---|---|---|
 | `app/core/` | Shared foundation | `state.mjs` (the single mutable `state` object + `els` DOM map + `updateProgressLabel`; bottom of the feature import graph — must never import a feature module), `tuning.mjs` (loads and re-exports **all tunable behavior parameters** from `tuning.yaml` under their historical names — new knobs go in the yaml, not this file), `tuning.yaml` (the actual values + one documented comment each, shared with `scripts/tuning_config.py`), `yaml.mjs` (hand-rolled parser for the small YAML subset `tuning.yaml` uses; tested), `geo.mjs` (pure geodesy: haversine, bearing, destinationPoint, clamp, lerp; tested), `units.mjs` (km/mi + kcal/kJ display formatting; internal state is always metric; tested) |
-| `app/map/` | Map rendering | `map-init.mjs` (Maps API key resolution/saving, Google Maps JS loader, 3D map + minimap creation), `route-render.mjs` (elevated 3D route lines, rider dot mesh + fallback ring, rider beacon, minimap route/marker — see the rider-dot notes below), `route-style.mjs` (pure route segment styling), `screenshot.mjs` (viewport JPG via tab capture — the 3D canvas sits in a closed shadow root and cannot be read directly) |
+| `app/map/` | Map rendering | `map-init.mjs` (Maps API key resolution/saving, Google Maps JS loader, 3D map + minimap creation), `route-render.mjs` (elevated 3D route lines, rider dot mesh + fallback ring, rider beacon, minimap route/marker — see the rider-dot notes below), `route-style.mjs` (pure route segment styling), `screenshot.mjs` (viewport JPG via tab capture — the 3D canvas sits in a closed shadow root and cannot be read directly), `terrain-tiles-math.mjs` (pure Web Mercator tile coords + Terrarium elevation decode; tested), `terrain-tiles.mjs` (fetches/decodes/LRU-caches online Mapzen Terrarium elevation tiles — see "Online terrain elevation" below) |
 | `app/camera/` | Camera behavior | `camera.mjs` (pure follow-camera math; tested), `flyover.mjs` (pure orbit math; tested), `flyby.mjs` (pure ellipse/figure-eight flight math; tested), `follow-camera.mjs` (follow/first-person targets, chase flight, terrain avoidance, manual-drag capture), `overview-camera.mjs` (overview state machine: static/satellite framing, animated orbit/fly-by/fly-over, finish orbit, return-to-rider), `camera-ui.mjs` (map action-bar camera controls + menus, camera settings sliders, first-person preset, reset button state), `camera-debug.mjs` (debug overlay readout + red travel-path debug line), `transition-arc.mjs` (pure overview ↔ chase transition-arc math: Hermite/Bezier eye + look-at flight, duration solver against scale-aware physical limits; tested), `transition-camera.mjs` (app-side transition driver: captures pose + driver velocity, predicts the dock state, flies the arc into whichever target is in `arc_into_modes` — the follow camera (overview-off, movement-start, profile-seek teleport) or the fly-by/fly-over pattern; static/orbit/satellite overviews are never arced into) |
 | `app/route/` | Route processing | `route.mjs` (GPX parsing, enrichment, interpolation, grade; tested), `climb-signal.mjs` (pure resample/smooth/rolling-grade elevation-signal helpers behind climb detection; tested), `climbs.mjs` (sustained-climb detection — the fatigue-pressure state machine built on `climb-signal.mjs`; tested), `difficulty.mjs` (classification from distance + gain; tested), `route-load.mjs` (GPX file/URL intake, `applyGpxText` route-swap sequence, once-per-load route overview), `climbs-ui.mjs` (climb/segment focus, live climb status, the HUD climb/segment banner), `profile.mjs` (elevation profile canvas drawing + hit-testing), `profile-ui.mjs` (profile rendering + hover/seek/drag-select wiring) |
 | `app/ride/` | Ride execution & telemetry | `movement.mjs` (the movement loop `tick`, simulation toggle, pedaling hysteresis, reset, seek), `eta.mjs` (flat-equivalent pace ETA model; tested), `ride-ui.mjs` (`updateRideUi`, the per-tick UI driver), `telemetry-ui.mjs` (trainer/HR callbacks, HR source resolution, calories/timer, telemetry readouts), `training-zones.mjs` (HR/power zones, fullscreen zone meters, zone summaries), `recorder.mjs` (ride sample bucket), `recording-ui.mjs` (FIT card, download, clear), `fit.mjs` (FIT encoder — must stay sport=cycling, sub_sport=virtual_activity; tested) |
@@ -595,8 +595,16 @@ in place).
   interior (clockwise = right, counter-clockwise = left), while the route travel
   direction still drives the baseline heading.
   The actual fly height is the higher of the baseline height and the height
-  needed to clear the highest route elevation sample under the fitted ellipse by
-  `fly_height_meters_above_terrain_min`. `max_bank_degrees` scales the bank angle from
+  needed to clear the highest terrain along the whole flight path by
+  `fly_height_meters_above_terrain_min`. That highest-terrain figure comes from
+  an injected `terrainSampler` (`buildLoopFlight` in `flyby.mjs` stays pure and
+  takes it as an option): `overview-camera.mjs` and `transition-camera.mjs` pass
+  `onlineTerrainElevationAt` (`follow-camera.mjs`), which reads the online
+  Mapzen tiles, so a hill the route *detours around* is still cleared — the old
+  route-only "highest sample under the ellipse" missed those. With online
+  terrain off (or a tile not yet loaded), it degrades to the route-based
+  footprint estimate. The sampled highest terrain and sample coverage are shown
+  on the camera debug overlay (`path terrain` / `path pts`). `max_bank_degrees` scales the bank angle from
   the current turn radius
   (`min_turn_radius_meters` = max bank), and `overview-camera.mjs` applies it to `state.map.roll`.
   Fly-over (`createFigureEightFlyover`) reuses the exact same footprint fit,
@@ -704,10 +712,51 @@ in place).
 - **Camera terrain avoidance** lifts the follow camera when its eye would
   sink below terrain + clearance and eases it back down as terrain allows
   (`currentTerrainLift` in `follow-camera.mjs`; pure math in `camera.mjs`'s
-  `applyCameraLift`). The terrain estimate is `maxElevationNear` over the
-  route's own elevation points — deliberately **not** the Google Elevation
-  API, which would cost real money at follow-camera query rates. Keep it
-  that way.
+  `applyCameraLift`). The base terrain estimate is `maxElevationNear` over the
+  route's own elevation points — a free, always-available offline floor
+  (deliberately **not** the Google Elevation API, which would cost real money
+  at follow-camera query rates). When **online terrain** is enabled it is
+  augmented with real ground elevation from `map/terrain-tiles.mjs`, blended as
+  the higher of the two (`terrainElevationForSample` in `follow-camera.mjs`), so
+  the camera also clears hillsides the GPX track never climbs; it degrades to
+  the route-only floor whenever a tile has not loaded yet or the setting is off.
+- **Follow-camera rider visibility (swing around a hill).** Follow mode only.
+  Lift handles a hillside the view ray *sinks into*; this handles the other
+  occlusion — a hill squarely between the (already-above-ground) eye and the
+  rider, where lifting further would only tip the view uselessly overhead.
+  `currentVisibilityNudge` (`follow-camera.mjs`) tests the eye→rider sightline
+  for terrain occlusion (same ray-sampling + tapered clearance as the lift,
+  reusing `terrainElevationForSample`) and, when blocked, scans swings out to
+  `rider_visibility.max_nudge_degrees` each way; the pure
+  `pickVisibilityNudge` (`camera.mjs`, tested) picks the least rotation that
+  clears the rider (best-effort least-occluding swing if none fully clears).
+  The chosen angle is added to the camera heading, so the rider stays centered
+  and only the viewing *side* changes; it eases in/out (rise/fall taus) exactly
+  like the lift and is recomputed on `recompute_ms`. Skipped for predicted
+  targets (`terrainLift: false`) and never applied in any other camera mode
+  (overview / orbit / fly / transition). Knobs live under `rider_visibility` in
+  `tuning.yaml`; runtime-only state (`cameraVisNudge*` on `state`), no persisted
+  setting or UI toggle.
+- **Online terrain elevation.** `map/terrain-tiles.mjs` streams public Mapzen
+  Terrarium terrain-RGB tiles from the AWS Open Data bucket (no API key, no
+  cost, anonymous), decodes each PNG's pixels into an elevation grid through an
+  offscreen canvas (`crossOrigin = "anonymous"` so `getImageData` stays
+  untainted), and LRU-caches the grids so `terrainElevationAt(lat, lng)` is a
+  cheap synchronous lookup the follow camera calls every frame — a cache miss
+  kicks off the async fetch and returns `null`, so callers fall back until the
+  tile arrives. A configured tile spans several km, so a whole ride usually
+  stays in one or two cached tiles (that *is* the "only re-fetch on crossing a
+  new tile" throttle the feature asks for); `prefetchTerrainAround` warms the
+  tile plus its eight neighbors on route load. All the pure arithmetic (Web
+  Mercator `tileForLngLat`, `decodeTerrarium`) lives in the tested
+  `map/terrain-tiles-math.mjs`; everything tunable (base URL, zoom, tile size,
+  cache cap, attribution string, default-on toggle) is in the `terrain_tiles`
+  section of `tuning.yaml`. Feature modules gate every call on
+  `state.terrainTilesEnabled`; the module itself never reads app state. Google's
+  own 3D map already streams imagery for the same area, so this exposes no
+  location the map didn't already request. The open-data attribution
+  (`TERRAIN_TILE_ATTRIBUTION`) is shown at the foot of the setup control pane
+  (`#terrainAttribution`) while the feature is on.
 
 ## Persistence
 

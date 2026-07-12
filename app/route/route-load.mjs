@@ -20,6 +20,7 @@ import {
   routeTotalDistance,
 } from "./route.mjs";
 import { renderRoute } from "../map/route-render.mjs";
+import { prefetchTerrainAround } from "../map/terrain-tiles.mjs";
 import { els, state, updateProgressLabel } from "../core/state.mjs";
 import { formatAltitude, formatDistance } from "../core/units.mjs";
 
@@ -55,6 +56,18 @@ export function applyGpxText(text, { overrideName = null, fallbackName = null, g
   stopDemoMode({ silent: true });
   clearDemoHistory();
   state.route = enrichRoute(route);
+  // Warm the online-terrain cache around the start, middle and end of the
+  // route so the follow camera has real ground under it from the first frame,
+  // and the fly-by/fly-over height planner can profile the whole flight path
+  // (no-op when the setting is off).
+  if (state.terrainTilesEnabled && state.route.length) {
+    const first = state.route[0];
+    const middle = state.route[Math.floor(state.route.length / 2)];
+    const last = state.route[state.route.length - 1];
+    for (const point of [first, middle, last]) {
+      if (point) prefetchTerrainAround(point.lat, point.lng);
+    }
+  }
   state.routeName = overrideName || gpxName || fallbackName;
   state.galleryMetadata = galleryMetadata && typeof galleryMetadata === "object"
     ? structuredClone(galleryMetadata)

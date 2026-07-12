@@ -12,6 +12,7 @@ import {
   computeFollowCamera,
   measureCameraOffset,
   normalizeHeading,
+  pickVisibilityNudge,
   rangeForBehind,
   signedHeadingDelta,
 } from "./camera.mjs";
@@ -32,6 +33,7 @@ import {
   routeTotalDistance,
 } from "../route/route.mjs";
 import { updateRiderDot } from "../map/route-render.mjs";
+import { terrainElevationAt } from "../map/terrain-tiles.mjs";
 import { state } from "../core/state.mjs";
 import {
   CAMERA_CENTER_ALTITUDE_LIMIT_METERS,
@@ -44,6 +46,12 @@ import {
   FIRST_PERSON_LOOK_AHEAD_METERS,
   HEADING_SAMPLE_METERS,
   INTERACTION_SETTLE_MS,
+  RIDER_VISIBILITY_FALL_TAU_SECONDS,
+  RIDER_VISIBILITY_MAX_NUDGE_DEGREES,
+  RIDER_VISIBILITY_RAY_SAMPLES,
+  RIDER_VISIBILITY_RECOMPUTE_MS,
+  RIDER_VISIBILITY_RISE_TAU_SECONDS,
+  RIDER_VISIBILITY_STEP_DEGREES,
   TERRAIN_LIFT_FALL_TAU_SECONDS,
   TERRAIN_LIFT_RECOMPUTE_MS,
   TERRAIN_LIFT_RISE_TAU_SECONDS,
@@ -123,9 +131,16 @@ export function followCameraTargetAt(progressMeters, { terrainLift = true } = {}
     liftedCenterAltitude = centerAltitude + lifted.extraCenterAltitude;
   }
 
+  // Even above terrain, a hill between the (lifted) eye and the rider hides the
+  // rider; swing the camera the least distance around the rider to see past it.
+  // Skipped for predicted targets (terrainLift off), which must be free of the
+  // stateful smoothing the live chase re-applies once it takes over.
+  const nudgeDegrees = terrainLift ? currentVisibilityNudge(camera, liftedCenterAltitude, tilt) : 0;
+  const nudgedHeading = normalizeHeading(camera.heading + nudgeDegrees);
+
   const center = { lat: camera.center.lat, lng: camera.center.lng, altitude: liftedCenterAltitude };
-  const eye = cameraEyePosition({ center, range: camera.range, tilt, heading: camera.heading });
-  return eye ? { eye, center, heading: camera.heading } : null;
+  const eye = cameraEyePosition({ center, range: camera.range, tilt, heading: nudgedHeading });
+  return eye ? { eye, center, heading: nudgedHeading } : null;
 }
 
 function firstPersonCameraTarget(position, heading) {
@@ -347,13 +362,118 @@ function computeTerrainLiftTarget(camera, centerAltitude) {
       lat: lerp(eye.lat, camera.center.lat, fraction),
       lng: lerp(eye.lng, camera.center.lng, fraction),
     };
-    const terrainEle = maxElevationNear(state.route, samplePoint, TERRAIN_SAMPLE_RADIUS_METERS);
+    const terrainEle = terrainElevationForSample(samplePoint);
     if (terrainEle === null) continue;
     const rayAltitude = lerp(eye.altitude, centerAltitude, fraction);
     const clearance = state.terrainClearanceMeters * (1 - fraction);
     target = Math.max(target, terrainEle + clearance - rayAltitude);
   }
   return target;
+}
+
+// The terrain height under a view-ray sample point. The route's own elevation
+// points are a free, always-available estimate (the road covers the hillside
+// on switchbacks); when online terrain is enabled, the real ground elevation
+// from the Terrarium tile is blended in as the higher of the two — so the
+// camera also clears hills the GPX track never climbs, while degrading to the
+// route-only estimate whenever a tile has not loaded yet or is disabled.
+function terrainElevationForSample(samplePoint) {
+  const routeEle = maxElevationNear(state.route, samplePoint, TERRAIN_SAMPLE_RADIUS_METERS);
+  if (!state.terrainTilesEnabled) return routeEle;
+  const tileEle = terrainElevationAt(samplePoint.lat, samplePoint.lng);
+  if (tileEle === null) return routeEle;
+  return routeEle === null ? tileEle : Math.max(routeEle, tileEle);
+}
+
+// Real ground elevation at a point from the online terrain tiles, for the
+// fly-by / fly-over height planner (flyby.mjs). Out on the flight path the
+// route-based estimate is useless — the path leaves the road entirely — so
+// this is tiles-only: null when online terrain is off or a tile has not loaded
+// yet, and the planner falls back to its route-based footprint estimate.
+export function onlineTerrainElevationAt(lat, lng) {
+  if (!state.terrainTilesEnabled) return null;
+  return terrainElevationAt(lat, lng);
+}
+
+// --- Rider visibility (swing around a blocking hill) ---------------------------
+//
+// Terrain lift raises the camera when its view ray sinks into a hillside, but
+// some hills sit squarely between the eye and the rider even with the eye well
+// above ground — lifting further would tip the view uselessly overhead. Instead
+// swing the camera horizontally around the rider (the rider stays centered,
+// only the viewing side changes), taking the least rotation left or right that
+// clears the hill. Eased over time so it never snaps, exactly like the lift.
+
+function currentVisibilityNudge(camera, centerAltitude, tilt) {
+  if (!state.riderVisibilityNudgeEnabled) {
+    state.cameraVisNudgeDegrees = 0;
+    state.cameraVisNudgeTargetDegrees = 0;
+    return 0;
+  }
+
+  const now = performance.now();
+  if (now - state.lastVisNudgeComputeMs >= RIDER_VISIBILITY_RECOMPUTE_MS) {
+    state.lastVisNudgeComputeMs = now;
+    state.cameraVisNudgeTargetDegrees = computeVisibilityNudgeTarget(camera, centerAltitude, tilt);
+  }
+
+  const dt = clamp((now - state.lastVisNudgeSmoothMs) / 1000, 0, 1);
+  state.lastVisNudgeSmoothMs = now;
+  const tau = Math.abs(state.cameraVisNudgeTargetDegrees) > Math.abs(state.cameraVisNudgeDegrees)
+    ? RIDER_VISIBILITY_RISE_TAU_SECONDS
+    : RIDER_VISIBILITY_FALL_TAU_SECONDS;
+  state.cameraVisNudgeDegrees += (state.cameraVisNudgeTargetDegrees - state.cameraVisNudgeDegrees) * (1 - Math.exp(-dt / tau));
+  if (Math.abs(state.cameraVisNudgeDegrees) < 0.05 && state.cameraVisNudgeTargetDegrees === 0) {
+    state.cameraVisNudgeDegrees = 0;
+  }
+  return state.cameraVisNudgeDegrees;
+}
+
+// Scan swings out to the configured max each way (only if the straight-behind
+// view is actually blocked) and let the pure picker choose the least rotation
+// that clears the rider.
+function computeVisibilityNudgeTarget(camera, centerAltitude, tilt) {
+  const basePenetration = sightlinePenetration(camera, centerAltitude, tilt, 0);
+  if (basePenetration <= 0) return 0;
+
+  const candidates = [{ degrees: 0, penetration: basePenetration }];
+  const step = Math.max(1, RIDER_VISIBILITY_STEP_DEGREES);
+  const max = Math.max(step, RIDER_VISIBILITY_MAX_NUDGE_DEGREES);
+  for (let degrees = step; degrees <= max; degrees += step) {
+    candidates.push({ degrees, penetration: sightlinePenetration(camera, centerAltitude, tilt, degrees) });
+    candidates.push({ degrees: -degrees, penetration: sightlinePenetration(camera, centerAltitude, tilt, -degrees) });
+  }
+  return pickVisibilityNudge(candidates);
+}
+
+// Meters the terrain rises above the eye→rider sightline (>0 = rider occluded)
+// with the eye swung `nudgeDegrees` around the rider. Same ray-sampling shape
+// as the lift: the required clearance tapers to zero at the rider, who sits on
+// the ground, so the samples near the rider don't count the road itself.
+function sightlinePenetration(camera, centerAltitude, tilt, nudgeDegrees) {
+  const heading = normalizeHeading(camera.heading + nudgeDegrees);
+  const eye = cameraEyePosition({
+    center: { lat: camera.center.lat, lng: camera.center.lng, altitude: centerAltitude },
+    range: camera.range,
+    tilt,
+    heading,
+  });
+  if (!eye) return 0;
+
+  const samples = Math.max(2, RIDER_VISIBILITY_RAY_SAMPLES);
+  let worst = 0;
+  for (let i = 0; i < samples; i++) {
+    const fraction = i / samples; // 0 at the eye, stops short of the rider (1)
+    const terrainEle = terrainElevationForSample({
+      lat: lerp(eye.lat, camera.center.lat, fraction),
+      lng: lerp(eye.lng, camera.center.lng, fraction),
+    });
+    if (terrainEle === null) continue;
+    const rayAltitude = lerp(eye.altitude, centerAltitude, fraction);
+    const clearance = state.terrainClearanceMeters * (1 - fraction);
+    worst = Math.max(worst, terrainEle + clearance - rayAltitude);
+  }
+  return worst;
 }
 
 // --- Manual camera capture -------------------------------------------------------
