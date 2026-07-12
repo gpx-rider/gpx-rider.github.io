@@ -22,29 +22,63 @@ const TWO_PI = Math.PI * 2;
 // choose among them, without letting a meaningfully different bearing win.
 const ENTRY_BEARING_BAND_RADIANS = 2 * Math.PI / 180;
 
-export function createEllipseFlyby(route, config = {}) {
-  return buildLoopFlight(fitFlybyEllipse(route, config), config);
+export function createEllipseFlyby(route, config = {}, opts = {}) {
+  return buildLoopFlight(fitFlybyEllipse(route, config), config, opts);
 }
 
-export function createFigureEightFlyover(route, config = {}) {
-  return buildLoopFlight(fitFlyoverFigureEight(route, config), config);
+export function createFigureEightFlyover(route, config = {}, opts = {}) {
+  return buildLoopFlight(fitFlyoverFigureEight(route, config), config, opts);
 }
 
 // Shared camera-flight driver for any closed loop curve fitted to the route
 // footprint. `curve` exposes its geometry in a parameter u ∈ [0, 2π) plus an
 // arc-length map (uAt), so the driver only handles pacing, camera framing and
-// banking. Returns null when the curve could not be fitted (route too small).
-function buildLoopFlight(curve, config = {}) {
+// banking. `opts.terrainSampler(lat, lng) => meters|null` (optional) supplies
+// real ground elevation along the flight path — see the fly-height planner
+// below. Returns null when the curve could not be fitted (route too small).
+function buildLoopFlight(curve, config = {}, opts = {}) {
   if (!curve) return null;
 
+  const terrainSampler = typeof opts.terrainSampler === "function" ? opts.terrainSampler : null;
   const maxSpeedMps = Math.max(0.1, Number(config.max_speed_mps) || 70);
   const targetLapSeconds = Math.max(1, Number(config.seconds_per_lap) || 60);
   const speedMps = Math.min(maxSpeedMps, curve.loopLength / targetLapSeconds);
   const flyHeightMin = Math.max(1, Number(config.fly_height_meters_min) || 1000);
   const terrainClearanceMin = Math.max(0, Number(config.fly_height_meters_above_terrain_min) || 0);
+
+  // Elevation profile of the whole flight path. The footprint fit only knows
+  // the *route's* own elevation points inside the ellipse, so a hill the route
+  // detours around is invisible to it and the camera would fly straight through
+  // it. When a terrain sampler is supplied (online elevation tiles), walk the
+  // eye's ground track around the entire loop and lift the flight to clear the
+  // highest terrain found. Degrades to the route-based footprint estimate when
+  // no sampler is given, or per-point when a tile has not loaded yet (the
+  // sampler returns a non-finite value for that point).
+  let pathTerrainSampledMeters = null;
+  let pathTerrainSampleCount = 0;
+  if (terrainSampler) {
+    const pathSamples = Math.max(24, Math.round(Number(config.sample_count) || 240));
+    let highest = -Infinity;
+    for (const point of curve.pathAt(0, pathSamples)) {
+      const raw = terrainSampler(point.lat, point.lng);
+      // null/undefined means "no data here" (tile not loaded / disabled) — skip
+      // it; a real 0 (sea level) is valid and must NOT be coerced away.
+      if (raw == null) continue;
+      const ele = Number(raw);
+      if (Number.isFinite(ele)) {
+        highest = Math.max(highest, ele);
+        pathTerrainSampleCount += 1;
+      }
+    }
+    if (Number.isFinite(highest)) pathTerrainSampledMeters = highest;
+  }
+  const highestTerrainAltitudeMeters = pathTerrainSampledMeters === null
+    ? curve.highestTerrainAltitudeMeters
+    : Math.max(curve.highestTerrainAltitudeMeters, pathTerrainSampledMeters);
+
   const flyHeight = Math.max(
     flyHeightMin,
-    curve.highestTerrainAltitudeMeters + terrainClearanceMin - curve.centerAltitude,
+    highestTerrainAltitudeMeters + terrainClearanceMin - curve.centerAltitude,
   );
   const viewDistance = Math.max(1, Number(config.view_distance_meters) || 2500);
   const cameraFovDegrees = clamp(Number(config.camera_fov_degrees) || 35, 5, 80);
@@ -57,7 +91,7 @@ function buildLoopFlight(curve, config = {}) {
 
   const travelSign = direction > 0 ? -1 : 1;
   const lapSeconds = curve.loopLength / speedMps;
-  const terrainClearanceMeters = flyHeight + curve.centerAltitude - curve.highestTerrainAltitudeMeters;
+  const terrainClearanceMeters = flyHeight + curve.centerAltitude - highestTerrainAltitudeMeters;
 
   function angleAt(s) {
     return startAngle + travelSign * curve.uAt(s);
@@ -135,7 +169,12 @@ function buildLoopFlight(curve, config = {}) {
       lapSeconds,
       flyHeightMeters: flyHeight,
       terrainClearanceMeters,
-      highestTerrainAltitudeMeters: curve.highestTerrainAltitudeMeters,
+      highestTerrainAltitudeMeters,
+      // Highest ground the online sampler found under the flight path (null =
+      // no sampler or no tiles loaded), and how many path points it covered —
+      // surfaced on the camera debug overlay.
+      pathTerrainSampledMeters,
+      pathTerrainSampleCount,
       cameraFovDegrees,
       inwardLookDegrees: toDeg(inwardLook),
       // The inward look actually applied at this point (signed: + right, -
@@ -248,6 +287,9 @@ function buildLoopFlight(curve, config = {}) {
     bankAt,
     flyHeightMeters: flyHeight,
     terrainClearanceMeters,
+    highestTerrainAltitudeMeters,
+    pathTerrainSampledMeters,
+    pathTerrainSampleCount,
     cameraFovDegrees,
     inwardLookDegrees: toDeg(inwardLook),
     pathAtAltitude(altitudeMeters = 0, sampleCount = 240) {

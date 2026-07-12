@@ -88,6 +88,42 @@ test("fly height climbs to clear the highest terrain under the ellipse", () => {
   assert.equal(flyby.terrainClearanceMeters, 700);
 });
 
+test("a terrain sampler lifts the fly height to clear an off-route hill on the path", () => {
+  // The route sits at ~500 m; the sampler reports a 5000 m hill the route never
+  // climbs. The flight-path profile must win over the route-based estimate.
+  const flyby = createEllipseFlyby(route, {
+    ...BASE,
+    fly_height_meters_min: 100,
+    fly_height_meters_above_terrain_min: 300,
+  }, { terrainSampler: () => 5000 });
+  assert.ok(flyby);
+  assert.equal(flyby.pathTerrainSampledMeters, 5000);
+  assert.ok(flyby.pathTerrainSampleCount > 0);
+  assert.equal(flyby.highestTerrainAltitudeMeters, 5000);
+  assert.equal(flyby.flyHeightMeters, 5000 + 300 - flyby.curve.centerAltitude);
+  assert.equal(flyby.terrainClearanceMeters, 300);
+});
+
+test("a terrain sampler returning nothing falls back to the route-based estimate", () => {
+  const withSampler = createEllipseFlyby(route, BASE, { terrainSampler: () => null });
+  const without = createEllipseFlyby(route, BASE);
+  assert.equal(withSampler.pathTerrainSampledMeters, null);
+  assert.equal(withSampler.pathTerrainSampleCount, 0);
+  assert.equal(withSampler.flyHeightMeters, without.flyHeightMeters);
+  assert.equal(withSampler.highestTerrainAltitudeMeters, without.highestTerrainAltitudeMeters);
+});
+
+test("the figure-eight fly-over also profiles its flight path against terrain", () => {
+  const flyover = createFigureEightFlyover(route, {
+    ...BASE,
+    fly_height_meters_min: 100,
+    fly_height_meters_above_terrain_min: 200,
+  }, { terrainSampler: () => 4000 });
+  assert.ok(flyover);
+  assert.equal(flyover.pathTerrainSampledMeters, 4000);
+  assert.equal(flyover.flyHeightMeters, 4000 + 200 - flyover.curve.centerAltitude);
+});
+
 test("camera FOV is configurable and clamped to Map3D's supported range", () => {
   assert.equal(createEllipseFlyby(route, { ...BASE, camera_fov_degrees: 65 }).cameraFovDegrees, 65);
   assert.equal(createEllipseFlyby(route, { ...BASE, camera_fov_degrees: 1 }).cameraFovDegrees, 5);

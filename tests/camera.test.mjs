@@ -11,6 +11,7 @@ import {
   computeRouteOverviewCamera,
   measureCameraOffset,
   normalizeHeading,
+  pickVisibilityNudge,
   rangeForBehind,
 } from "../app/camera/camera.mjs";
 import * as geo from "../app/core/geo.mjs";
@@ -595,4 +596,41 @@ test("overview keeps every route point safely inside the viewport", () => {
     assert.ok(x < tanHalfX * 0.9, `horizontal projection ${x} leaves slack (limit ${tanHalfX})`);
     assert.ok(y < tanHalfY * 0.9, `vertical projection ${y} leaves slack (limit ${tanHalfY})`);
   }
+});
+
+test("pickVisibilityNudge keeps the straight view when it is already clear", () => {
+  const candidates = [
+    { degrees: 0, penetration: -5 },
+    { degrees: 8, penetration: -9 },
+    { degrees: -8, penetration: 3 },
+  ];
+  assert.equal(pickVisibilityNudge(candidates), 0);
+});
+
+test("pickVisibilityNudge picks the least swing that clears the rider", () => {
+  const candidates = [
+    { degrees: 0, penetration: 12 }, // blocked straight behind
+    { degrees: 8, penetration: 4 }, // still blocked
+    { degrees: -8, penetration: 6 }, // still blocked
+    { degrees: 16, penetration: -2 }, // clears, magnitude 16
+    { degrees: -16, penetration: -1 }, // clears, magnitude 16
+    { degrees: 24, penetration: -8 }, // clears, but a bigger swing
+  ];
+  // Both ±16 clear; the clearer one (16, penetration -2) wins the tie.
+  assert.equal(pickVisibilityNudge(candidates), 16);
+});
+
+test("pickVisibilityNudge falls back to the least-occluding swing when none clear", () => {
+  const candidates = [
+    { degrees: 0, penetration: 20 },
+    { degrees: 8, penetration: 15 },
+    { degrees: -8, penetration: 9 }, // least penetration
+    { degrees: 16, penetration: 11 },
+  ];
+  assert.equal(pickVisibilityNudge(candidates), -8);
+});
+
+test("pickVisibilityNudge is a no-op on empty input", () => {
+  assert.equal(pickVisibilityNudge([]), 0);
+  assert.equal(pickVisibilityNudge(null), 0);
 });

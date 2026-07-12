@@ -16,6 +16,7 @@ import {
   applyCameraNow,
   currentMapCameraPose,
   ensureCameraFlightLoop,
+  onlineTerrainElevationAt,
   updateMapCamera,
 } from "./follow-camera.mjs";
 import {
@@ -266,9 +267,12 @@ export function startOverviewAnimation({ instant = false, atS = null } = {}) {
   const route = state.overviewRoute ?? state.route;
   let flyby = null;
   if (isFlyOverviewMode(mode)) {
+    // Sample the flight path against online terrain so the fly height clears
+    // hills the route detours around (see buildLoopFlight in flyby.mjs).
+    const flyOpts = { terrainSampler: onlineTerrainElevationAt };
     flyby = mode === "flyover"
-      ? createFigureEightFlyover(route, ELLIPSE_FLYBY)
-      : createEllipseFlyby(route, ELLIPSE_FLYBY);
+      ? createFigureEightFlyover(route, ELLIPSE_FLYBY, flyOpts)
+      : createEllipseFlyby(route, ELLIPSE_FLYBY, flyOpts);
     if (!flyby) return false; // route too small to fly — caller falls back to static
   }
   // The animation is the sole camera driver from here.

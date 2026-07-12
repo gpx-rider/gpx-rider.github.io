@@ -574,8 +574,16 @@ in place).
   interior (clockwise = right, counter-clockwise = left), while the route travel
   direction still drives the baseline heading.
   The actual fly height is the higher of the baseline height and the height
-  needed to clear the highest route elevation sample under the fitted ellipse by
-  `fly_height_meters_above_terrain_min`. `max_bank_degrees` scales the bank angle from
+  needed to clear the highest terrain along the whole flight path by
+  `fly_height_meters_above_terrain_min`. That highest-terrain figure comes from
+  an injected `terrainSampler` (`buildLoopFlight` in `flyby.mjs` stays pure and
+  takes it as an option): `overview-camera.mjs` and `transition-camera.mjs` pass
+  `onlineTerrainElevationAt` (`follow-camera.mjs`), which reads the online
+  Mapzen tiles, so a hill the route *detours around* is still cleared — the old
+  route-only "highest sample under the ellipse" missed those. With online
+  terrain off (or a tile not yet loaded), it degrades to the route-based
+  footprint estimate. The sampled highest terrain and sample coverage are shown
+  on the camera debug overlay (`path terrain` / `path pts`). `max_bank_degrees` scales the bank angle from
   the current turn radius
   (`min_turn_radius_meters` = max bank), and `overview-camera.mjs` applies it to `state.map.roll`.
   Fly-over (`createFigureEightFlyover`) reuses the exact same footprint fit,
@@ -691,6 +699,23 @@ in place).
   the higher of the two (`terrainElevationForSample` in `follow-camera.mjs`), so
   the camera also clears hillsides the GPX track never climbs; it degrades to
   the route-only floor whenever a tile has not loaded yet or the setting is off.
+- **Follow-camera rider visibility (swing around a hill).** Follow mode only.
+  Lift handles a hillside the view ray *sinks into*; this handles the other
+  occlusion — a hill squarely between the (already-above-ground) eye and the
+  rider, where lifting further would only tip the view uselessly overhead.
+  `currentVisibilityNudge` (`follow-camera.mjs`) tests the eye→rider sightline
+  for terrain occlusion (same ray-sampling + tapered clearance as the lift,
+  reusing `terrainElevationForSample`) and, when blocked, scans swings out to
+  `rider_visibility.max_nudge_degrees` each way; the pure
+  `pickVisibilityNudge` (`camera.mjs`, tested) picks the least rotation that
+  clears the rider (best-effort least-occluding swing if none fully clears).
+  The chosen angle is added to the camera heading, so the rider stays centered
+  and only the viewing *side* changes; it eases in/out (rise/fall taus) exactly
+  like the lift and is recomputed on `recompute_ms`. Skipped for predicted
+  targets (`terrainLift: false`) and never applied in any other camera mode
+  (overview / orbit / fly / transition). Knobs live under `rider_visibility` in
+  `tuning.yaml`; runtime-only state (`cameraVisNudge*` on `state`), no persisted
+  setting or UI toggle.
 - **Online terrain elevation.** `map/terrain-tiles.mjs` streams public Mapzen
   Terrarium terrain-RGB tiles from the AWS Open Data bucket (no API key, no
   cost, anonymous), decodes each PNG's pixels into an elevation grid through an

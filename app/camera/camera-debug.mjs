@@ -189,6 +189,12 @@ function renderCameraDebug() {
     rows.push(["target lap", num(frame.targetLapSeconds, 0, " s")]);
     rows.push(["fly height", num(frame.flyHeightMeters, 0, " m")]);
     rows.push(["terrain high", num(frame.highestTerrainAltitudeMeters, 0, " m")]);
+    // Elevation profile of the whole flight path from online terrain: the
+    // highest ground sampled along it and how many path points were covered
+    // (— when online terrain is off or no tile has loaded, so the height falls
+    // back to the route-based estimate above).
+    rows.push(["path terrain", num(frame.pathTerrainSampledMeters, 0, " m")]);
+    rows.push(["path pts", `${frame.pathTerrainSampleCount ?? 0}`]);
     rows.push(["terrain clr", num(frame.terrainClearanceMeters, 0, " m")]);
     rows.push(["fly fov", num(frame.cameraFovDegrees, 1, "°")]);
     rows.push(["fly inward", num(frame.inwardLookDegrees, 1, "°")]);

@@ -360,6 +360,37 @@ export function cameraFromEyeAndCenter(eye, center, fallbackHeading = 0) {
   };
 }
 
+// Pick the least sideways camera swing (degrees) that clears a hill blocking
+// the rider. `candidates` is [{ degrees, penetration }], penetration being the
+// meters terrain rises above the eye→rider sightline at that swing (>0 = still
+// occluded, ≤0 = clear). Prefer no swing when the straight-behind view is
+// already clear; else the smallest-magnitude swing that clears it (ties broken
+// toward the clearer side); if none clears within the search, the swing that
+// occludes the rider least (best effort). Positive = one way, negative = the
+// other; the caller adds it to the camera heading, so the rider stays centered.
+export function pickVisibilityNudge(candidates) {
+  if (!Array.isArray(candidates) || !candidates.length) return 0;
+
+  const zero = candidates.find((candidate) => candidate.degrees === 0);
+  if (zero && zero.penetration <= 0) return 0;
+
+  const cleared = candidates
+    .filter((candidate) => candidate.penetration <= 0)
+    .sort((a, b) => Math.abs(a.degrees) - Math.abs(b.degrees) || a.penetration - b.penetration);
+  if (cleared.length) return cleared[0].degrees;
+
+  let best = candidates[0];
+  for (const candidate of candidates) {
+    if (
+      candidate.penetration < best.penetration ||
+      (candidate.penetration === best.penetration && Math.abs(candidate.degrees) < Math.abs(best.degrees))
+    ) {
+      best = candidate;
+    }
+  }
+  return best.degrees;
+}
+
 export function measureCameraOffset(riderPosition, centerPosition, routeHeading) {
   const distance = haversine(riderPosition, centerPosition);
   if (distance < 0.01) return { forwardMeters: 0, rightMeters: 0 };

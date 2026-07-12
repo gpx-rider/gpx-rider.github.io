@@ -27,6 +27,7 @@ import {
   DEFAULT_MAX_HEART_RATE_BPM,
   DEFAULT_OVERVIEW_MODE,
   DEFAULT_RESTING_HEART_RATE_BPM,
+  DEFAULT_RIDER_VISIBILITY_ENABLED,
   DEFAULT_ROUTE_GRADE_COLORS_ENABLED,
   DEFAULT_SCREENSHOT_ASPECT,
   DEFAULT_SCREENSHOT_WIDTH,
@@ -157,6 +158,14 @@ export const state = {
   cameraLiftTargetMeters: 0,
   lastLiftComputeMs: 0,
   lastLiftSmoothMs: 0,
+  // Follow-camera rider-visibility swing (see follow-camera.mjs): how far the
+  // camera is currently swung sideways around the rider to see past a hill,
+  // its eased target, and the last compute/smooth timestamps. Runtime only.
+  riderVisibilityNudgeEnabled: DEFAULT_RIDER_VISIBILITY_ENABLED,
+  cameraVisNudgeDegrees: 0,
+  cameraVisNudgeTargetDegrees: 0,
+  lastVisNudgeComputeMs: 0,
+  lastVisNudgeSmoothMs: 0,
   mapFullscreen: false,
   theaterMode: false,
   finishOrbitActive: false,

@@ -23,6 +23,7 @@ import {
   currentRouteHeading,
   ensureCameraFlightLoop,
   followCameraTargetAt,
+  onlineTerrainElevationAt,
 } from "./follow-camera.mjs";
 import { clearOverviewAnimation, orbitSpin, startOverviewAnimation } from "./overview-camera.mjs";
 import { createEllipseFlyby, createFigureEightFlyover } from "./flyby.mjs";
@@ -90,9 +91,10 @@ export function startCameraTransitionToFollow(startState = null) {
 export function startCameraTransitionToFlyPattern(startState, mode) {
   if (!canTransition() || !arcsIntoMode(mode)) return false;
   const route = state.overviewRoute ?? state.route;
+  const flyOpts = { terrainSampler: onlineTerrainElevationAt };
   const pattern = mode === "flyover"
-    ? createFigureEightFlyover(route, ELLIPSE_FLYBY)
-    : createEllipseFlyby(route, ELLIPSE_FLYBY);
+    ? createFigureEightFlyover(route, ELLIPSE_FLYBY, flyOpts)
+    : createEllipseFlyby(route, ELLIPSE_FLYBY, flyOpts);
   if (!pattern) return false;
   const start = startState ?? captureCameraTransitionStart();
   if (!start) return false;

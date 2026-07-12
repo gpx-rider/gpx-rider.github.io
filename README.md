@@ -86,6 +86,7 @@ Simulation ETA remains a straightforward remaining-distance calculation at the s
 - A first-person preset places the camera at rider height.
 - Camera distance, angle, position, heading, and centering can be adjusted.
 - Terrain avoidance lifts the camera when the ground between it and the rider would otherwise block the view. It uses the route's own elevation as a free offline floor, and — when **online terrain** is enabled (Settings › Rendering, on by default) — augments it with real ground elevation streamed from free public Mapzen/AWS terrain tiles, so the camera also clears hills the GPX track never climbs.
+- When a hill sits squarely between the camera and the rider even with the camera above ground, the follow camera swings the shortest way around the rider — left or right — until the rider is visible again, instead of only lifting overhead. The rider stays centered; only the viewing side changes.
 - Manual dragging gives the user direct control; reset restores the selected camera surface.
 
 ### Route overview
@@ -99,6 +100,8 @@ Five overview styles are available:
 - **Fly-by** — a camera flies a PCA-aligned ellipse around the route and looks into its direction of travel.
 - **Fly-over** — a banking figure-eight that crosses the route's center and reverses its turn direction between lobes.
 - **Satellite** — a near-vertical, north-up view fitted to the route.
+
+Before a fly-by or fly-over starts, GPX Rider profiles the elevation of the entire flight path (from online terrain when enabled) and raises the fly height so the camera clears the highest ground along it — including hills the route itself detours around. The sampled data is visible on the camera debug overlay.
 
 Selecting a detected climb or custom segment opens a dedicated static, orbit, or satellite focus camera. Reaching the end of a ride can trigger a finish-line orbit around the rider.
 
