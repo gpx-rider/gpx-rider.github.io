@@ -27,6 +27,7 @@ import { parseAspectRatio } from "../map/screenshot.mjs";
 import {
   applyDisplaySettings,
   applyScreenshotButtonVisibility,
+  applyTerrainTilesSetting,
   syncDisplayControls,
   syncProfileSeriesButtons,
   syncRenderingControls,
@@ -199,6 +200,10 @@ export function restoreSettings() {
     state.terrainAvoidEnabled = settings.terrainAvoidEnabled;
   }
 
+  if (typeof settings?.terrainTilesEnabled === "boolean") {
+    state.terrainTilesEnabled = settings.terrainTilesEnabled;
+  }
+
   if (typeof settings?.routeGradeColorsEnabled === "boolean") {
     state.routeGradeColorsEnabled = settings.routeGradeColorsEnabled;
   }
@@ -305,6 +310,7 @@ export function restoreSettings() {
   updateCameraSettingsLabels();
   syncRenderingControls();
   updateRenderingSettingsLabels();
+  applyTerrainTilesSetting();
   els.screenshotButtonInput.checked = state.showScreenshotButton;
   els.screenshotAspectSelect.value = state.screenshotAspect;
   els.screenshotWidthSelect.value = String(state.screenshotWidth);
@@ -335,6 +341,7 @@ export function saveSettings() {
     beaconOpacity: state.beaconOpacity,
     beaconColor: state.beaconColor,
     terrainAvoidEnabled: state.terrainAvoidEnabled,
+    terrainTilesEnabled: state.terrainTilesEnabled,
     terrainClearanceMeters: state.terrainClearanceMeters,
     showScreenshotButton: state.showScreenshotButton,
     screenshotAspect: state.screenshotAspect,

@@ -34,6 +34,7 @@ import {
   DEFAULT_SHOW_SCREENSHOT_BUTTON,
   DEFAULT_TERRAIN_AVOID_ENABLED,
   DEFAULT_TERRAIN_CLEARANCE_METERS,
+  DEFAULT_TERRAIN_TILES_ENABLED,
   DEFAULT_THEATER_HIDE_CLIMB_BANNER,
   DEFAULT_THEATER_HIDE_CLOCK,
   DEFAULT_THEATER_HIDE_CONTROLS,
@@ -148,6 +149,9 @@ export const state = {
   beaconColor: DEFAULT_BEACON_COLOR,
   terrainAvoidEnabled: DEFAULT_TERRAIN_AVOID_ENABLED,
   terrainClearanceMeters: DEFAULT_TERRAIN_CLEARANCE_METERS,
+  // Augment the route-based terrain estimate with real ground elevation from
+  // online Mapzen Terrarium tiles (map/terrain-tiles.mjs).
+  terrainTilesEnabled: DEFAULT_TERRAIN_TILES_ENABLED,
   routeGradeColorsEnabled: DEFAULT_ROUTE_GRADE_COLORS_ENABLED,
   cameraLiftMeters: 0,
   cameraLiftTargetMeters: 0,
@@ -264,6 +268,8 @@ export const els = {
   terrainAvoidInput: document.querySelector("#terrainAvoidInput"),
   terrainClearanceInput: document.querySelector("#terrainClearanceInput"),
   terrainClearanceOutput: document.querySelector("#terrainClearanceOutput"),
+  terrainTilesInput: document.querySelector("#terrainTilesInput"),
+  terrainAttribution: document.querySelector("#terrainAttribution"),
   routeGradeColorsInput: document.querySelector("#routeGradeColorsInput"),
   resetRenderingBtn: document.querySelector("#resetRenderingBtn"),
   connectBtn: document.querySelector("#connectBtn"),

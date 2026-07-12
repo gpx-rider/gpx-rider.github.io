@@ -32,6 +32,7 @@ import {
   routeTotalDistance,
 } from "../route/route.mjs";
 import { updateRiderDot } from "../map/route-render.mjs";
+import { terrainElevationAt } from "../map/terrain-tiles.mjs";
 import { state } from "../core/state.mjs";
 import {
   CAMERA_CENTER_ALTITUDE_LIMIT_METERS,
@@ -347,13 +348,27 @@ function computeTerrainLiftTarget(camera, centerAltitude) {
       lat: lerp(eye.lat, camera.center.lat, fraction),
       lng: lerp(eye.lng, camera.center.lng, fraction),
     };
-    const terrainEle = maxElevationNear(state.route, samplePoint, TERRAIN_SAMPLE_RADIUS_METERS);
+    const terrainEle = terrainElevationForSample(samplePoint);
     if (terrainEle === null) continue;
     const rayAltitude = lerp(eye.altitude, centerAltitude, fraction);
     const clearance = state.terrainClearanceMeters * (1 - fraction);
     target = Math.max(target, terrainEle + clearance - rayAltitude);
   }
   return target;
+}
+
+// The terrain height under a view-ray sample point. The route's own elevation
+// points are a free, always-available estimate (the road covers the hillside
+// on switchbacks); when online terrain is enabled, the real ground elevation
+// from the Terrarium tile is blended in as the higher of the two — so the
+// camera also clears hills the GPX track never climbs, while degrading to the
+// route-only estimate whenever a tile has not loaded yet or is disabled.
+function terrainElevationForSample(samplePoint) {
+  const routeEle = maxElevationNear(state.route, samplePoint, TERRAIN_SAMPLE_RADIUS_METERS);
+  if (!state.terrainTilesEnabled) return routeEle;
+  const tileEle = terrainElevationAt(samplePoint.lat, samplePoint.lng);
+  if (tileEle === null) return routeEle;
+  return routeEle === null ? tileEle : Math.max(routeEle, tileEle);
 }
 
 // --- Manual camera capture -------------------------------------------------------

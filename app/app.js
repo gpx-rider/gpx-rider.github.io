@@ -237,6 +237,7 @@ function bindEvents() {
   els.beaconColorInput.addEventListener("input", updateRenderingSettingsFromControls);
   els.terrainAvoidInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.terrainClearanceInput.addEventListener("input", updateRenderingSettingsFromControls);
+  els.terrainTilesInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.routeGradeColorsInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.resetRenderingBtn.addEventListener("click", resetRenderingToDefaults);
   els.connectBtn.addEventListener("click", connectTrainer);

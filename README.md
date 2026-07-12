@@ -85,7 +85,7 @@ Simulation ETA remains a straightforward remaining-distance calculation at the s
 - The default follow camera flies behind the rider using the GPX route bearing.
 - A first-person preset places the camera at rider height.
 - Camera distance, angle, position, heading, and centering can be adjusted.
-- Terrain avoidance lifts the camera when route elevation indicates intervening ground.
+- Terrain avoidance lifts the camera when the ground between it and the rider would otherwise block the view. It uses the route's own elevation as a free offline floor, and — when **online terrain** is enabled (Settings › Rendering, on by default) — augments it with real ground elevation streamed from free public Mapzen/AWS terrain tiles, so the camera also clears hills the GPX track never climbs.
 - Manual dragging gives the user direct control; reset restores the selected camera surface.
 
 ### Route overview
@@ -163,6 +163,17 @@ Climb detection reads like a rider's own sense of effort rather than raw point-t
 
 The pure signal-processing helpers (resample, smoothing, rolling grade) live in [`app/route/climb-signal.mjs`](app/route/climb-signal.mjs); the fatigue state machine sits in [`app/route/climbs.mjs`](app/route/climbs.mjs). Both are covered by unit tests. Every behavior knob is documented under `climb_detection` in [`app/core/tuning.yaml`](app/core/tuning.yaml); [`scripts/climb_tester.py`](scripts/climb_tester.py) is a standalone CLI that reads the exact same tunables for verbose, step-by-step diagnostics against any GPX file.
 
+### Free client-side terrain elevation
+
+Keeping the camera above the ground needs to know where the ground actually is — but a commercial elevation API, queried at follow-camera rates, would cost real money on every ride. GPX Rider gets the same data for free, entirely in the browser:
+
+- **Public open-data terrain tiles.** It streams Mapzen Terrarium terrain-RGB tiles from the [AWS Open Data](https://registry.opendata.aws/terrain-tiles/) bucket — no API key, no quota, no cost, requested anonymously.
+- **Pixel-decoded elevation.** Each tile is an ordinary PNG that packs elevation into its color channels (`elevation = R·256 + G + B/256 − 32768`). The tile is drawn to an offscreen canvas and its pixels are read back into an elevation grid — decoding real ground height with zero server round-trips per query.
+- **Synchronous lookups over an async cache.** Decoded tiles are held in an LRU cache, so `terrainElevationAt(lat, lng)` is a cheap per-frame lookup; a cache miss kicks off the tile fetch and returns nothing, and the camera falls back to the route's own elevation until the tile arrives. One tile spans several kilometers, so a whole ride usually stays inside one or two cached tiles — the network is touched only when the rider crosses into a new tile.
+- **Safe blending.** The camera lift takes the higher of the route-based estimate and the real terrain, so enabling online terrain can only ever raise the camera clear of a hill, never drop it into one — and turning it off degrades gracefully to the offline estimate.
+
+The pure tile math (Web Mercator coordinates, Terrarium decode) lives in [`app/map/terrain-tiles-math.mjs`](app/map/terrain-tiles-math.mjs) and is unit-tested; the fetch/decode/cache machinery is in [`app/map/terrain-tiles.mjs`](app/map/terrain-tiles.mjs). Every knob — the tile source, zoom, cache size, and attribution — is documented under `terrain_tiles` in [`app/core/tuning.yaml`](app/core/tuning.yaml).
+
 ### Architecture
 
 - **Zero build step, vanilla ES modules, no package dependencies.** The deployed `app/` directory is static HTML, CSS, JavaScript, and assets.
@@ -223,6 +234,8 @@ GPX Rider has no user accounts and no application backend. Routes, settings, rid
 
 The hosted application's Maps key is restricted to the GPX Rider domain. Self-hosted installations use their own key.
 
+When **online terrain** is enabled (on by default), the app anonymously fetches free public elevation tiles from the Mapzen/AWS Open Data bucket to sharpen the terrain-aware camera. The requests carry no keys, accounts, or ride data — only the map tile coordinates for the area you are riding, which Google's own 3D imagery already streams for the same area. It can be turned off in Settings › Rendering, in which case the camera falls back to route-only elevation and no tiles are ever requested.
+
 ## Browser, hardware, and limitations
 
 - The complete visual app and Simulation mode work without cycling hardware.
@@ -233,7 +246,7 @@ The hosted application's Maps key is restricted to the GPX Rider domain. Self-ho
 - Smart ETA needs about a minute of real pedaling before it trusts the measured pace; until then it projects from current speed.
 - Calories are shown and exported only when the trainer reports FTMS Expended Energy.
 - Heart rate comes from a paired strap or, as a fallback, the trainer's own heart-rate field.
-- Terrain avoidance estimates ground height from route elevation rather than a separate Elevation API, so it works best where the route itself follows the hillside.
+- Terrain avoidance uses the route's own elevation as a free offline floor and, when online terrain is enabled, augments it with free public Mapzen/AWS terrain tiles. With online terrain off (or before tiles load), it works best where the route itself follows the hillside.
 
 ## Tested hardware
 

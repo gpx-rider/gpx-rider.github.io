@@ -150,6 +150,14 @@ export const TERRAIN_LIFT_RECOMPUTE_MS = req("terrain_avoidance", "lift_recomput
 export const TERRAIN_LIFT_RISE_TAU_SECONDS = req("terrain_avoidance", "lift_rise_tau_seconds");
 export const TERRAIN_LIFT_FALL_TAU_SECONDS = req("terrain_avoidance", "lift_fall_tau_seconds");
 
+// Online terrain elevation (Mapzen Terrarium tiles on AWS Open Data)
+export const DEFAULT_TERRAIN_TILES_ENABLED = req("terrain_tiles", "enabled");
+export const TERRAIN_TILE_BASE_URL = req("terrain_tiles", "base_url");
+export const TERRAIN_TILE_ZOOM = req("terrain_tiles", "zoom");
+export const TERRAIN_TILE_SIZE = req("terrain_tiles", "tile_size");
+export const TERRAIN_TILE_MAX_CACHE = req("terrain_tiles", "max_cache_tiles");
+export const TERRAIN_TILE_ATTRIBUTION = req("terrain_tiles", "attribution");
+
 // Rider beacon
 export const DEFAULT_BEACON_ENABLED = req("rider_beacon", "enabled");
 export const DEFAULT_BEACON_DIAMETER_METERS = req("rider_beacon", "diameter_meters");

@@ -11,7 +11,8 @@ import { saveSettings } from "../storage/persistence.mjs";
 import { renderProfile } from "../route/profile-ui.mjs";
 import { updateRecordingUi } from "../ride/recording-ui.mjs";
 import { updateRideUi } from "../ride/ride-ui.mjs";
-import { gradeAt } from "../route/route.mjs";
+import { gradeAt, interpolateRoutePoint } from "../route/route.mjs";
+import { prefetchTerrainAround } from "../map/terrain-tiles.mjs";
 import { rebuildRiderBeacon, rebuildRouteStyle } from "../map/route-render.mjs";
 import { parseAspectRatio, screenshotSupported } from "../map/screenshot.mjs";
 import { els, state } from "../core/state.mjs";
@@ -31,11 +32,13 @@ import {
   DEFAULT_SCREENSHOT_WIDTH,
   DEFAULT_TERRAIN_AVOID_ENABLED,
   DEFAULT_TERRAIN_CLEARANCE_METERS,
+  DEFAULT_TERRAIN_TILES_ENABLED,
   DEFAULT_TIME_FORMAT,
   GRADE_INTERVAL_MAX_SECONDS,
   GRADE_INTERVAL_MIN_SECONDS,
   SCREENSHOT_WIDTH_MAX,
   SCREENSHOT_WIDTH_MIN,
+  TERRAIN_TILE_ATTRIBUTION,
 } from "../core/tuning.mjs";
 import { formatSpeed } from "../core/units.mjs";
 
@@ -207,7 +210,9 @@ export function updateRenderingSettingsFromControls() {
   state.beaconColor = els.beaconColorInput.value;
   state.terrainAvoidEnabled = els.terrainAvoidInput.checked;
   state.terrainClearanceMeters = Number(els.terrainClearanceInput.value);
+  state.terrainTilesEnabled = els.terrainTilesInput.checked;
   updateRenderingSettingsLabels();
+  applyTerrainTilesSetting();
   saveSettings();
   rebuildRiderBeacon();
   if (routeGradeColorsChanged) rebuildRouteStyle();
@@ -224,8 +229,10 @@ export function resetRenderingToDefaults() {
   state.beaconColor = DEFAULT_BEACON_COLOR;
   state.terrainAvoidEnabled = DEFAULT_TERRAIN_AVOID_ENABLED;
   state.terrainClearanceMeters = DEFAULT_TERRAIN_CLEARANCE_METERS;
+  state.terrainTilesEnabled = DEFAULT_TERRAIN_TILES_ENABLED;
   syncRenderingControls();
   updateRenderingSettingsLabels();
+  applyTerrainTilesSetting();
   saveSettings();
   rebuildRiderBeacon();
   if (routeGradeColorsChanged) rebuildRouteStyle();
@@ -241,6 +248,7 @@ export function syncRenderingControls() {
   els.beaconColorInput.value = state.beaconColor;
   els.terrainAvoidInput.checked = state.terrainAvoidEnabled;
   els.terrainClearanceInput.value = String(state.terrainClearanceMeters);
+  els.terrainTilesInput.checked = state.terrainTilesEnabled;
 }
 
 export function updateRenderingSettingsLabels() {
@@ -248,6 +256,20 @@ export function updateRenderingSettingsLabels() {
   els.beaconHeightOutput.value = `${state.beaconHeightMeters} m`;
   els.beaconOpacityOutput.value = `${Math.round(state.beaconOpacity * 100)}%`;
   els.terrainClearanceOutput.value = `${state.terrainClearanceMeters} m`;
+}
+
+// Show the open-data attribution while online terrain is on, and warm the tile
+// cache around the rider when it is switched on mid-session so the camera has
+// real ground to work with without waiting for the next route load.
+export function applyTerrainTilesSetting() {
+  if (els.terrainAttribution) {
+    els.terrainAttribution.textContent = TERRAIN_TILE_ATTRIBUTION;
+    els.terrainAttribution.hidden = !state.terrainTilesEnabled;
+  }
+  if (state.terrainTilesEnabled && state.route.length) {
+    const rider = interpolateRoutePoint(state.route, state.progressMeters);
+    if (rider) prefetchTerrainAround(rider.lat, rider.lng);
+  }
 }
 
 // --- Screenshot settings -----------------------------------------------------------

@@ -1419,6 +1419,14 @@ body {
   border-left: 1px solid rgba(255, 255, 255, 0.07);
 }
 
+/* Subtle open-data credit line at the foot of the control pane (currently the
+   online terrain-elevation source). Sits below the last card, dimmed. */
+.panel-credits {
+  margin: 2px 2px 4px;
+  font: 400 11px/1.4 var(--font-ui);
+  color: var(--faint);
+}
+
 .stat-grid {
   display: grid;
   gap: 1px;

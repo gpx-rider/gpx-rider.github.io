@@ -20,6 +20,7 @@ import {
   routeTotalDistance,
 } from "./route.mjs";
 import { renderRoute } from "../map/route-render.mjs";
+import { prefetchTerrainAround } from "../map/terrain-tiles.mjs";
 import { els, state, updateProgressLabel } from "../core/state.mjs";
 import { formatAltitude, formatDistance } from "../core/units.mjs";
 
@@ -55,6 +56,11 @@ export function applyGpxText(text, { overrideName = null, fallbackName = null, g
   stopDemoMode({ silent: true });
   clearDemoHistory();
   state.route = enrichRoute(route);
+  // Warm the online-terrain cache around the start so the follow camera has
+  // real ground under it from the first frame (no-op when the setting is off).
+  if (state.terrainTilesEnabled && state.route.length) {
+    prefetchTerrainAround(state.route[0].lat, state.route[0].lng);
+  }
   state.routeName = overrideName || gpxName || fallbackName;
   state.galleryMetadata = galleryMetadata && typeof galleryMetadata === "object"
     ? structuredClone(galleryMetadata)

@@ -541,6 +541,7 @@
               </label>
             </div>
           </div>
+          <p id="terrainAttribution" class="panel-credits" hidden></p>
         </aside>
       </div>
     </main>
@@ -748,6 +749,16 @@
                 <output id="terrainClearanceOutput" for="terrainClearanceInput">20 m</output>
               </div>
               <input id="terrainClearanceInput" type="range" min="5" max="100" step="5" value="20">
+            </div>
+            <div class="setting-row">
+              <div class="setting-row-text">
+                <span class="setting-row-label">Use online terrain data</span>
+                <span class="setting-row-hint">streams free Mapzen/AWS elevation tiles so the camera clears hills the GPX track misses</span>
+              </div>
+              <label class="switch">
+                <input id="terrainTilesInput" type="checkbox" checked>
+                <span class="switch-track"><span class="switch-knob"></span></span>
+              </label>
             </div>
             <div class="settings-divider"></div>
             <div class="setting-row">

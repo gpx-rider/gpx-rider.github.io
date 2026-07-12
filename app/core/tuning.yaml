@@ -469,6 +469,42 @@ terrain_avoidance:
   lift_rise_tau_seconds: 0.3
   lift_fall_tau_seconds: 4
 
+# --- Online terrain elevation (Mapzen Terrarium tiles) -----------------------
+#
+# Real ground elevation streamed from the public Mapzen Terrarium terrain-RGB
+# tiles on the AWS Open Data bucket — no API key, no cost, anonymous requests.
+# It augments the route-based estimate above (the camera lift takes the higher
+# of the two) so the follow camera clears hillsides the GPX track itself never
+# climbs. When off, the app falls back to the route-only estimate and no tiles
+# are ever fetched. Google's own 3D map already streams imagery for the same
+# area, so this exposes no location the map didn't already request.
+terrain_tiles:
+  # Default for the "Use online terrain data" toggle in Rendering settings.
+  enabled: true
+
+  # Slippy-map base URL; "{z}/{x}/{y}.png" is appended. The AWS Open Data
+  # bucket is public and serves the tiles with permissive CORS, so the browser
+  # can read their pixels back off a canvas to decode elevation.
+  base_url: "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/"
+
+  # Fetch zoom level. Higher = finer ground detail but more/larger tiles; 12 is
+  # ~9.5 m per pixel at the equator (finer toward the poles), plenty for keeping
+  # the camera above ridgelines, and one tile spans several km so a whole ride
+  # usually stays inside one or two cached tiles.
+  zoom: 12
+
+  # Terrarium tiles are always 256×256 px.
+  tile_size: 256
+
+  # Max decoded tiles kept in memory (each is tile_size² floats ≈ 256 KB at
+  # 256 px), LRU-evicted past this. The browser's own HTTP cache still avoids
+  # re-downloading evicted tiles.
+  max_cache_tiles: 64
+
+  # Open-data attribution shown at the bottom of the setup panel while online
+  # terrain is on (the compiled SRTM/USGS sources ask for a credit line).
+  attribution: "Elevation data courtesy of Mapzen / AWS Open Data"
+
 # --- Profile segment selection -----------------------------------------------
 profile_segment_selection:
   # Horizontal pointer movement before a profile interaction becomes a segment
