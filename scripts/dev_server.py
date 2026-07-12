@@ -33,7 +33,7 @@ import os
 import pathlib
 import re
 import sys
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 DEFAULT_PORT = 5173
@@ -41,6 +41,21 @@ DEFAULT_HOST = "127.0.0.1"
 
 CONFIG_URL_SUFFIX = "/app/config.mjs"
 KEY_LINE_PATTERN = re.compile(rb'const DEPLOYED_MAPS_API_KEY_B64 = ".*";')
+
+# Content types forced by file extension, independent of the OS MIME registry.
+# Python's http.server falls back to the platform registry for unknown types,
+# and on some machines .mjs resolves to text/plain — which browsers reject for
+# ES module scripts ("Strict MIME type checking is enforced for module
+# scripts"). Pinning them here makes local dev behave the same everywhere.
+FORCED_CONTENT_TYPES = {
+    ".mjs": "text/javascript",
+    ".js": "text/javascript",
+    ".json": "application/json",
+    ".css": "text/css",
+    ".svg": "image/svg+xml",
+    ".glb": "model/gltf-binary",
+    ".wasm": "application/wasm",
+}
 
 
 def local_maps_api_key():
@@ -56,6 +71,14 @@ def local_maps_api_key():
 
 
 class NoCacheHandler(SimpleHTTPRequestHandler):
+    def guess_type(self, path):
+        # Force known web extensions ahead of the platform registry so module
+        # scripts always arrive with a JavaScript MIME type.
+        ext = os.path.splitext(str(path))[1].lower()
+        if ext in FORCED_CONTENT_TYPES:
+            return FORCED_CONTENT_TYPES[ext]
+        return super().guess_type(path)
+
     def send_head(self):
         # Never honour conditional requests, so we always return a fresh 200
         # instead of a 304 that tells the browser to reuse its cached copy.
@@ -107,7 +130,10 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
 def main(argv):
     port = int(argv[1]) if len(argv) > 1 else DEFAULT_PORT
     host = argv[2] if len(argv) > 2 else DEFAULT_HOST
-    server = HTTPServer((host, port), NoCacheHandler)
+    # Threaded so the browser's many parallel module requests are served
+    # concurrently instead of one-at-a-time (a serial server stalls or refuses
+    # connections when a page pulls in dozens of .mjs files at once).
+    server = ThreadingHTTPServer((host, port), NoCacheHandler)
     print(f"GPX Rider (no-cache dev server): landing http://{host}:{port}/app/ · app http://{host}:{port}/app/app.html")
     try:
         server.serve_forever()
