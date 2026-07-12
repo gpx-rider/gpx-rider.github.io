@@ -8,9 +8,12 @@
 //   3. replaces index.html (the public landing page, pointless inside a
 //      native app) with an instant redirect to app.html
 //   4. optionally bakes a Google Maps API key into config.mjs, read from the
-//      MAPS_API_KEY environment variable or the gitignored ../.maps-api-key
-//      file — the same sources and base64 substitution the repo's dev server
-//      and deploy workflow use
+//      MAPS_API_KEY_IOS environment variable or the gitignored
+//      mobile/.maps-api-key file — deliberately NOT the repo-root
+//      .maps-api-key: the web keys are HTTP-referrer-restricted and never
+//      match the native app's capacitor://localhost origin, so the native
+//      build needs its own (API-restricted) key. Same base64 substitution
+//      as the repo's dev server and deploy workflow.
 //   5. bundles native/native-shim.mjs (+ the Capacitor plugin JS) with
 //      esbuild into www/native/native-shim.js
 //
@@ -62,10 +65,11 @@ writeFileSync(
 `,
 );
 
-// 4. Optional Maps API key. Without one the app falls back to its own
+// 4. Optional iOS-specific Maps API key (see the header comment for why the
+// web app's key is never reused). Without one the app falls back to its own
 // first-run "paste your key" prompt in Settings, which also works.
-const keyFile = path.join(repoRoot, ".maps-api-key");
-const mapsKey = (process.env.MAPS_API_KEY || (existsSync(keyFile) ? readFileSync(keyFile, "utf8") : "")).trim();
+const keyFile = path.join(here, ".maps-api-key");
+const mapsKey = (process.env.MAPS_API_KEY_IOS || (existsSync(keyFile) ? readFileSync(keyFile, "utf8") : "")).trim();
 if (mapsKey) {
   const configPath = path.join(wwwDir, "config.mjs");
   const keyLine = /const DEPLOYED_MAPS_API_KEY_B64 = ".*";/;
@@ -77,7 +81,7 @@ if (mapsKey) {
   writeFileSync(configPath, config.replace(keyLine, `const DEPLOYED_MAPS_API_KEY_B64 = "${encoded}";`));
   console.log("[build] baked Maps API key into www/config.mjs");
 } else {
-  console.log("[build] no Maps API key (MAPS_API_KEY env or ../.maps-api-key) — the app will prompt for one");
+  console.log("[build] no Maps API key (MAPS_API_KEY_IOS env or mobile/.maps-api-key) — the app will prompt for one");
 }
 
 // 5. Bundle the native shim. Classic IIFE script so it installs the

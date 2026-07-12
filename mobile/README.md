@@ -66,24 +66,28 @@ in Apple's ecosystem and can't be changed after the first App Store upload.
 ### Google Maps API key
 
 Same as the web app, the map needs a Maps JavaScript API key
-([cloud.google.com/maps-platform](https://cloud.google.com/maps-platform)).
-Two options:
+([cloud.google.com/maps-platform](https://cloud.google.com/maps-platform)) —
+but the native app needs **its own key, separate from the web app's**. The
+web keys (the deploy secret and the repo-root `.maps-api-key` dev file) are
+HTTP-referrer-restricted, and inside the native app the page origin is
+`capacitor://localhost`, which never matches a referrer rule — the map would
+stay black. Create a dedicated key for the iOS build, restricted **by API**
+(Maps JavaScript API only), and treat it as visible to anyone who unzips the
+app bundle — the same visibility trade-off every Maps web key has. The build
+deliberately ignores the root `.maps-api-key` so a web key can't leak into a
+native build by accident.
+
+Two ways to supply it:
 
 1. **Paste it in the app** — with no baked-in key, first launch opens the
    same Settings prompt as the hosted web app; the key is stored on the
    device. Fine for personal use.
 2. **Bake it into the build** — put the key in the gitignored
-   `.maps-api-key` file at the repo root (or export `MAPS_API_KEY`) and run
-   `npm run build`; it is injected into `www/config.mjs` exactly like the dev
-   server and deploy workflow do. Do this for TestFlight/App Store builds:
-   reviewers and testers won't have their own key.
-
-Do **not** reuse an HTTP-referrer-restricted key (like the GitHub Pages
-deploy key): inside the native app the page origin is
-`capacitor://localhost`, which never matches a referrer rule, and the map
-stays black. Create a separate key restricted **by API** (Maps JavaScript API
-only) instead, and treat it as visible to anyone who unzips the app bundle —
-the same visibility trade-off every Maps web key has.
+   `mobile/.maps-api-key` file (a single line, no quotes; or export
+   `MAPS_API_KEY_IOS`) and run `npm run build`; it is injected into
+   `www/config.mjs` with the same substitution the dev server and deploy
+   workflow use. Do this for TestFlight/App Store builds: reviewers and
+   testers won't have their own key.
 
 ## Running on your own iPhone/iPad
 

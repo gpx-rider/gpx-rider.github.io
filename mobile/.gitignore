@@ -1,5 +1,7 @@
 # Everything here is generated or machine-local; the checked-in sources are
 # build.mjs, native/, capacitor.config.json, package.json, and README.md.
+# The iOS build's own Maps API key (baked in by build.mjs) — never commit it.
+.maps-api-key
 node_modules/
 www/
 ios/
