@@ -1,0 +1,9 @@
+{
+  "appId": "io.github.gpxrider",
+  "appName": "GPX Rider",
+  "webDir": "www",
+  "backgroundColor": "#0e1116",
+  "ios": {
+    "contentInset": "automatic"
+  }
+}

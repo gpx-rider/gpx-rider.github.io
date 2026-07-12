@@ -1,0 +1,22 @@
+{
+  "name": "gpx-rider-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capacitor iOS/iPad (and optional Android) wrapper around the GPX Rider web app in ../app — see README.md",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "sync": "node build.mjs && cap sync",
+    "ios": "node build.mjs && cap sync ios && cap open ios",
+    "android": "node build.mjs && cap sync android && cap open android"
+  },
+  "dependencies": {
+    "@capacitor-community/bluetooth-le": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/ios": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0",
+    "esbuild": "^0.28.0"
+  }
+}

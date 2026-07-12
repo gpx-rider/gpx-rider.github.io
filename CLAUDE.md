@@ -709,6 +709,28 @@ in place).
   API, which would cost real money at follow-camera query rates. Keep it
   that way.
 
+## iOS/iPad port (`mobile/`)
+
+`mobile/` is a Capacitor wrapper that ships the web app natively on
+iPhone/iPad (and optionally Android) — build, TestFlight, and App Store
+instructions in `mobile/README.md`. Its `build.mjs` regenerates `mobile/www/`
+from `app/` on every build (verbatim copy + a landing-page redirect +
+optional Maps-key injection, mirroring `scripts/inject_maps_api_key.py`) and
+injects one extra script into the copied `app.html`: a Web Bluetooth
+polyfill (`mobile/native/web-bluetooth.mjs`) that maps the exact API subset
+the `app/trainer/` modules use onto `@capacitor-community/bluetooth-le`,
+because WKWebView has no `navigator.bluetooth`. Rules: never fork or copy
+`app/` files into `mobile/` (the build script is the only bridge), and
+`app/` must never import from or depend on `mobile/`. Two coupling points to
+keep in mind when changing the app: `build.mjs` anchors its injection on the
+exact `<script src="./app.js" type="module"></script>` tag in `app.html`
+(it fails loudly if that tag changes), and the polyfill mirrors the Web
+Bluetooth calls made by `trainer.mjs`/`trainer-fec.mjs`/`heartrate.mjs` —
+extend `mobile/native/web-bluetooth.mjs` in the same change if those modules
+start using new Web Bluetooth APIs. `node --check` works on the
+`mobile/native/*.mjs` sources; actually building the native app requires a
+Mac with Xcode.
+
 ## Persistence
 
 `app/storage/storage.mjs` keeps everything in IndexedDB (database `gpx-rider`,

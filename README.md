@@ -227,6 +227,10 @@ The included [GitHub Pages workflow](.github/workflows/deploy-pages.yml) publish
 
 Self-hosted deployments can request a visitor-supplied Maps key. It is stored in that browser and sent only to Google Maps.
 
+## iPhone and iPad app
+
+No iOS browser implements Web Bluetooth, so Safari cannot pair a trainer. The [`mobile/`](mobile/) folder wraps the unmodified web app in a native iOS/iPadOS shell with [Capacitor](https://capacitorjs.com): its build script copies `app/` as-is on every build and injects a Web Bluetooth polyfill backed by the native Bluetooth stack, so trainer and heart-rate pairing work natively while the app itself stays exactly the web app. [`mobile/README.md`](mobile/README.md) walks through building it, testing on your own device, TestFlight, and App Store submission. Android users generally don't need it — Chrome on Android has real Web Bluetooth — though the same folder can build an Android app too.
+
 ## Data and privacy
 
 GPX Rider has no user accounts and no application backend. Routes, settings, ride progress, sensor preferences, and recorded samples remain in browser storage. Trainer and heart-rate communication happens directly between the browser and the selected Bluetooth devices.
@@ -236,7 +240,7 @@ The hosted application's Maps key is restricted to the GPX Rider domain. Self-ho
 ## Browser, hardware, and limitations
 
 - The complete visual app and Simulation mode work without cycling hardware.
-- Trainer and heart-rate connections require a secure context and a browser with [Web Bluetooth support](https://developer.chrome.com/docs/capabilities/bluetooth). Chrome and Edge are the intended browsers.
+- Trainer and heart-rate connections require a secure context and a browser with [Web Bluetooth support](https://developer.chrome.com/docs/capabilities/bluetooth). Chrome and Edge are the intended browsers. On iPhone and iPad, where no browser offers Web Bluetooth, use the [native app](mobile/) instead.
 - Bluetooth device selection, permissions, and remembered-device access are controlled by the browser. If a saved device is unavailable, select **Connect** again.
 - FTMS-compatible trainers are the primary hardware target; wheel-on Tacx trainers are supported through their ANT+ FE-C over Bluetooth protocol. Other proprietary control protocols may still require trainer-specific work.
 - Total ascent and descent are calculated from noise-filtered GPX elevation and may differ from another planner or head unit.

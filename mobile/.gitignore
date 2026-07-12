@@ -1,0 +1,7 @@
+# Everything here is generated or machine-local; the checked-in sources are
+# build.mjs, native/, capacitor.config.json, package.json, and README.md.
+node_modules/
+www/
+ios/
+android/
+package-lock.json
