@@ -100,6 +100,8 @@ test("activity local_timestamp is shifted by the local UTC offset", () => {
     | (bytes[timestampOffset + 3] << 24);
 
   const endMs = sampleRide().samples.at(-1).t * 1000;
-  const expectedOffsetSeconds = -new Date(endMs).getTimezoneOffset() * 60;
+  // `|| 0` normalizes the -0 that `-x * 60` produces when running in a UTC
+  // test environment (offset 0) — Object.is(-0, 0) is false under assert/strict.
+  const expectedOffsetSeconds = (-new Date(endMs).getTimezoneOffset() * 60) || 0;
   assert.equal(localTimestamp - timestamp, expectedOffsetSeconds);
 });

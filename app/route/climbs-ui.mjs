@@ -314,8 +314,14 @@ function showOnClimbBanner(climb, point, orderLabel) {
   const distanceFraction = climb.lengthMeters > 0
     ? (state.progressMeters - climb.startDistanceMeters) / climb.lengthMeters
     : 0;
-  const ascentSpan = Math.max(1, climb.endElevationMeters - climb.startElevationMeters);
-  const ascentFraction = (point.ele - climb.startElevationMeters) / ascentSpan;
+  // Cumulative (noise-filtered) ascent so far, not raw current elevation —
+  // a raw-elevation fraction dips whenever the rider loses a little altitude
+  // mid-climb, even though the climb's total ascent-to-date never decreases.
+  const ascentSoFar = Math.max(
+    0,
+    ascentAt(state.route, state.progressMeters) - ascentAt(state.route, climb.startDistanceMeters),
+  );
+  const ascentFraction = climb.gainMeters > 0 ? ascentSoFar / climb.gainMeters : 0;
   els.cbDistFill.style.width = `${clamp(distanceFraction, 0, 1) * 100}%`;
   els.cbAscFill.style.width = `${clamp(ascentFraction, 0, 1) * 100}%`;
 }
