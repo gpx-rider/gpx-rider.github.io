@@ -5,6 +5,7 @@ import {
   advanceDemoRide,
   createDemoRideModel,
   demoSpeedForPower,
+  demoTargetCadenceRpm,
   demoTargetPowerWatts,
   seedDemoHistory,
 } from "../app/demo/demo.mjs";
@@ -25,6 +26,12 @@ const TEST_RIDE = {
   min_power_watts: 85,
   max_power_watts: 360,
   power_smoothing_tau_seconds: 7,
+  flat_cadence_rpm: 88,
+  cadence_rpm_per_grade_percent: -1.5,
+  min_cadence_rpm: 55,
+  max_cadence_rpm: 105,
+  cadence_smoothing_tau_seconds: 5,
+  cadence_noise_rpm: 2,
   rolling_resistance_coefficient: 0.005,
   drag_area_square_meters: 0.48,
   air_density_kg_per_cubic_meter: 1.225,
@@ -43,6 +50,17 @@ const TEST_RIDE = {
 test("demo target power rises on climbs and backs off on descents", () => {
   assert.ok(demoTargetPowerWatts(7, TEST_RIDE) > demoTargetPowerWatts(0, TEST_RIDE));
   assert.ok(demoTargetPowerWatts(-5, TEST_RIDE) < demoTargetPowerWatts(0, TEST_RIDE));
+});
+
+test("demo target cadence drops on climbs and rises on descents, within bounds", () => {
+  const flat = demoTargetCadenceRpm(0, TEST_RIDE);
+  const climb = demoTargetCadenceRpm(8, TEST_RIDE);
+  const descent = demoTargetCadenceRpm(-5, TEST_RIDE);
+
+  assert.ok(climb < flat, `${climb} rpm should be lower than ${flat} rpm`);
+  assert.ok(descent > flat, `${descent} rpm should be higher than ${flat} rpm`);
+  assert.ok(demoTargetCadenceRpm(50, TEST_RIDE) >= TEST_RIDE.min_cadence_rpm);
+  assert.ok(demoTargetCadenceRpm(-50, TEST_RIDE) <= TEST_RIDE.max_cadence_rpm);
 });
 
 test("demo speed solve slows uphill and speeds downhill at the same power", () => {

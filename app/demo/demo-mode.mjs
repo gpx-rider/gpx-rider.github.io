@@ -65,6 +65,7 @@ export function stopDemoMode({ message = null, silent = false, preserveHistory =
   state.demoModel = null;
   state.trainerSpeedKph = null;
   state.trainerPowerWatts = null;
+  state.trainerCadenceRpm = null;
   state.trainerCaloriesKcal = null;
   state.trainerHeartRateBpm = null;
   state.strapHeartRateBpm = null;
@@ -105,6 +106,7 @@ export function advanceDemoTelemetry(elapsedSeconds, grade, metersAdvanced, { re
   });
   state.trainerSpeedKph = telemetry.speedKph;
   state.trainerPowerWatts = telemetry.powerWatts;
+  state.trainerCadenceRpm = telemetry.cadenceRpm;
   state.trainerCaloriesKcal = telemetry.caloriesKcal;
   state.trainerHeartRateBpm = telemetry.heartRateBpm;
   state.strapHeartRateBpm = telemetry.heartRateBpm;

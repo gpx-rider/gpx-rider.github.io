@@ -120,8 +120,8 @@ The underlying kinematics are described in [Under the hood](#under-the-hood).
 The HUD belongs to the map viewport and remains a standard ride screen in both windowed and fullscreen layouts. Fullscreen expands the same surface instead of switching to a separate UI.
 
 - The bottom dock presents the core ride metrics, road-ahead elevation profile, and distance and climbing progress.
-- Power and heart-rate meters appear only when those sensor values are available; grade appears when a route is loaded.
-- Available power, heart-rate, and grade meters show live training zones.
+- Power, heart-rate, and cadence meters appear only when those sensor values are available; grade appears when a route is loaded.
+- Available power, heart-rate, and grade meters show live training zones; the cadence meter shows a fixed green (90-110 rpm) / yellow / red band.
 - The clock chip combines local time, elapsed time, ridden distance, and ascent.
 - The climb banner shows approaching-climb, active-climb, or custom-segment statistics.
 - The minimap and map controls remain available on the ride surface.

@@ -9,6 +9,13 @@ import { registerHudComponent } from "../hud/screen-manager.mjs";
 import { els, state } from "../core/state.mjs";
 import { currentHeartRate } from "./telemetry-ui.mjs";
 import {
+  CADENCE_METER_MAX_RPM,
+  CADENCE_METER_MIN_RPM,
+  CADENCE_ZONE_COLORS,
+  CADENCE_ZONE_GREEN_MAX_RPM,
+  CADENCE_ZONE_GREEN_MIN_RPM,
+  CADENCE_ZONE_YELLOW_MAX_RPM,
+  CADENCE_ZONE_YELLOW_MIN_RPM,
   DEFAULT_RESTING_HEART_RATE_BPM,
   DEMO_RIDE,
   GRADE_METER_MAX_PERCENT,
@@ -25,17 +32,20 @@ export function registerTrainingMetersHud() {
 export function updateTrainingMeters(grade) {
   const power = state.trainerPowerWatts;
   const heartRate = currentHeartRate();
+  const cadence = state.trainerCadenceRpm;
   const ftpWatts = effectiveFtpWatts();
   const maxHeartRateBpm = effectiveMaxHeartRateBpm();
   const gradeValue = Number.isFinite(grade) ? grade : null;
   const showPowerMeter = Number.isFinite(power);
   const showHeartRateMeter = Number.isFinite(heartRate);
   const showGradeMeter = state.route.length > 1 && Number.isFinite(gradeValue);
+  const showCadenceMeter = Number.isFinite(cadence);
 
   els.powerMeter.hidden = !showPowerMeter;
   els.heartRateMeter.hidden = !showHeartRateMeter;
   els.gradeMeter.hidden = !showGradeMeter;
-  els.fullscreenTrainingMeters.hidden = !(showPowerMeter || showHeartRateMeter || showGradeMeter);
+  els.cadenceMeter.hidden = !showCadenceMeter;
+  els.fullscreenTrainingMeters.hidden = !(showPowerMeter || showHeartRateMeter || showGradeMeter || showCadenceMeter);
 
   const powerZones = currentPowerZones();
   const heartRateZones = currentHeartRateZones();
@@ -84,6 +94,22 @@ export function updateTrainingMeters(grade) {
     fallbackMeta: "Live road",
     zone: gradeZones.findIndex((zone) => zone.color === gradeColor(gradeValue)),
     color: Number.isFinite(gradeValue) ? gradeColor(gradeValue) : null,
+  });
+
+  const cadenceZones = cadenceMeterZones();
+  updateZoneMeter({
+    meter: els.cadenceMeter,
+    valueEl: els.zoneCadenceValue,
+    metaEl: els.zoneCadenceMeta,
+    fillEl: els.zoneCadenceFill,
+    value: cadence,
+    min: CADENCE_METER_MIN_RPM,
+    max: CADENCE_METER_MAX_RPM,
+    zones: cadenceZones,
+    text: Number.isFinite(cadence) ? `${Math.round(cadence)} rpm` : "--",
+    fallbackMeta: "Cadence",
+    zone: cadenceZones.findIndex((zone) => zone.color === cadenceColor(cadence)),
+    color: Number.isFinite(cadence) ? cadenceColor(cadence) : null,
   });
 }
 
@@ -146,6 +172,28 @@ function calculatePowerZones(ftp) {
 
 function gradeMeterZones() {
   return gradeColorZones(GRADE_METER_MIN_PERCENT, GRADE_METER_MAX_PERCENT);
+}
+
+// Cadence has no rider profile to derive zones from (unlike power/HR), so the
+// green/yellow/red bands are plain rpm constants from tuning.yaml. HUD-only,
+// so unlike gradeColor/gradeColorZones this isn't shared with any other module.
+function cadenceColor(rpm) {
+  if (!Number.isFinite(rpm)) return CADENCE_ZONE_COLORS.red;
+  if (rpm < CADENCE_ZONE_YELLOW_MIN_RPM) return CADENCE_ZONE_COLORS.red;
+  if (rpm < CADENCE_ZONE_GREEN_MIN_RPM) return CADENCE_ZONE_COLORS.yellow;
+  if (rpm <= CADENCE_ZONE_GREEN_MAX_RPM) return CADENCE_ZONE_COLORS.green;
+  if (rpm <= CADENCE_ZONE_YELLOW_MAX_RPM) return CADENCE_ZONE_COLORS.yellow;
+  return CADENCE_ZONE_COLORS.red;
+}
+
+function cadenceMeterZones() {
+  return [
+    { min: CADENCE_METER_MIN_RPM, max: CADENCE_ZONE_YELLOW_MIN_RPM, color: CADENCE_ZONE_COLORS.red },
+    { min: CADENCE_ZONE_YELLOW_MIN_RPM, max: CADENCE_ZONE_GREEN_MIN_RPM, color: CADENCE_ZONE_COLORS.yellow },
+    { min: CADENCE_ZONE_GREEN_MIN_RPM, max: CADENCE_ZONE_GREEN_MAX_RPM, color: CADENCE_ZONE_COLORS.green },
+    { min: CADENCE_ZONE_GREEN_MAX_RPM, max: CADENCE_ZONE_YELLOW_MAX_RPM, color: CADENCE_ZONE_COLORS.yellow },
+    { min: CADENCE_ZONE_YELLOW_MAX_RPM, max: CADENCE_METER_MAX_RPM, color: CADENCE_ZONE_COLORS.red },
+  ];
 }
 
 function zoneDisplayBounds(zones, fallbackMin, fallbackMax) {

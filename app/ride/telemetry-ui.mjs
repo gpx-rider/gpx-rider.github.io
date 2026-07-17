@@ -24,6 +24,7 @@ export function handleTrainerTelemetry(telemetry) {
   if (!telemetry) {
     state.trainerSpeedKph = null;
     state.trainerPowerWatts = null;
+    state.trainerCadenceRpm = null;
     state.trainerHeartRateBpm = null;
     setPedaling(false);
     updateTelemetryUi();
@@ -33,6 +34,7 @@ export function handleTrainerTelemetry(telemetry) {
 
   if (telemetry.speedKph !== null) state.trainerSpeedKph = telemetry.speedKph;
   if (telemetry.powerWatts !== null) state.trainerPowerWatts = telemetry.powerWatts;
+  if (telemetry.cadenceRpm !== null) state.trainerCadenceRpm = telemetry.cadenceRpm;
   if (telemetry.totalCaloriesKcal !== null) state.trainerCaloriesKcal = telemetry.totalCaloriesKcal;
   state.trainerHeartRateBpm = telemetry.heartRateBpm;
 
