@@ -1,12 +1,11 @@
 // Climbs & custom profile segments: focusing a detected climb or a
-// drag-selected segment (seek + highlight + focused camera), the live
+// drag-selected segment (seek + highlight + focused map view), the live
 // current/next-climb status in the side panel, and the map HUD's top-center
 // climb/segment banner.
 
-import { syncOverviewControls } from "../camera/camera-ui.mjs";
+import { enterOverviewMode, syncOverviewControls } from "../map/map-view.mjs";
 import { clamp } from "../core/geo.mjs";
 import { isMoving, seekToMeters } from "../ride/movement.mjs";
-import { enterOverviewMode } from "../camera/overview-camera.mjs";
 import { gradeColor } from "./profile.mjs";
 import { renderProfile } from "./profile-ui.mjs";
 import { updateRideUi } from "../ride/ride-ui.mjs";
@@ -54,10 +53,7 @@ export function focusClimb(index) {
   renderProfile();
   rebuildRouteStyle();
   if (shouldEnterClimbOverview) {
-    enterOverviewMode({
-      route: climbRoute,
-      mode: state.climbFocusMode,
-    });
+    enterOverviewMode({ route: climbRoute });
   }
 }
 
@@ -80,10 +76,7 @@ export function focusProfileSegment(startDistance, endDistance) {
   renderProfile();
   rebuildRouteStyle();
   if (shouldEnterSegmentOverview) {
-    enterOverviewMode({
-      route: segmentRoute,
-      mode: state.climbFocusMode,
-    });
+    enterOverviewMode({ route: segmentRoute });
   } else {
     updateRideUi({ force: true });
   }

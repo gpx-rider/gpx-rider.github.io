@@ -7,19 +7,11 @@
 // Starting to pedal stops a running simulation; the map then follows trainer
 // speed and stops when the rider stops pedaling.
 
-import { closeOverviewModeMenu, syncOverviewControls } from "../camera/camera-ui.mjs";
+import { enterOverviewMode, returnToFollow, syncOverviewControls } from "../map/map-view.mjs";
 import { syncFocusedClimbList } from "../route/climbs-ui.mjs";
 import { advanceDemoTelemetry, stopDemoMode, syncDemoModeUi } from "../demo/demo-mode.mjs";
 import { recordEstimatorTick } from "./eta.mjs";
-import { ensureCameraFlightLoop } from "../camera/follow-camera.mjs";
 import { clamp } from "../core/geo.mjs";
-import {
-  clearOverviewAnimation,
-  enterFinishOrbit,
-  enterOverviewMode,
-  returnToRiderCamera,
-} from "../camera/overview-camera.mjs";
-import { startCameraTransitionToFollow } from "../camera/transition-camera.mjs";
 import { saveRide, saveRideThrottled } from "../storage/persistence.mjs";
 import { renderProfile } from "../route/profile-ui.mjs";
 import { persistRideLog, recordRideTick } from "./recorder.mjs";
@@ -112,30 +104,16 @@ export function setPedaling(pedaling) {
 
 export function ensureMovementLoop() {
   if (state.route.length < 2) return;
-  // Actual movement (not a mere seek) hands the camera over to the follow
-  // view; the camera flight then flies it in from wherever it is — e.g. down
-  // from the route overview when the rider starts pedaling.
+  // Actual movement (not a mere seek) hands the map over to follow mode.
   if (isMoving()) {
-    state.overviewActive = false;
-    state.finishOrbitActive = false;
     if (state.focusedClimbIndex !== null) {
       state.focusedClimbIndex = null;
       syncFocusedClimbList();
       renderProfile();
       rebuildRouteStyle();
     }
-    closeOverviewModeMenu();
+    if (state.mapMode !== "follow") returnToFollow();
     syncOverviewControls();
-    // Hand the camera over once, on the actual overview→follow (or manual→
-    // follow) switch — via a physical transition arc when one fits (it
-    // captures the current driver's velocity before tearing that driver
-    // down), else by dropping the animated-overview driver so the follow
-    // flight (via updateMapCamera) can take over as before.
-    if (state.cameraMode !== "follow") {
-      const flying = startCameraTransitionToFollow();
-      state.cameraMode = "follow";
-      if (!flying) clearOverviewAnimation();
-    }
   }
   if (state.movementLoopActive) return;
   state.movementLoopActive = true;
@@ -185,11 +163,11 @@ export function resetRide() {
   state.simulating = false;
   state.progressMeters = 0;
   state.lastTick = performance.now();
-  // A reset while stationary honors the chosen camera surface: overview stays
-  // overview, rider camera stays with the rider.
+  // A reset while stationary honors the current map mode: overview stays
+  // overview, the follow map re-centers on the rider's reset position.
   if (!isMoving()) {
     if (state.overviewActive) enterOverviewMode();
-    else returnToRiderCamera();
+    else returnToFollow({ instant: true });
   }
   updateStartButton();
   updateRideUi({ force: true });
@@ -200,9 +178,6 @@ export function resetRide() {
 function tick(now) {
   if (!isMoving() || state.route.length < 2) {
     state.movementLoopActive = false;
-    // The movement loop was driving the camera flight; let the flight loop
-    // finish any move still in progress.
-    ensureCameraFlightLoop();
     return;
   }
 
@@ -267,8 +242,7 @@ function tick(now) {
       });
     }
     state.movementLoopActive = false;
-    enterFinishOrbit();
-    ensureCameraFlightLoop();
+    enterOverviewMode();
     updateStartButton();
     saveRide();
     persistRideLog();
@@ -286,15 +260,12 @@ export function seekToMeters(meters) {
   const wasMoving = isMoving();
   state.progressMeters = clamp(meters, 0, routeTotalDistance(state.route));
   state.lastTick = performance.now();
-  // A teleport while parked in the rider camera (clicking the elevation
-  // profile) flies the transition arc from the old camera pose to the new
-  // rider position, instead of a plain chase snap. Skip it while moving (the
-  // follow camera is already tracking), in an overview (the framing shouldn't
-  // move), and in manual mode (a manual drag should stay put). It captures the
-  // pre-teleport pose itself, so start it before updateRideUi nudges the
-  // chase; updateMapCamera yields while the arc owns the camera.
-  if (!wasMoving && state.cameraMode !== "overview" && state.cameraMode !== "manual") {
-    startCameraTransitionToFollow();
+  // A teleport while parked in follow mode (clicking the elevation profile)
+  // recenters the map on the new rider position. Skip it while moving (the
+  // map is already following), in an overview (the framing shouldn't move),
+  // and in manual mode (a manual drag should stay put).
+  if (!wasMoving && state.mapMode === "follow") {
+    returnToFollow({ instant: true });
   }
   updateRideUi({ force: true });
   saveRide();

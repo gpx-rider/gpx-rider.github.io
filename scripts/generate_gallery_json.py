@@ -4,12 +4,11 @@
 For every route in gallery/*/ this reads metadata.json, parses the GPX and
 precomputes everything the gallery cards render — distance, noise-filtered
 ascent/descent, the distance/terrain/difficulty classification, and the
-ready-to-draw bars of the mini elevation profile. The live 3D preview camera
-comes from metadata.json when present; the browser falls back to its normal
-route overview framing when a route has not been hand-framed yet. All the
-thresholds and the grade palette are read from app/core/tuning.yaml (via
-tuning_config.py) — the same file the app itself loads — so nothing is
-mirrored by hand anymore.
+ready-to-draw bars of the mini elevation profile. The gallery card preview is
+a plain top-down Leaflet map auto-framed to the route's bounds, so no preview
+camera needs to be hand-authored in metadata.json. All the thresholds and the
+grade palette are read from app/core/tuning.yaml (via tuning_config.py) — the
+same file the app itself loads — so nothing is mirrored by hand anymore.
 """
 import json
 import math
@@ -179,10 +178,7 @@ def parse_metadata(path):
     data = json.loads(path.read_text())
     title = str(data.get("title") or "").strip()
     description = str(data.get("description") or "").strip()
-    preview_camera = data.get("previewCamera")
-    if not isinstance(preview_camera, dict):
-        preview_camera = None
-    return title, description, preview_camera
+    return title, description
 
 
 def main():
@@ -198,13 +194,12 @@ def main():
         if not metadata_file.exists() or not gpx_file.exists():
             continue
 
-        title, body, preview_camera = parse_metadata(metadata_file)
+        title, body = parse_metadata(metadata_file)
 
         route = {
             "id": entry.name,
             "title": title,
             "description": body,
-            "previewCamera": preview_camera,
             "gpx": f"gallery/{entry.name}/export.gpx",
         }
 
@@ -222,7 +217,8 @@ def main():
         routes.append(route)
 
     # Copy gallery GPX files into app/gallery/ so they are served alongside the app.
-    # Preview images are no longer copied: gallery cards render live 3D maps.
+    # Gallery cards render a live top-down Leaflet preview, so no preview
+    # image needs to be generated or copied.
     if APP_GALLERY_DIR.exists():
         shutil.rmtree(APP_GALLERY_DIR)
     for entry in entries:

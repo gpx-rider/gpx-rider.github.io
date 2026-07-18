@@ -1,44 +1,34 @@
-// Settings dialog wiring (everything except the camera panel, which lives in
-// camera-ui.mjs): the category rail/panel shell, units & formats, the rider
-// profile, profile series toggles, Display & HUD toggles, rendering settings,
-// and screenshot settings. Each update*FromControls reads the inputs into
-// state, persists, and applies; each sync* writes state back into the inputs.
+// Settings dialog wiring (everything except the map action-bar controls,
+// which live in map-view.mjs): the category rail/panel shell, units &
+// formats, the rider profile, profile series toggles, Display & HUD toggles,
+// rendering settings, and screenshot settings. Each update*FromControls reads
+// the inputs into state, persists, and applies; each sync* writes state back
+// into the inputs.
 
-import { applyCameraDebug } from "../camera/camera-debug.mjs";
 import { clamp } from "../core/geo.mjs";
 import { applyHudFieldOrder, layoutMetricTiles, renderHudOrderControls, updateFullscreenLocalTime } from "../hud/map-hud.mjs";
 import { saveSettings } from "../storage/persistence.mjs";
 import { renderProfile } from "../route/profile-ui.mjs";
 import { updateRecordingUi } from "../ride/recording-ui.mjs";
 import { updateRideUi } from "../ride/ride-ui.mjs";
-import { gradeAt, interpolateRoutePoint } from "../route/route.mjs";
-import { prefetchTerrainAround } from "../map/terrain-tiles.mjs";
-import { rebuildRiderBeacon, rebuildRouteStyle } from "../map/route-render.mjs";
+import { gradeAt } from "../route/route.mjs";
+import { rebuildRouteStyle } from "../map/route-render.mjs";
 import { parseAspectRatio, screenshotSupported } from "../map/screenshot.mjs";
 import { els, state } from "../core/state.mjs";
 import { updateTelemetryUi } from "../ride/telemetry-ui.mjs";
 import { renderZoneSummaries, updateTrainingMeters } from "../ride/training-zones.mjs";
 import {
-  DEFAULT_BEACON_COLOR,
-  DEFAULT_BEACON_DIAMETER_METERS,
-  DEFAULT_BEACON_ENABLED,
-  DEFAULT_BEACON_HEIGHT_METERS,
-  DEFAULT_BEACON_OPACITY,
   DEFAULT_DURATION_FORMAT,
   DEFAULT_MAX_HEART_RATE_BPM,
   DEFAULT_RESTING_HEART_RATE_BPM,
   DEFAULT_ROUTE_GRADE_COLORS_ENABLED,
   DEFAULT_SCREENSHOT_ASPECT,
   DEFAULT_SCREENSHOT_WIDTH,
-  DEFAULT_TERRAIN_AVOID_ENABLED,
-  DEFAULT_TERRAIN_CLEARANCE_METERS,
-  DEFAULT_TERRAIN_TILES_ENABLED,
   DEFAULT_TIME_FORMAT,
   GRADE_INTERVAL_MAX_SECONDS,
   GRADE_INTERVAL_MIN_SECONDS,
   SCREENSHOT_WIDTH_MAX,
   SCREENSHOT_WIDTH_MIN,
-  TERRAIN_TILE_ATTRIBUTION,
 } from "../core/tuning.mjs";
 import { formatSpeed } from "../core/units.mjs";
 
@@ -58,7 +48,7 @@ export function selectSettingsTab(name) {
   }
 }
 
-export function openSettings(tab = "camera") {
+export function openSettings(tab = "map") {
   selectSettingsTab(tab);
   els.settingsDialog.showModal();
 }
@@ -145,40 +135,29 @@ export function syncProfileSeriesButtons() {
 // --- Display & HUD settings -----------------------------------------------------
 
 export function updateDisplaySettingsFromControls() {
-  state.showMinimap = els.minimapInput.checked;
-  state.mapLabelsEnabled = els.mapLabelsInput.checked;
-  state.cameraDebugEnabled = els.cameraDebugInput.checked;
   state.theaterHideClock = els.theaterHideClockInput.checked;
   state.theaterHideMeters = els.theaterHideMetersInput.checked;
   state.theaterHideDock = els.theaterHideDockInput.checked;
   state.theaterHideClimbBanner = els.theaterHideClimbBannerInput.checked;
   state.theaterHideDemoChip = els.theaterHideDemoChipInput.checked;
   state.theaterHideControls = els.theaterHideControlsInput.checked;
-  state.theaterHideMinimap = els.theaterHideMinimapInput.checked;
   saveSettings();
   applyDisplaySettings();
 }
 
 export function syncDisplayControls() {
-  els.minimapInput.checked = state.showMinimap;
-  els.mapLabelsInput.checked = state.mapLabelsEnabled;
-  els.cameraDebugInput.checked = state.cameraDebugEnabled;
   els.theaterHideClockInput.checked = state.theaterHideClock;
   els.theaterHideMetersInput.checked = state.theaterHideMeters;
   els.theaterHideDockInput.checked = state.theaterHideDock;
   els.theaterHideClimbBannerInput.checked = state.theaterHideClimbBanner;
   els.theaterHideDemoChipInput.checked = state.theaterHideDemoChip;
   els.theaterHideControlsInput.checked = state.theaterHideControls;
-  els.theaterHideMinimapInput.checked = state.theaterHideMinimap;
   renderHudOrderControls();
 }
 
 export function applyDisplaySettings() {
-  els.minimap.classList.toggle("minimap-hidden", !state.showMinimap);
   applyHudFieldOrder();
   layoutMetricTiles();
-  applyMapMode();
-  applyCameraDebug();
   applyTheaterHudToggles();
 }
 
@@ -189,13 +168,6 @@ function applyTheaterHudToggles() {
   els.mapViewport.classList.toggle("theater-hide-climb-banner", state.theaterHideClimbBanner);
   els.mapViewport.classList.toggle("theater-hide-demo-chip", state.theaterHideDemoChip);
   els.mapViewport.classList.toggle("theater-hide-controls", state.theaterHideControls);
-  els.mapViewport.classList.toggle("theater-hide-minimap", state.theaterHideMinimap);
-}
-
-function applyMapMode() {
-  const MapMode = state.maps3d?.MapMode;
-  if (!state.map || !MapMode) return;
-  state.map.mode = state.mapLabelsEnabled ? MapMode.HYBRID : MapMode.SATELLITE;
 }
 
 // --- Rendering settings -----------------------------------------------------------
@@ -203,18 +175,7 @@ function applyMapMode() {
 export function updateRenderingSettingsFromControls() {
   const routeGradeColorsChanged = state.routeGradeColorsEnabled !== els.routeGradeColorsInput.checked;
   state.routeGradeColorsEnabled = els.routeGradeColorsInput.checked;
-  state.beaconEnabled = els.beaconEnabledInput.checked;
-  state.beaconDiameterMeters = Number(els.beaconDiameterInput.value);
-  state.beaconHeightMeters = Number(els.beaconHeightInput.value);
-  state.beaconOpacity = Number(els.beaconOpacityInput.value);
-  state.beaconColor = els.beaconColorInput.value;
-  state.terrainAvoidEnabled = els.terrainAvoidInput.checked;
-  state.terrainClearanceMeters = Number(els.terrainClearanceInput.value);
-  state.terrainTilesEnabled = els.terrainTilesInput.checked;
-  updateRenderingSettingsLabels();
-  applyTerrainTilesSetting();
   saveSettings();
-  rebuildRiderBeacon();
   if (routeGradeColorsChanged) rebuildRouteStyle();
   updateRideUi();
 }
@@ -222,54 +183,14 @@ export function updateRenderingSettingsFromControls() {
 export function resetRenderingToDefaults() {
   const routeGradeColorsChanged = state.routeGradeColorsEnabled !== DEFAULT_ROUTE_GRADE_COLORS_ENABLED;
   state.routeGradeColorsEnabled = DEFAULT_ROUTE_GRADE_COLORS_ENABLED;
-  state.beaconEnabled = DEFAULT_BEACON_ENABLED;
-  state.beaconDiameterMeters = DEFAULT_BEACON_DIAMETER_METERS;
-  state.beaconHeightMeters = DEFAULT_BEACON_HEIGHT_METERS;
-  state.beaconOpacity = DEFAULT_BEACON_OPACITY;
-  state.beaconColor = DEFAULT_BEACON_COLOR;
-  state.terrainAvoidEnabled = DEFAULT_TERRAIN_AVOID_ENABLED;
-  state.terrainClearanceMeters = DEFAULT_TERRAIN_CLEARANCE_METERS;
-  state.terrainTilesEnabled = DEFAULT_TERRAIN_TILES_ENABLED;
   syncRenderingControls();
-  updateRenderingSettingsLabels();
-  applyTerrainTilesSetting();
   saveSettings();
-  rebuildRiderBeacon();
   if (routeGradeColorsChanged) rebuildRouteStyle();
   updateRideUi();
 }
 
 export function syncRenderingControls() {
   els.routeGradeColorsInput.checked = state.routeGradeColorsEnabled;
-  els.beaconEnabledInput.checked = state.beaconEnabled;
-  els.beaconDiameterInput.value = String(state.beaconDiameterMeters);
-  els.beaconHeightInput.value = String(state.beaconHeightMeters);
-  els.beaconOpacityInput.value = String(state.beaconOpacity);
-  els.beaconColorInput.value = state.beaconColor;
-  els.terrainAvoidInput.checked = state.terrainAvoidEnabled;
-  els.terrainClearanceInput.value = String(state.terrainClearanceMeters);
-  els.terrainTilesInput.checked = state.terrainTilesEnabled;
-}
-
-export function updateRenderingSettingsLabels() {
-  els.beaconDiameterOutput.value = `${state.beaconDiameterMeters} m`;
-  els.beaconHeightOutput.value = `${state.beaconHeightMeters} m`;
-  els.beaconOpacityOutput.value = `${Math.round(state.beaconOpacity * 100)}%`;
-  els.terrainClearanceOutput.value = `${state.terrainClearanceMeters} m`;
-}
-
-// Show the open-data attribution while online terrain is on, and warm the tile
-// cache around the rider when it is switched on mid-session so the camera has
-// real ground to work with without waiting for the next route load.
-export function applyTerrainTilesSetting() {
-  if (els.terrainAttribution) {
-    els.terrainAttribution.textContent = TERRAIN_TILE_ATTRIBUTION;
-    els.terrainAttribution.hidden = !state.terrainTilesEnabled;
-  }
-  if (state.terrainTilesEnabled && state.route.length) {
-    const rider = interpolateRoutePoint(state.route, state.progressMeters);
-    if (rider) prefetchTerrainAround(rider.lat, rider.lng);
-  }
 }
 
 // --- Screenshot settings -----------------------------------------------------------

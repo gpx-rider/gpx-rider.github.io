@@ -1,47 +1,26 @@
 // Landing-page hero replay.
 //
-// Plays a looping cinematic replay of one route (Ještěd) over the same Google
-// Photorealistic 3D map the app uses, with a faked HUD, then a summit orbit,
-// then a fade back to the start. It reuses the app's Maps-key resolution (a
-// visitor's saved key wins over the deploy-time key in config.mjs) and, when no
-// map is available, gracefully falls back to a still image so the page still
-// reads. This is the public front page (app/index.html); "Launch GPX Rider"
-// links to app.html.
+// Plays a looping replay of one route (Ještěd) over the same top-down
+// Leaflet/OpenStreetMap the app uses, with a faked HUD, then a whole-route
+// overview hold, then a fade back to the start. No API key is needed (OSM
+// tiles are free and anonymous); if the tiles fail to load for any reason it
+// gracefully falls back to a still image so the page still reads. This is the
+// public front page (app/index.html); "Launch GPX Rider" links to app.html.
 //
 // Ported from the original Claude Design (x-dc) prototype to plain no-build JS:
 // every tunable now lives in LANDING_HERO (tuning.mjs) instead of design props,
 // and the route comes from landing-route.mjs instead of a global.
 import { LANDING_HERO as H } from "../core/tuning.mjs";
 import { LANDING_ROUTE_POINTS } from "./landing-route.mjs";
-import { deployedMapsApiKey } from "../config.mjs";
-
-const MAPS_API_KEY_STORAGE_KEY = "gpx-rider:maps-api-key";
-
-// Signalled by Google's auth-failure callback (invalid/unauthorised key) so the
-// hero can fall back to the still image instead of a blank map.
-window.gm_authFailure = function () {
-  window.__GPXR_MAP_FAIL = true;
-};
-
-function resolveMapsApiKey() {
-  return (localStorage.getItem(MAPS_API_KEY_STORAGE_KEY) || "") || deployedMapsApiKey();
-}
-
-function loadGoogleMaps(apiKey) {
-  return new Promise((resolve, reject) => {
-    if (window.google?.maps) {
-      resolve();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=beta`;
-    script.async = true;
-    script.defer = true;
-    script.onload = resolve;
-    script.onerror = () => reject(new Error("Could not load the Google Maps JavaScript API."));
-    document.head.append(script);
-  });
-}
+import {
+  MAP_ATTRIBUTION,
+  MAP_MAX_ZOOM,
+  MAP_TILE_SUBDOMAINS,
+  MAP_TILE_URL,
+  RIDER_MARKER_COLOR,
+  RIDER_MARKER_RING_COLOR,
+  RIDER_MARKER_SIZE_PIXELS,
+} from "../core/tuning.mjs";
 
 class HeroReplay {
   constructor() {
@@ -143,19 +122,7 @@ class HeroReplay {
   }
   headingAt(s) {
     const a = this.interp(Math.max(0, s - 6)), b = this.interp(Math.min(this.total, s + 24));
-    return this.bearing(a, b);
-  }
-  camHeadingAt(s) {
-    // Forward travel direction. A short baseline gives a stable "current heading";
-    // camLookaheadMeters extends how far ahead the camera aims into the turn.
-    const look = H.cam_lookahead_meters;
-    const base = 12;
-    const a = this.interp(Math.max(0, s - base * 0.5));
-    const b = this.interp(Math.min(this.total, s + base * 0.5 + look));
-    if (Math.abs(b.lat - a.lat) < 1e-9 && Math.abs(b.lng - a.lng) < 1e-9) {
-      return this.camHeading != null ? this.camHeading : this.headingAt(s);
-    }
-    return this.bearing(a, b);
+    return (this.bearing(a, b) + 360) % 360;
   }
   hrShownVal(now) {
     // heart rate refreshes at most once per second, like a real sensor
@@ -164,15 +131,6 @@ class HeroReplay {
       this._hrShownAt = now;
     }
     return this._hrShown;
-  }
-  ring(c, r, altVal) {
-    const out = [], latM = 111320, lngM = 111320 * Math.cos(c.lat * Math.PI / 180);
-    const av = (altVal != null) ? altVal : (c.ele != null ? c.ele : 4);
-    for (let i = 0; i <= 18; i++) {
-      const a = i / 18 * 2 * Math.PI;
-      out.push({ lat: c.lat + r * Math.cos(a) / latM, lng: c.lng + r * Math.sin(a) / lngM, altitude: av });
-    }
-    return out;
   }
   currentClimb(s) {
     for (const c of this.climbs) { if (s <= c.e) return c; }
@@ -191,31 +149,27 @@ class HeroReplay {
   }
 
   // --- Map ---------------------------------------------------------------------
-  async initMap() {
+  initMap() {
     try {
-      if (window.__GPXR_MAP_FAIL) throw new Error("auth");
-      const apiKey = resolveMapsApiKey();
-      if (!apiKey) throw new Error("no-key");
-      await loadGoogleMaps(apiKey);
-      let tries = 0;
-      while (!(window.google && google.maps && google.maps.importLibrary) && tries < 120) {
-        await new Promise((r) => setTimeout(r, 100));
-        tries++;
-      }
-      if (!(window.google && google.maps && google.maps.importLibrary)) throw new Error("api");
-      const maps3d = await google.maps.importLibrary("maps3d");
-      if (window.__GPXR_MAP_FAIL) throw new Error("auth");
-      const { Map3DElement, Polyline3DElement, Model3DElement, AltitudeMode, MapMode } = maps3d;
-      this.Poly = Polyline3DElement; this.Alt = AltitudeMode; this.Model = Model3DElement;
-      const s0 = this.pts[0];
-      this.map = new Map3DElement({
-        center: { lat: s0.lat, lng: s0.lng, altitude: s0.ele },
-        range: 650, tilt: 62, heading: this.headingAt(0),
-        mode: MapMode ? MapMode.SATELLITE : undefined,
-        defaultUIDisabled: true,
-      });
       const mount = this.$("gpxr-map");
-      if (mount) mount.appendChild(this.map);
+      if (!mount || typeof L === "undefined") throw new Error("no-leaflet");
+      this.map = L.map(mount, {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        touchZoom: false,
+        boxZoom: false,
+        keyboard: false,
+      });
+      L.tileLayer(MAP_TILE_URL, {
+        subdomains: MAP_TILE_SUBDOMAINS,
+        maxZoom: MAP_MAX_ZOOM,
+        attribution: MAP_ATTRIBUTION,
+      }).addTo(this.map);
+      const s0 = this.pts[0];
+      this.map.setView([s0.lat, s0.lng], H.chase_zoom, { animate: false });
       this.buildRoute();
       this.mapReady = true;
     } catch (e) {
@@ -235,9 +189,17 @@ class HeroReplay {
     if (g < 10) return "#e8823c";
     return "#d9542f";
   }
+  riderIcon() {
+    return L.divIcon({
+      className: "rider-marker",
+      html:
+        `<div class="rider-marker-ring" style="--rider-color:${RIDER_MARKER_COLOR};--rider-ring:${RIDER_MARKER_RING_COLOR}">` +
+        `<div class="rider-marker-arrow"></div></div>`,
+      iconSize: [RIDER_MARKER_SIZE_PIXELS, RIDER_MARKER_SIZE_PIXELS],
+      iconAnchor: [RIDER_MARKER_SIZE_PIXELS / 2, RIDER_MARKER_SIZE_PIXELS / 2],
+    });
+  }
   buildRoute() {
-    // App-faithful vertical: route line sits ~2m above the terrain, rider on it.
-    const alt = this.Alt && this.Alt.RELATIVE_TO_GROUND;
     // route colored by per-segment grade, like the app
     const colors = this.pts.map((_, i) => this.gradeColor(this.gradeAt(this.cumDist[i])));
     this.segs = [];
@@ -248,35 +210,20 @@ class HeroReplay {
       if (colors[i] !== colors[runStart] || last) {
         const end = i;
         const path = [];
-        for (let k = runStart; k <= end; k++) path.push({ lat: this.pts[k].lat, lng: this.pts[k].lng, altitude: 2 });
+        for (let k = runStart; k <= end; k++) path.push([this.pts[k].lat, this.pts[k].lng]);
         if (path.length >= 2) {
-          const seg = new this.Poly({
-            altitudeMode: alt, path, strokeColor: colors[runStart], strokeWidth: 13,
-            outerColor: "rgba(255,255,255,0.5)", outerWidth: 0.3,
-          });
-          this.map.append(seg); this.segs.push(seg);
+          const seg = L.polyline(path, { color: colors[runStart], weight: 5 });
+          seg.addTo(this.map);
+          this.segs.push(seg);
         }
         runStart = i;
       }
     }
-    // rider: 3D disc model on the terrain (fallback to a ring where unavailable)
-    const p0 = { lat: this.pts[0].lat, lng: this.pts[0].lng, altitude: 0 };
-    if (this.Model) {
-      try {
-        this.rider = new this.Model({
-          src: H.rider_model_path, position: p0, altitudeMode: alt,
-          orientation: { heading: 0, tilt: 90, roll: 0 }, scale: 9,
-        });
-        this.map.append(this.rider);
-      } catch (e) { this.rider = null; }
-    }
-    if (!this.rider) {
-      this.dot = new this.Poly({
-        altitudeMode: alt, path: this.ring(this.pts[0], 8, 2), strokeColor: "#f6a52c",
-        strokeWidth: 10, outerColor: "rgba(90,58,18,0.9)", outerWidth: 0.5,
-      });
-      this.map.append(this.dot);
-    }
+    this.rider = L.marker([this.pts[0].lat, this.pts[0].lng], {
+      icon: this.riderIcon(),
+      zIndexOffset: 1000,
+      interactive: false,
+    }).addTo(this.map);
   }
 
   rideStartS() {
@@ -286,9 +233,8 @@ class HeroReplay {
   }
 
   startLoop() {
-    this.phase = "ride"; this.s = this.rideStartS(); this.orbitT = 0; this.fadeT = 0; this.rideTime = 0;
-    this.camHeading = this.headingAt(this.s); this.orbitHeading = this.camHeading;
-    this.powDisp = 60; this.hrDisp = 92; this.dsThisFrame = 0; this.camVel = 0;
+    this.phase = "ride"; this.s = this.rideStartS(); this.overviewT = 0; this.fadeT = 0; this.rideTime = 0;
+    this.powDisp = 60; this.hrDisp = 92; this.dsThisFrame = 0;
     this.lastT = performance.now(); this.lastHud = 0;
     this._raf = requestAnimationFrame(this.frame);
   }
@@ -307,26 +253,24 @@ class HeroReplay {
       if (this.s >= this.total) {
         this.s = this.total;
         if (this.phase === "ride") {
-          this.phase = "orbit"; this.orbitT = 0; this.orbitHeading = this.camHeading;
-          this.orbitFrom = { tilt: H.chase_tilt_degrees, range: H.chase_range_meters };
+          this.phase = "overview"; this.overviewT = 0;
           this.powDisp = 0; this.hrAtFinish = this.hrDisp;
+          this.enterOverview();
         }
       }
     }
 
     if (this.phase === "ride") {
       this.updateRide(dt, now);
-    } else if (this.phase === "orbit") {
-      this.orbitT += dt;
-      this.orbitHeading = (this.orbitHeading + dt * (360 / H.orbit_seconds_per_rev)) % 360;
-      this.updateOrbit(dt, now);
-      if (this.orbitT >= H.orbit_seconds) { this.phase = "fadeout"; this.fadeT = 0; }
+    } else if (this.phase === "overview") {
+      this.overviewT += dt;
+      this.updateOverview(now);
+      if (this.overviewT >= H.overview_seconds) { this.phase = "fadeout"; this.fadeT = 0; }
     } else if (this.phase === "fadeout") {
       this.fadeT += dt; const o = Math.min(1, this.fadeT / 0.7); this.setFade(o);
-      this.orbitHeading = (this.orbitHeading + dt * (360 / H.orbit_seconds_per_rev)) % 360;
-      this.updateOrbit(dt, now);
+      this.updateOverview(now);
       if (o >= 1) {
-        this.s = this.rideStartS(); this.rideTime = 0; this.camHeading = this.headingAt(this.s);
+        this.s = this.rideStartS(); this.rideTime = 0;
         this.powDisp = 60; this.resetLines(); this.phase = "ridein"; this.fadeT = 0;
       }
     } else if (this.phase === "ridein") {
@@ -338,18 +282,20 @@ class HeroReplay {
   };
 
   moveRider(pos) {
-    if (this.rider) {
-      try {
-        this.rider.position = { lat: pos.lat, lng: pos.lng, altitude: 0 };
-        this.rider.orientation = { heading: this.headingAt(this.s), tilt: 90, roll: 0 };
-      } catch (e) {}
-    } else if (this.dot) {
-      try { this.dot.path = this.ring(pos, 8, 2); } catch (e) {}
-    }
+    if (!this.rider) return;
+    this.rider.setLatLng([pos.lat, pos.lng]);
+    const arrow = this.rider.getElement()?.querySelector(".rider-marker-arrow");
+    if (arrow) arrow.style.transform = `rotate(${this.headingAt(this.s)}deg)`;
   }
   resetLines() {
     if (!this.mapReady) return;
     this.moveRider(this.interp(this.rideStartS()));
+    this.map.setView([this.pts[0].lat, this.pts[0].lng], H.chase_zoom, { animate: false });
+  }
+  enterOverview() {
+    if (!this.mapReady) return;
+    const bounds = L.latLngBounds(this.pts.map((p) => [p.lat, p.lng]));
+    this.map.fitBounds(bounds, { padding: [40, 40] });
   }
 
   stepSim(dt) {
@@ -403,60 +349,23 @@ class HeroReplay {
   updateRide(dt, now) {
     const grade = this.stepSim(dt);
     const pos = this.interp(this.s);
-    const tgt = this.camHeadingAt(this.s);
-    // Smooth pan: velocity eases in/out (limited acceleration) and slows as it
-    // nears the rider's heading, capped at the max turn rate.
-    let d = ((tgt - this.camHeading + 540) % 360) - 180;
-    const maxRate = H.cam_turn_rate_deg_per_sec;
-    const maxAccel = H.cam_turn_accel_deg_per_sec2;
-    const sign = d < 0 ? -1 : 1;
-    // never exceed the speed from which we can still brake to a stop before the target
-    const brakeVel = Math.sqrt(2 * maxAccel * Math.abs(d));
-    const desiredVel = sign * Math.min(maxRate, brakeVel);
-    const dv = Math.max(-maxAccel * dt, Math.min(maxAccel * dt, desiredVel - this.camVel));
-    this.camVel += dv;
-    let step = this.camVel * dt;
-    // hard guarantee against discrete-step overshoot: never pass the target in one frame
-    if (Math.abs(step) >= Math.abs(d)) { step = d; this.camVel = 0; }
-    this.camHeading = (this.camHeading + step + 360) % 360;
     if (this.mapReady) {
-      try {
-        this.map.center = { lat: pos.lat, lng: pos.lng, altitude: pos.ele };
-        this.map.heading = this.camHeading;
-        this.map.tilt = H.chase_tilt_degrees;
-        this.map.range = H.chase_range_meters;
-      } catch (e) {}
+      this.map.panTo([pos.lat, pos.lng], { animate: true, duration: 0.3 });
       this.moveRider(pos);
     }
     if (now - this.lastHud > 180) { this.lastHud = now; this.hudRide(pos, grade, now); }
   }
 
-  updateOrbit(dt, now) {
-    const sum = this.pts[this.pts.length - 1];
+  updateOverview(now) {
     // power dropped to 0 at the finish; HR holds for the lag, then eases to 80
     this.powDisp = 0;
     const lag = H.hr_lag_seconds;
-    const span = Math.max(1, H.orbit_seconds);
+    const span = Math.max(1, H.overview_seconds);
     const from = (this.hrAtFinish != null) ? this.hrAtFinish : this.hrDisp;
-    const p = Math.max(0, Math.min(1, (this.orbitT - lag) / span));
+    const p = Math.max(0, Math.min(1, (this.overviewT - lag) / span));
     const eased = p * p * (3 - 2 * p);
     this.hrDisp = from + (80 - from) * eased;
-    if (this.mapReady) {
-      try {
-        // ease tilt + range from the exact chase values into orbit values so
-        // there is no abrupt switch
-        const fromCam = this.orbitFrom || { tilt: H.chase_tilt_degrees, range: H.chase_range_meters };
-        const k = Math.min(1, this.orbitT / 3.2);
-        const ease = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-        const r = fromCam.range + (H.orbit_range_meters - fromCam.range) * ease;
-        const tilt = fromCam.tilt + (H.orbit_tilt_degrees - fromCam.tilt) * ease;
-        this.map.center = { lat: sum.lat, lng: sum.lng, altitude: sum.ele };
-        this.map.heading = this.orbitHeading;
-        this.map.tilt = tilt;
-        this.map.range = r;
-      } catch (e) {}
-    }
-    if (now - this.lastHud > 180) { this.lastHud = now; this.hudOrbit(now); }
+    if (now - this.lastHud > 180) { this.lastHud = now; this.hudOverview(now); }
   }
 
   hudRide(pos, grade, now) {
@@ -494,7 +403,7 @@ class HeroReplay {
     this.set("v-mode", this.mapReady ? "Ride replay" : "Preview");
   }
 
-  hudOrbit(now) {
+  hudOverview(now) {
     const pow = Math.round(this.powDisp), hr = this.hrShownVal(now);
     const sumEle = Math.round(this.pts[this.pts.length - 1].ele);
     this.set("v-pow", pow); this.set("v-powzone", this.powerZone(pow)); this.mark("v-powmark", pow / 430 * 100);
@@ -509,7 +418,7 @@ class HeroReplay {
     this.set("v-bnum", "CLIMB " + c.n + " OF " + this.climbCount);
     this.set("v-btop", "0.0"); this.set("v-bgo", "0"); this.set("v-bcur", sumEle); this.set("v-bgl", "0.0");
     this.width("v-bdistbar", 100); this.width("v-bascbar", 100);
-    this.set("v-mode", "Summit orbit");
+    this.set("v-mode", "Route overview");
   }
 }
 

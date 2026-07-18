@@ -351,13 +351,8 @@ body {
 }
 
 .map-viewport.theater-mode.theater-hide-controls .map-actions,
-.map-viewport.theater-mode.theater-hide-controls #resetCameraControl,
 .map-viewport.theater-mode.theater-hide-controls #mapOverviewControl,
 .map-viewport.theater-mode.theater-hide-controls #climbOverviewControl {
-  display: none;
-}
-
-.map-viewport.theater-mode.theater-hide-minimap #minimap {
   display: none;
 }
 
@@ -366,26 +361,9 @@ body {
   inset: 0;
 }
 
-#map gmp-map-3d {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-/* visibility (not display:none) keeps the Google map instance laid out, so
-   re-enabling the minimap never shows stale gray tiles needing a resize */
-#minimap.minimap-hidden {
-  visibility: hidden;
-}
-
-#minimap {
-  width: 150px;
-  height: 150px;
-  overflow: hidden;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.45);
-  pointer-events: none;
+#map .leaflet-container {
+  background: #1b1e23;
+  font: inherit;
 }
 
 .map-actions {
@@ -395,111 +373,41 @@ body {
 }
 
 /* Our own buttons leave the shot while a screenshot is being captured;
-   Google's attribution must always stay in. */
+   the OpenStreetMap attribution must always stay in. */
 .map-viewport.capturing .map-actions {
   visibility: hidden;
 }
 
-/* Developer camera-debug overlay: a translucent readout under the action
-   buttons, top-right. Shown in windowed and fullscreen; kept out of
-   screenshots like the buttons. */
-.camera-debug {
-  min-width: 168px;
-  padding: 9px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-  background: rgba(13, 16, 21, 0.62);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  color: rgba(255, 255, 255, 0.85);
-  /* Selectable: the box captures the pointer (so a drag over it selects text
-     to copy, rather than panning the map underneath) and allows text
-     selection. It's small and out of the way, so it doesn't get in the way of
-     map interaction elsewhere. */
-  pointer-events: auto;
-  user-select: text;
-  -webkit-user-select: text;
-  cursor: text;
+/* The rider marker: a small circular dot with a directional arrow, echoing
+   the brand "GPX Rider" logo dot (solid amber center, paler amber ring). The
+   arrow element spans the whole icon box so rotating it (heading, set from
+   JS) turns around the marker's own center rather than the triangle's. */
+.rider-marker-ring {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--rider-color, #f6a52c);
+  border: 4px solid var(--rider-ring, rgba(246, 165, 44, 0.35));
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
 }
 
-.map-viewport.capturing .camera-debug {
-  visibility: hidden;
+.rider-marker-arrow {
+  position: absolute;
+  inset: 0;
 }
 
-.camera-debug-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 7px;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.camera-debug-title {
-  font: 700 9px/1 var(--font-mono);
-  letter-spacing: 0.14em;
-  color: var(--accent);
-}
-
-.camera-debug-toggle {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 19px;
-  height: 19px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.78);
-  cursor: pointer;
-}
-
-.camera-debug-toggle:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-}
-
-.camera-debug-toggle-icon {
-  transition: transform 120ms ease;
-}
-
-.camera-debug.collapsed {
-  min-width: 128px;
-}
-
-.camera-debug.collapsed .camera-debug-head {
-  margin-bottom: 0;
-}
-
-.camera-debug.collapsed .camera-debug-toggle-icon {
-  transform: rotate(-90deg);
-}
-
-.camera-debug.collapsed .camera-debug-body {
-  display: none;
-}
-
-.camera-debug-body {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 12px;
-  margin: 0;
-  font: 500 11px/1.35 var(--font-mono);
-}
-
-.camera-debug-body dt {
-  color: rgba(255, 255, 255, 0.5);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.camera-debug-body dd {
-  margin: 0;
-  text-align: right;
-  color: rgba(255, 255, 255, 0.92);
-  font-variant-numeric: tabular-nums;
+.rider-marker-arrow::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 7px solid var(--rider-color, #f6a52c);
+  transform: translateX(-50%);
 }
 
 .map-action-btn {
@@ -587,60 +495,7 @@ body {
 }
 
 .map-overview-toggle {
-  border-radius: 11px 0 0 11px !important;
-}
-
-.map-overview-menu-btn {
-  width: 29px !important;
-  border-left: 1px solid rgba(255, 255, 255, 0.16) !important;
-  border-radius: 0 11px 11px 0 !important;
-}
-
-.map-overview-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 132px;
-  padding: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-  background: rgba(13, 16, 21, 0.74);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-  z-index: 8;
-}
-
-.map-overview-menu[hidden] {
-  display: none;
-}
-
-.map-overview-menu button {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  min-height: 32px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.82);
-  font: 700 12px/1 var(--font-ui);
-  text-align: left;
-  cursor: pointer;
-}
-
-.map-overview-menu button:hover {
-  background: rgba(255, 255, 255, 0.09);
-  color: #fff;
-}
-
-.map-overview-menu button[aria-checked="true"] {
-  background: rgba(246, 165, 44, 0.16);
-  color: var(--accent);
+  border-radius: 11px !important;
 }
 
 .icon-fs-exit {
@@ -698,8 +553,9 @@ body {
   --hud-gap: 12px;
   --hud-bottom-inset-x: 24px;
   --hud-bottom-inset-y: 36px;
-  /* Side columns stop above the bottom stack: map's bottom strip (Google
-     attribution) + the live measured bottom-region height + a gap. */
+  /* Side columns stop above the bottom stack: map's bottom strip
+     (OpenStreetMap attribution) + the live measured bottom-region height +
+     a gap. */
   --hud-bottom-clearance: calc(36px + var(--fs-dock-height, 210px) + 12px);
 }
 
@@ -1017,7 +873,7 @@ body {
 .fs-dock {
   /* Relative: .fs-dock-top-tools inside anchors to the dock's own corner.
      The bottom region places the dock; its 36px inset leaves the map's
-     bottom strip clear for the Google logo/legal notices (ToS). */
+     bottom strip clear for the OpenStreetMap attribution. */
   position: relative;
   width: 100%;
   display: block;
@@ -1417,14 +1273,6 @@ body {
   overflow-y: auto;
   background: var(--bar);
   border-left: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-/* Subtle open-data credit line at the foot of the control pane (currently the
-   online terrain-elevation source). Sits below the last card, dimmed. */
-.panel-credits {
-  margin: 2px 2px 4px;
-  font: 400 11px/1.4 var(--font-ui);
-  color: var(--faint);
 }
 
 .stat-grid {
@@ -2330,16 +2178,6 @@ dialog::backdrop {
   color: var(--ink-bright);
 }
 
-.camera-readout {
-  display: block;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  font: 400 11px/1.5 var(--font-mono);
-  color: var(--faint);
-}
-
 select {
   min-height: 38px;
   padding: 0 10px;
@@ -2357,31 +2195,6 @@ input[type="color"] {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   background: var(--card);
-}
-
-.api-key-control {
-  display: grid;
-  gap: 8px;
-}
-
-.api-key-control[hidden] {
-  display: none;
-}
-
-.api-key-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-}
-
-.api-key-row input {
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.04);
-  font: 500 12px/1 var(--font-mono);
 }
 
 /* toggle switch component */
@@ -2637,12 +2450,12 @@ input[type="color"] {
   background: var(--card);
 }
 
-.gallery-card-map,
-.gallery-card-map > * {
+.gallery-card-map {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  background: #1b1e23;
 }
 
 .gallery-card-preview-status {
@@ -2706,31 +2519,6 @@ input[type="color"] {
 .gallery-card-profile i {
   flex: 1 1 0;
   border-radius: 1.5px 1.5px 0 0;
-}
-
-.gallery-card-view-toggle {
-  width: 48px;
-  flex: 0 0 48px;
-  padding: 5px;
-  border: 0;
-  border-left: 1px solid var(--line-soft);
-  background: rgba(255, 255, 255, 0.035);
-  font: 700 9px/1.15 var(--font-mono);
-  letter-spacing: 0.04em;
-  color: var(--blue-soft);
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.gallery-card-view-toggle:hover,
-.gallery-card-view-toggle[aria-pressed="true"] {
-  background: rgba(10, 132, 255, 0.13);
-  color: #8cc8ff;
-}
-
-.gallery-card-view-toggle:disabled {
-  color: var(--faint);
-  cursor: wait;
 }
 
 .gallery-card-body {

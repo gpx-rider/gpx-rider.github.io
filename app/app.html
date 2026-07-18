@@ -7,6 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
+    <script src="./vendor/leaflet/leaflet.js"></script>
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
@@ -41,7 +43,6 @@
         <section class="map-pane">
           <div id="mapViewport" class="map-viewport">
             <div id="map" aria-label="Route map"></div>
-            <div id="minimap" aria-label="Minimap showing rider position on the route"></div>
             <div id="demoBanner" class="demo-banner" hidden>Demo mode: synthetic trainer + HR, FIT recording paused</div>
             <div class="map-actions">
               <button id="screenshotBtn" type="button" class="map-action-btn" title="Save a JPG of the map view" aria-label="Save a JPG of the map view">
@@ -51,46 +52,16 @@
                 <svg class="icon-fs-enter" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M16 3h3a2 2 0 0 1 2 2v3"></path><path d="M8 21H5a2 2 0 0 1-2-2v-3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>
                 <svg class="icon-fs-exit" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h3a2 2 0 0 0 2-2V3"></path><path d="M21 8h-3a2 2 0 0 1-2-2V3"></path><path d="M3 16h3a2 2 0 0 1 2 2v3"></path><path d="M21 16h-3a2 2 0 0 0-2 2v3"></path></svg>
               </button>
-              <div id="resetCameraControl" class="map-overview-control map-reset-camera-control">
-                <button id="resetCameraViewBtn" type="button" class="map-action-btn map-overview-toggle" title="Reset the camera to its default view" aria-label="Reset the camera to its default view" disabled>
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a9 9 0 1 1-1.6 5"></path><path d="M3 3v5h5"></path></svg>
-                </button>
-                <button id="cameraViewMenuBtn" type="button" class="map-action-btn map-overview-menu-btn" title="Choose rider camera view" aria-label="Choose rider camera view" aria-haspopup="menu" aria-expanded="false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
-                </button>
-                <div id="cameraViewMenu" class="map-overview-menu" role="menu" hidden>
-                  <button type="button" role="menuitemradio" data-camera-view-preset="default">Default follow</button>
-                  <button type="button" role="menuitemradio" data-camera-view-preset="firstPerson">First person</button>
-                </div>
-              </div>
               <div id="mapOverviewControl" class="map-overview-control">
                 <button id="overviewToggleBtn" type="button" class="map-action-btn map-overview-toggle" title="Show route overview" aria-label="Show route overview" aria-pressed="true">
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.8 19.2 16 11l3.5-3.5c1-1 1.3-2.6.8-3.1s-2.1-.2-3.1.8L13.7 8.8 5.5 7 4 8.5l6.6 3.1-3.5 3.5-2.8-.6-1.2 1.2 4.1 2.1 2.1 4.1 1.2-1.2-.6-2.8 3.5-3.5 3.1 6.6z"></path></svg>
                 </button>
-                <button id="overviewMenuBtn" type="button" class="map-action-btn map-overview-menu-btn" title="Choose overview style" aria-label="Choose overview style" aria-haspopup="menu" aria-expanded="false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
-                </button>
-                <div id="overviewModeMenu" class="map-overview-menu" role="menu" hidden>
-                  <button type="button" role="menuitemradio" data-map-overview-mode="static">Static</button>
-                  <button type="button" role="menuitemradio" data-map-overview-mode="orbit">Orbit</button>
-                  <button type="button" role="menuitemradio" data-map-overview-mode="flyby">Fly-by</button>
-                  <button type="button" role="menuitemradio" data-map-overview-mode="flyover">Fly-over</button>
-                  <button type="button" role="menuitemradio" data-map-overview-mode="satellite">Satellite</button>
-                </div>
               </div>
               <div id="climbOverviewControl" class="map-overview-control map-climb-overview-control" hidden>
                 <button id="climbOverviewToggleBtn" type="button" class="map-action-btn map-overview-toggle" title="Return to route overview" aria-label="Return to route overview" aria-pressed="true">
                   <svg class="icon-climb-focus" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 19 6.5-12 3.5 6 2-3 6 9H3Z"></path><path d="m8.2 9.4 1.3-2.4 1.4 2.4"></path></svg>
                   <svg class="icon-segment-focus" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12c3.2-4.5 6.8 4.5 10 0s3.8-3.2 4-3"></path><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="9" r="2"></circle></svg>
                 </button>
-                <button id="climbOverviewMenuBtn" type="button" class="map-action-btn map-overview-menu-btn" title="Choose climb overview style" aria-label="Choose climb overview style" aria-haspopup="menu" aria-expanded="false">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
-                </button>
-                <div id="climbOverviewModeMenu" class="map-overview-menu" role="menu" hidden>
-                  <button type="button" role="menuitemradio" data-map-climb-mode="static">Static</button>
-                  <button type="button" role="menuitemradio" data-map-climb-mode="orbit">Orbit</button>
-                  <button type="button" role="menuitemradio" data-map-climb-mode="satellite">Satellite</button>
-                </div>
               </div>
               <button id="centerRiderBtn" type="button" class="map-action-btn" title="Keep rider centered" aria-label="Keep rider centered" aria-pressed="true">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7"></circle><line x1="12" y1="1.5" x2="12" y2="4.5"></line><line x1="12" y1="19.5" x2="12" y2="22.5"></line><line x1="1.5" y1="12" x2="4.5" y2="12"></line><line x1="19.5" y1="12" x2="22.5" y2="12"></line><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"></circle></svg>
@@ -100,19 +71,6 @@
               <button id="mapSettingsShortcutBtn" type="button" class="map-action-btn map-action-btn-settings" title="Settings" aria-label="Open settings">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
               </button>
-            </div>
-
-            <!-- Developer camera-debug overlay (Settings › Debug). A plain map
-                 overlay — shown in both windowed and fullscreen — its body is
-                 filled live from the map's current camera values. -->
-            <div id="cameraDebug" class="camera-debug" hidden aria-hidden="true">
-              <div class="camera-debug-head">
-                <div class="camera-debug-title">CAMERA DEBUG</div>
-                <button id="cameraDebugCollapseBtn" type="button" class="camera-debug-toggle" title="Collapse camera debug" aria-label="Collapse camera debug" aria-expanded="true">
-                  <svg class="camera-debug-toggle-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                </button>
-              </div>
-              <dl id="cameraDebugBody" class="camera-debug-body"></dl>
             </div>
 
             <!-- Ride HUD. These overlays are children of the map viewport, so
@@ -541,13 +499,8 @@
                 <input id="theaterHideControlsInput" type="checkbox">
                 <span>Controls</span>
               </label>
-              <label class="theater-hud-toggle">
-                <input id="theaterHideMinimapInput" type="checkbox">
-                <span>Minimap</span>
-              </label>
             </div>
           </div>
-          <p id="terrainAttribution" class="panel-credits" hidden></p>
         </aside>
       </div>
     </main>
@@ -556,15 +509,10 @@
       <div class="settings-rail">
         <div class="settings-rail-eyebrow">Settings</div>
         <nav class="settings-tabs">
-          <button type="button" class="settings-tab" data-settings-tab="camera"
-            data-panel-title="Camera &amp; view" data-panel-subtitle="How the follow camera frames the rider.">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2"></rect></svg>
-            <span>Camera &amp; view</span>
-          </button>
-          <button type="button" class="settings-tab" data-settings-tab="rendering"
-            data-panel-title="Rendering" data-panel-subtitle="Route styling, rider beacon, terrain avoidance and map labels.">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M2 12h4M18 12h4M12 2v4M12 18v4"></path></svg>
-            <span>Rendering</span>
+          <button type="button" class="settings-tab" data-settings-tab="map"
+            data-panel-title="Map" data-panel-subtitle="How the top-down map follows the rider and styles the route.">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 20-6-3V4l6 3 6-3 6 3v13l-6-3-6 3Z"></path><path d="M9 4v13M15 7v13"></path></svg>
+            <span>Map</span>
           </button>
           <button type="button" class="settings-tab" data-settings-tab="hud"
             data-panel-title="HUD &amp; data fields" data-panel-subtitle="Choose which tiles appear on the fullscreen ride HUD.">
@@ -591,11 +539,6 @@
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"></path></svg>
             <span>Data &amp; storage</span>
           </button>
-          <button type="button" class="settings-tab" data-settings-tab="debug"
-            data-panel-title="Debug" data-panel-subtitle="Developer overlays for inspecting the live camera.">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="6" width="8" height="14" rx="4"></rect><path d="M12 6V3M5 9l3 1.5M19 9l-3 1.5M4 15h4M16 15h4M6 20l2.5-1.5M18 20l-2.5-1.5"></path></svg>
-            <span>Debug</span>
-          </button>
         </nav>
         <div class="settings-rail-foot">GPX Rider · open source<br>settings saved locally</div>
       </div>
@@ -603,8 +546,8 @@
       <div class="settings-main">
         <header class="settings-head">
           <div>
-            <div id="settingsPanelTitle" class="settings-panel-title">Camera &amp; view</div>
-            <div id="settingsPanelSubtitle" class="settings-panel-subtitle">How the follow camera frames the rider.</div>
+            <div id="settingsPanelTitle" class="settings-panel-title">Map</div>
+            <div id="settingsPanelSubtitle" class="settings-panel-subtitle">How the top-down map follows the rider and styles the route.</div>
           </div>
           <button id="settingsCloseBtn" type="button" class="icon-btn" title="Close settings" aria-label="Close settings">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg>
@@ -612,84 +555,18 @@
         </header>
 
         <div class="settings-body">
-          <section class="settings-panel" data-settings-panel="camera">
-            <div class="setting-row">
-              <div class="setting-row-text">
-                <span class="setting-row-label">Route overview</span>
-                <span class="setting-row-hint">how the whole route is framed in the overview</span>
-              </div>
-              <select id="overviewModeSelect">
-                <option value="static">Static</option>
-                <option value="orbit">Orbit</option>
-                <option value="flyby">Fly-by</option>
-                <option value="flyover">Fly-over</option>
-                <option value="satellite">Satellite</option>
-              </select>
-            </div>
-            <div class="settings-divider"></div>
-            <div class="setting-row">
-              <div class="setting-row-text">
-                <span class="setting-row-label">Selected climb camera</span>
-                <span class="setting-row-hint">how a climb is framed after clicking it</span>
-              </div>
-              <select id="climbFocusModeSelect">
-                <option value="static">Static</option>
-                <option value="orbit">Orbit</option>
-                <option value="satellite">Satellite</option>
-              </select>
-            </div>
-            <div class="settings-divider"></div>
-            <div class="setting-slider">
-              <div class="setting-slider-head">
-                <label for="climbOrbitSpeedInput">Climb orbit speed</label>
-                <output id="climbOrbitSpeedOutput" for="climbOrbitSpeedInput">30 s/lap</output>
-              </div>
-              <input id="climbOrbitSpeedInput" type="range" step="1">
-            </div>
-            <div class="settings-divider"></div>
-            <div class="setting-slider">
-              <div class="setting-slider-head">
-                <label for="cameraZoomInput">Zoom</label>
-                <output id="cameraZoomOutput" for="cameraZoomInput">1.0x</output>
-              </div>
-              <input id="cameraZoomInput" type="range" min="0.1" max="10" step="0.1" value="1">
-            </div>
-            <div class="setting-slider">
-              <div class="setting-slider-head">
-                <label for="cameraAngleInput">Camera angle</label>
-                <output id="cameraAngleOutput" for="cameraAngleInput">67 deg</output>
-              </div>
-              <input id="cameraAngleInput" type="range" min="25" max="80" step="1" value="67">
-            </div>
-            <div class="setting-slider">
-              <div class="setting-slider-head">
-                <label for="cameraBehindInput">Camera behind</label>
-                <output id="cameraBehindOutput" for="cameraBehindInput">300 m</output>
-              </div>
-              <input id="cameraBehindInput" type="range" min="20" max="10000" step="20" value="300">
-            </div>
-            <div class="setting-slider">
-              <div class="setting-slider-head">
-                <label for="firstPersonHeightInput">First-person eye height</label>
-                <output id="firstPersonHeightOutput" for="firstPersonHeightInput">1.7 m</output>
-              </div>
-              <input id="firstPersonHeightInput" type="range" step="0.1">
-            </div>
+          <section class="settings-panel" data-settings-panel="map">
             <div class="setting-row">
               <div class="setting-row-text">
                 <span class="setting-row-label">Keep rider centered</span>
-                <span class="setting-row-hint">the camera always looks at the rider</span>
+                <span class="setting-row-hint">the map recenters on the rider while riding</span>
               </div>
               <label class="switch">
                 <input id="centerRiderInput" type="checkbox" checked>
                 <span class="switch-track"><span class="switch-knob"></span></span>
               </label>
             </div>
-            <output id="cameraReadout" class="camera-readout" aria-live="polite">Camera --</output>
-            <button id="resetCameraBtn" type="button" class="btn btn-ghost">Reset camera to defaults</button>
-          </section>
-
-          <section class="settings-panel" data-settings-panel="rendering" hidden>
+            <div class="settings-divider"></div>
             <div class="setting-row">
               <div class="setting-row-text">
                 <span class="setting-row-label">Color route by grade</span>
@@ -700,84 +577,7 @@
                 <span class="switch-track"><span class="switch-knob"></span></span>
               </label>
             </div>
-            <div class="settings-divider"></div>
-            <div class="setting-row">
-              <div class="setting-row-text">
-                <span class="setting-row-label">Rider beacon</span>
-                <span class="setting-row-hint">visible above trees</span>
-              </div>
-              <label class="switch">
-                <input id="beaconEnabledInput" type="checkbox" checked>
-                <span class="switch-track"><span class="switch-knob"></span></span>
-              </label>
-            </div>
-            <div class="setting-slider">
-              <div class="setting-slider-head">
-                <label for="beaconDiameterInput">Beacon diameter</label>
-                <output id="beaconDiameterOutput" for="beaconDiameterInput">5 m</output>
-              </div>
-              <input id="beaconDiameterInput" type="range" min="1" max="20" step="1" value="5">
-            </div>
-            <div class="setting-slider">
-              <div class="setting-slider-head">
-                <label for="beaconHeightInput">Beacon height</label>
-                <output id="beaconHeightOutput" for="beaconHeightInput">20 m</output>
-              </div>
-              <input id="beaconHeightInput" type="range" min="5" max="100" step="5" value="20">
-            </div>
-            <div class="setting-slider">
-              <div class="setting-slider-head">
-                <label for="beaconOpacityInput">Beacon opacity</label>
-                <output id="beaconOpacityOutput" for="beaconOpacityInput">35%</output>
-              </div>
-              <input id="beaconOpacityInput" type="range" min="0.05" max="0.9" step="0.05" value="0.35">
-            </div>
-            <div class="setting-row">
-              <div class="setting-row-text">
-                <span class="setting-row-label">Beacon color</span>
-              </div>
-              <input id="beaconColorInput" type="color" value="#ffffff">
-            </div>
-            <div class="settings-divider"></div>
-            <div class="setting-row">
-              <div class="setting-row-text">
-                <span class="setting-row-label">Keep camera above terrain</span>
-                <span class="setting-row-hint">lifts the view over ridges between camera and rider</span>
-              </div>
-              <label class="switch">
-                <input id="terrainAvoidInput" type="checkbox" checked>
-                <span class="switch-track"><span class="switch-knob"></span></span>
-              </label>
-            </div>
-            <div class="setting-slider">
-              <div class="setting-slider-head">
-                <label for="terrainClearanceInput">Terrain clearance</label>
-                <output id="terrainClearanceOutput" for="terrainClearanceInput">20 m</output>
-              </div>
-              <input id="terrainClearanceInput" type="range" min="5" max="100" step="5" value="20">
-            </div>
-            <div class="setting-row">
-              <div class="setting-row-text">
-                <span class="setting-row-label">Use online terrain data</span>
-                <span class="setting-row-hint">streams free Mapzen/AWS elevation tiles so the camera clears hills the GPX track misses</span>
-              </div>
-              <label class="switch">
-                <input id="terrainTilesInput" type="checkbox" checked>
-                <span class="switch-track"><span class="switch-knob"></span></span>
-              </label>
-            </div>
-            <div class="settings-divider"></div>
-            <div class="setting-row">
-              <div class="setting-row-text">
-                <span class="setting-row-label">Place labels on the 3D map</span>
-                <span class="setting-row-hint">roads and towns over the satellite imagery</span>
-              </div>
-              <label class="switch">
-                <input id="mapLabelsInput" type="checkbox">
-                <span class="switch-track"><span class="switch-knob"></span></span>
-              </label>
-            </div>
-            <button id="resetRenderingBtn" type="button" class="btn btn-ghost">Reset rendering to defaults</button>
+            <button id="resetRenderingBtn" type="button" class="btn btn-ghost">Reset to defaults</button>
           </section>
 
           <section class="settings-panel" data-settings-panel="hud" hidden>
@@ -798,17 +598,6 @@
               ETA is the estimated time to the finish: your average pace so far,
               adjusted for the climbing and descending still ahead.
             </p>
-            <div class="settings-divider"></div>
-            <div class="setting-row">
-              <div class="setting-row-text">
-                <span class="setting-row-label">Minimap</span>
-                <span class="setting-row-hint">bottom-right route overview</span>
-              </div>
-              <label class="switch">
-                <input id="minimapInput" type="checkbox">
-                <span class="switch-track"><span class="switch-knob"></span></span>
-              </label>
-            </div>
           </section>
 
           <section class="settings-panel" data-settings-panel="units" hidden>
@@ -907,41 +696,11 @@
           </section>
 
           <section class="settings-panel" data-settings-panel="data" hidden>
-            <div id="apiKeySection" class="api-key-control">
-              <label for="mapsApiKeyInput" class="setting-row-label">Google Maps API key</label>
-              <div class="api-key-row">
-                <input id="mapsApiKeyInput" type="text" autocomplete="off" spellcheck="false" placeholder="Paste your Google Maps API key">
-                <button id="mapsApiKeySaveBtn" type="button" class="btn btn-accent">Save</button>
-              </div>
-              <p class="settings-note">
-                Stored only in this browser's local storage. Needs the Maps
-                JavaScript API and Photorealistic 3D Maps enabled.
-              </p>
-            </div>
-            <div class="settings-divider"></div>
             <p class="settings-note">
               The last GPX route, ride position, fallback speed, and the ride
               recording are saved in this browser. Chrome may also reconnect to a
               previously permitted trainer or heart rate sensor when Web
               Bluetooth allows it.
-            </p>
-          </section>
-
-          <section class="settings-panel" data-settings-panel="debug" hidden>
-            <div class="setting-row">
-              <div class="setting-row-text">
-                <span class="setting-row-label">Camera debug overlay</span>
-                <span class="setting-row-hint">live tilt / range / heading the map actually applies</span>
-              </div>
-              <label class="switch">
-                <input id="cameraDebugInput" type="checkbox">
-                <span class="switch-track"><span class="switch-knob"></span></span>
-              </label>
-            </div>
-            <p class="settings-note">
-              Shows a small box on the map with the camera values Google's 3D
-              map reports — useful for comparing what you set against what the
-              map honours after dragging the view by hand.
             </p>
           </section>
         </div>

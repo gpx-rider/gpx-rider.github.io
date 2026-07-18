@@ -3,7 +3,11 @@
 GPX Rider is a **no-build, static web app**: plain HTML/CSS/JS ES modules,
 no bundler, no framework, no `node_modules`. Keep it that way — do not
 introduce a build step, TypeScript, npm dependencies, or a framework unless
-the user explicitly asks for one.
+the user explicitly asks for one. Leaflet (the map library) is **vendored**
+as pre-built static files in `app/vendor/leaflet/` (loaded via a plain
+`<script>`/`<link>` tag, exactly like the Google/JetBrains fonts) — this is
+not an npm dependency and needs no build step; see "Map & rider marker"
+below for why it's vendored rather than pointed at a CDN.
 
 Use **American English** throughout the repository, including UI copy,
 documentation, code comments, test names, and generated metadata. Preserve
@@ -16,8 +20,7 @@ original spelling must remain exact.
 make           # default: gallery-data + test (the deploy Action runs the same generation)
 make run       # serve the repo (scripts/dev_server.py — a no-cache static server so edits never load stale). Landing page at http://127.0.0.1:5173/app/, the app itself at http://127.0.0.1:5173/app/app.html
 make test      # node --test tests/*.test.mjs (no dependencies needed)
-make gallery-data  # regenerate app/gallery.json from gallery/*/metadata.json + export.gpx (texts, preview camera, distance/ascent/descent, difficulty, and mini-profile bars)
-make rider-dot-model  # regenerate app/assets/rider-dot.glb (the 3D rider marker mesh) — only needed after editing scripts/generate_rider_dot_model.py, not part of the default `make`
+make gallery-data  # regenerate app/gallery.json from gallery/*/metadata.json + export.gpx (texts, distance/ascent/descent, difficulty, and mini-profile bars)
 ```
 
 Always run `make test` after changing anything in `app/`. Browser-only
@@ -34,29 +37,27 @@ and it is deliberately **thin**: it boots the app (`startApp`) and wires DOM
 events to the feature modules (`bindEvents`) — nothing else.
 
 Modules are organized into **feature folders** under `app/`. Only `app.js`,
-`config.mjs` (rewritten in place at deploy time — do not move it), the HTML
-pages, `styles.css`, `gallery.json`, and `assets/` stay at the app root.
-`app/gallery/` holds served route *data* (GPX/metadata per route); the gallery
-*code* lives in `app/gallery-ui/` — keep them apart.
+the HTML pages, `styles.css`, `gallery.json`, `assets/`, and `vendor/` stay at
+the app root. `app/gallery/` holds served route *data* (GPX/metadata per
+route); the gallery *code* lives in `app/gallery-ui/` — keep them apart.
 
 | Folder | Feature | Modules |
 |---|---|---|
 | `app/core/` | Shared foundation | `state.mjs` (the single mutable `state` object + `els` DOM map + `updateProgressLabel`; bottom of the feature import graph — must never import a feature module), `tuning.mjs` (loads and re-exports **all tunable behavior parameters** from `tuning.yaml` under their historical names — new knobs go in the yaml, not this file), `tuning.yaml` (the actual values + one documented comment each, shared with `scripts/tuning_config.py`), `yaml.mjs` (hand-rolled parser for the small YAML subset `tuning.yaml` uses; tested), `geo.mjs` (pure geodesy: haversine, bearing, destinationPoint, clamp, lerp; tested), `units.mjs` (km/mi + kcal/kJ display formatting; internal state is always metric; tested) |
-| `app/map/` | Map rendering | `map-init.mjs` (Maps API key resolution/saving, Google Maps JS loader, 3D map + minimap creation), `route-render.mjs` (elevated 3D route lines, rider dot mesh + fallback ring, rider beacon, minimap route/marker — see the rider-dot notes below), `route-style.mjs` (pure route segment styling), `screenshot.mjs` (viewport JPG via tab capture — the 3D canvas sits in a closed shadow root and cannot be read directly), `terrain-tiles-math.mjs` (pure Web Mercator tile coords + Terrarium elevation decode; tested), `terrain-tiles.mjs` (fetches/decodes/LRU-caches online Mapzen Terrarium elevation tiles — see "Online terrain elevation" below) |
-| `app/camera/` | Camera behavior | `camera.mjs` (pure follow-camera math; tested), `flyover.mjs` (pure orbit math; tested), `flyby.mjs` (pure ellipse/figure-eight flight math; tested), `follow-camera.mjs` (follow/first-person targets, chase flight, terrain avoidance, manual-drag capture), `overview-camera.mjs` (overview state machine: static/satellite framing, animated orbit/fly-by/fly-over, finish orbit, return-to-rider), `camera-ui.mjs` (map action-bar camera controls + menus, camera settings sliders, first-person preset, reset button state), `camera-debug.mjs` (debug overlay readout + red travel-path debug line), `transition-arc.mjs` (pure overview ↔ chase transition-arc math: Hermite/Bezier eye + look-at flight, duration solver against scale-aware physical limits; tested), `transition-camera.mjs` (app-side transition driver: captures pose + driver velocity, predicts the dock state, flies the arc into whichever target is in `arc_into_modes` — the follow camera (overview-off, movement-start, profile-seek teleport) or the fly-by/fly-over pattern; static/orbit/satellite overviews are never arced into) |
-| `app/route/` | Route processing | `route.mjs` (GPX parsing, enrichment, interpolation, grade; tested), `climb-signal.mjs` (pure resample/smooth/rolling-grade elevation-signal helpers behind climb detection; tested), `climbs.mjs` (sustained-climb detection — the fatigue-pressure state machine built on `climb-signal.mjs`; tested), `difficulty.mjs` (classification from distance + gain; tested), `route-load.mjs` (GPX file/URL intake, `applyGpxText` route-swap sequence, once-per-load route overview), `climbs-ui.mjs` (climb/segment focus, live climb status, the HUD climb/segment banner), `profile.mjs` (elevation profile canvas drawing + hit-testing), `profile-ui.mjs` (profile rendering + hover/seek/drag-select wiring) |
+| `app/map/` | Map rendering | `map-init.mjs` (creates the Leaflet map + OpenStreetMap tile layer — no API key needed), `map-view.mjs` (follow/overview/manual mode state machine: pan-to-rider, fit-bounds overview, manual-drag capture — see "Map & rider marker" below), `route-render.mjs` (grade-colored route polylines + the rider marker), `route-style.mjs` (pure route segment styling), `screenshot.mjs` (viewport JPG via tab capture) |
+| `app/route/` | Route processing | `route.mjs` (GPX parsing, enrichment, interpolation, grade, heading; tested), `climb-signal.mjs` (pure resample/smooth/rolling-grade elevation-signal helpers behind climb detection; tested), `climbs.mjs` (sustained-climb detection — the fatigue-pressure state machine built on `climb-signal.mjs`; tested), `difficulty.mjs` (classification from distance + gain; tested), `route-load.mjs` (GPX file/URL intake, `applyGpxText` route-swap sequence, once-per-load route overview), `climbs-ui.mjs` (climb/segment focus, live climb status, the HUD climb/segment banner), `profile.mjs` (elevation profile canvas drawing + hit-testing), `profile-ui.mjs` (profile rendering + hover/seek/drag-select wiring) |
 | `app/ride/` | Ride execution & telemetry | `movement.mjs` (the movement loop `tick`, simulation toggle, pedaling hysteresis, reset, seek), `eta.mjs` (flat-equivalent pace ETA model; tested), `ride-ui.mjs` (`updateRideUi`, the per-tick UI driver), `telemetry-ui.mjs` (trainer/HR callbacks, HR source resolution, calories/timer, telemetry readouts), `training-zones.mjs` (HR/power zones, fullscreen zone meters, zone summaries), `recorder.mjs` (ride sample bucket), `recording-ui.mjs` (FIT card, download, clear), `fit.mjs` (FIT encoder — must stay sport=cycling, sub_sport=virtual_activity; tested) |
 | `app/trainer/` | Hardware | `trainer.mjs` (trainer pairing + reconnect + protocol detection; FTMS over Web Bluetooth: write queue, Indoor Bike Data; routes to the FE-C backend for Tacx), `trainer-fec.mjs` (Tacx FE-C over BLE backend: telemetry notifications + Track Resistance grade writes on service 6e40fec1), `fec.mjs` (pure ANT+ FE-C codec: ANT framing + page 16/25/51 encode/decode — tested), `heartrate.mjs` (BLE heart-rate strap, service 0x180D) |
-| `app/settings/` | Settings | `settings-ui.mjs` (settings dialog shell + every non-camera panel: units, rider profile, display & HUD toggles, rendering, screenshot settings) |
+| `app/settings/` | Settings | `settings-ui.mjs` (settings dialog shell + every panel except the map action-bar controls: units, rider profile, display & HUD toggles, rendering, screenshot settings) |
 | `app/storage/` | Storage & persistence | `storage.mjs` (IndexedDB behind a sync cache, localStorage fallback + migration; tested), `persistence.mjs` (`restoreSettings`/`saveSettings`, `restoreSavedRide`/`saveRide` — the one deliberately cross-cutting module) |
 | `app/hud/` | Shared HUD layout | `screen-manager.mjs` (**the central HUD layout manager** — see "Map HUD layout" below), `map-hud.mjs` (clock chip, HUD tile order/visibility + drag-reorder, tile layout, dock collapse, fullscreen enter/exit, map screenshot action), `theater-mode.mjs` (exact-size recording viewport) |
-| `app/gallery-ui/` | Gallery | `gallery.mjs` (fullscreen ride-gallery overlay; cards from `app/gallery.json`, per-card on-demand 3D preview via each route's `metadata.json#previewCamera`), `gallery-export.mjs` (Export to gallery card: metadata.json snippet with the live camera, clipboard copy) |
-| `app/landing/` | Landing page | `landing.mjs` (public landing page behavior: hero replay over a live 3D map with a faked HUD, then summit orbit, loops; knobs in `LANDING_HERO`, `core/tuning.mjs`), `landing-route.mjs` (static route data the hero replays — marketing data, not app runtime) |
+| `app/gallery-ui/` | Gallery | `gallery.mjs` (fullscreen ride-gallery overlay; cards from `app/gallery.json`, each with a small top-down Leaflet preview auto-framed to the route's bounds), `gallery-export.mjs` (Export to gallery card: metadata.json title/description snippet, clipboard copy) |
+| `app/landing/` | Landing page | `landing.mjs` (public landing page behavior: hero replay over a live top-down Leaflet/OSM map with a faked HUD, then a whole-route overview hold, loops; knobs in `LANDING_HERO`, `core/tuning.mjs`), `landing-route.mjs` (static route data the hero replays — marketing data, not app runtime) |
 | `app/demo/` | Demo mode | `demo.mjs` (pure synthetic trainer/HR ride model; tested), `demo-mode.mjs` (demo mode UI: drives the ride from the model, demo chip sync) |
 
 ## Code organization system — how to keep this codebase clean
 
-`app.js` was once a 5000-line monolith; it is now ~300 lines of boot + event
+`app.js` was once a 5000-line monolith; it is now ~230 lines of boot + event
 wiring and must stay that way. The rules below are the system that keeps it
 so. Follow them mechanically — they are written so that any agent, regardless
 of context budget, can make a change without re-deriving the architecture.
@@ -65,16 +66,16 @@ of context budget, can make a change without re-deriving the architecture.
 
 Feature folders group a feature's models, views, and coordinators together
 (loose MVC: pure domain modules are the models, `*-ui` modules render and
-wire UI, coordinator-like modules such as `movement`, `follow-camera` and
-`overview-camera` connect state, domain logic, and infrastructure). Folders
-do NOT change the layer rules — a pure module stays pure wherever it lives:
+wire UI, coordinator-like modules such as `movement` and `map-view` connect
+state, domain logic, and infrastructure). Folders do NOT change the layer
+rules — a pure module stays pure wherever it lives:
 
 1. **`core/tuning.mjs`** — constants only, loaded from `core/tuning.yaml` via `core/yaml.mjs` (a pure parser with no imports of its own). Imports nothing app-level.
-2. **Pure logic modules** (`core/geo`, `camera/camera`, `route/route`,
-   `ride/eta`, `route/difficulty`, `route/climbs`, `core/units`, `ride/fit`,
-   `camera/flyby`, `camera/flyover`, `demo/demo`, `map/route-style`,
-   `route/profile`, `trainer/fec`) — no DOM, no app state, no imports from
-   higher layers. Every one of these is unit-testable; most are tested.
+2. **Pure logic modules** (`core/geo`, `route/route`, `ride/eta`,
+   `route/difficulty`, `route/climbs`, `core/units`, `ride/fit`, `demo/demo`,
+   `map/route-style`, `route/profile`, `trainer/fec`) — no DOM, no app state,
+   no imports from higher layers. Every one of these is unit-testable; most
+   are tested.
 3. **Hardware/IO modules** (`trainer/trainer`, `trainer/trainer-fec`,
    `trainer/heartrate`, `ride/recorder`, `storage/storage`, `map/screenshot`) —
    own their internal state, talk upward only through `init*()` callbacks or
@@ -85,18 +86,17 @@ do NOT change the layer rules — a pure module stays pure wherever it lives:
    and never make it import a feature module** — it is the bottom of the
    feature graph precisely so everything above can import it freely.
 5. **Feature modules** (the `*-ui` modules, `ride/movement`, `map/map-init`,
-   `route/route-load`, `map/route-render`, `camera/follow-camera`,
-   `camera/overview-camera`, `hud/map-hud`, `storage/persistence`, …) —
-   import `state`/`els` from `core/state.mjs`, pure helpers from layers 1–3,
-   and *each other's exported functions*. Circular imports **between feature
-   modules** are expected and safe because they only export top-level
-   function declarations that are called at runtime; what is NOT safe is
-   running another feature module's code at module-evaluation time (top-level
-   calls, or computing a module-level `const` from another feature module).
-   Keep module top levels to imports, constants, and function declarations.
+   `route/route-load`, `map/route-render`, `map/map-view`, `hud/map-hud`,
+   `storage/persistence`, …) — import `state`/`els` from `core/state.mjs`,
+   pure helpers from layers 1–3, and *each other's exported functions*.
+   Circular imports **between feature modules** are expected and safe because
+   they only export top-level function declarations that are called at
+   runtime; what is NOT safe is running another feature module's code at
+   module-evaluation time (top-level calls, or computing a module-level
+   `const` from another feature module). Keep module top levels to imports,
+   constants, and function declarations.
 6. **`app.js`** — boot (`startApp`) + event wiring (`bindEvents`). Nothing
-   else, ever. (`config.mjs` also stays at the app root: the deploy Action
-   and the dev server rewrite it in place by path.)
+   else, ever.
 
 Do not create broad shared folders (`utils/`, `models/`, `views/`,
 `controllers/`) — new code goes in the folder of the feature it belongs to,
@@ -164,15 +164,13 @@ value under its historical constant name, so the rest of the app is unchanged;
 matching hand-rolled parser, kept in sync with `yaml.mjs` — extend both plus
 their shared tests if you widen the supported YAML subset) so the Python
 generators (`generate_gallery_json.py`) never mirror a value by hand. This is
-not limited to numbers: file paths, URLs, color strings, orientation/config
-objects — anything a user or future contributor might reasonably want to
-retune belongs in `tuning.yaml`, not inlined at its call site, even if it's
-only used once. When adding a new adjustable behavior, add its constant to
-`tuning.yaml` (and the `req(...)` re-export in `tuning.mjs`) in the same
-change; don't leave it inline "for now." Deliberate exceptions:
-`app/config.mjs` (rewritten at deploy time, see below) and the BLE
-write-queue timing internals in `trainer.mjs` (hardware-safety, documented
-in place).
+not limited to numbers: file paths, URLs, color strings, tile-server config —
+anything a user or future contributor might reasonably want to retune belongs
+in `tuning.yaml`, not inlined at its call site, even if it's only used once.
+When adding a new adjustable behavior, add its constant to `tuning.yaml` (and
+the `req(...)` re-export in `tuning.mjs`) in the same change; don't leave it
+inline "for now." The one deliberate exception is the BLE write-queue timing
+internals in `trainer.mjs` (hardware-safety, documented in place).
 
 ## Key domain concepts
 
@@ -207,7 +205,7 @@ in place).
   The estimator resets when a new GPX loads, not on ride reset.
 - **UI layout & reusable components.** The app is a dark, single-viewport
   shell (`app.html`): a fixed top bar (brand, GPX chip, Open/Browse/Settings),
-  a 3D map filling the left, and a fixed-width right control panel. CSS
+  a top-down map filling the left, and a fixed-width right control panel. CSS
   components in `styles.css` are meant to be reused, not re-invented per
   screen: `.btn` (+ `-ghost`/`-blue`/`-accent`/`-outline-*`/`-sm`),
   `.panel-card` (+ `-head`/`-title`/`-hint`), `.stat-grid` + `.stat-tile`,
@@ -228,39 +226,17 @@ in place).
   (`[data-settings-panel]`); `selectSettingsTab` in `settings-ui.mjs` toggles the
   `active` tab, shows the matching panel, and copies the tab's
   `data-panel-title`/`data-panel-subtitle` into the header. `openSettings(tab)`
-  opens on a given category (first-run key prompt opens on `"data"`). All the
-  underlying inputs kept their IDs, so the settings-restore/sync code is
-  unchanged — only their grouping moved. On phones (the `max-width: 860px`
-  block in `styles.css`) the dialog stacks: the rail moves to the top as a
-  single horizontally-scrolling tab strip and the category panels fill the
-  rest. `.settings-main` carries `min-height: 0` so it shrinks to the fixed
-  dialog height and `.settings-body` (`overflow-y: auto`, `overscroll-behavior:
+  opens on a given category (default `"map"`). All the underlying inputs kept
+  their IDs, so the settings-restore/sync code is unchanged — only their
+  grouping moved. On phones (the `max-width: 860px` block in `styles.css`)
+  the dialog stacks: the rail moves to the top as a single
+  horizontally-scrolling tab strip and the category panels fill the rest.
+  `.settings-main` carries `min-height: 0` so it shrinks to the fixed dialog
+  height and `.settings-body` (`overflow-y: auto`, `overscroll-behavior:
   contain`) is what scrolls — without that the panel content spilled past the
-  dialog and the page behind scrolled instead (issue #13). The `"debug"`
-  category holds developer-facing toggles (currently the camera-debug overlay,
-  below); new diagnostics go there rather than cluttering the user-facing tabs.
-- **Camera debug overlay.** A `"debug"` settings toggle
-  (`#cameraDebugInput` → `state.cameraDebugEnabled`, persisted, default off via
-  `DEFAULT_CAMERA_DEBUG_ENABLED`) shows a translucent readout (`#cameraDebug`,
-  a plain map overlay — visible windowed *and* fullscreen, unlike the
-  `.fs-*` HUD overlays) of the values the 3D map **actually applies**:
-  `state.map.{tilt,range,heading,roll,fov,center}` plus the derived eye altitude
-  and ride progress. The readout can be collapsed via
-  `#cameraDebugCollapseBtn` (`state.cameraDebugCollapsed`, persisted) while
-  keeping the debug overlay active. It exists mainly to compare a requested
-  camera against what Google honours after a manual drag (e.g. how far a tilt
-  is respected at a given range). While active and the selected overview mode is
-  `"orbit"`, `"flyby"` or `"flyover"`, `camera-debug.mjs` also draws that mode's travel path
-  as a red `Polyline3DElement` configured by `OVERVIEW_DEBUG_LINE_*`; for orbit
-  this is the camera eye's ground track, for fly-by the fitted travel ellipse,
-  and for fly-over the fitted figure-eight. It stays visible if the user drags
-  the camera into manual mode.
-  `renderCameraDebug` rebuilds the rows and
-  `startCameraDebugLoop` re-runs it on its own `CAMERA_DEBUG_REFRESH_MS`
-  `setTimeout` chain while the overlay is on — a dedicated poll because when
-  the user is dragging the camera at rest nothing else steps it. Wired through
-  the same `updateDisplaySettingsFromControls`/`syncDisplayControls`/
-  `applyDisplaySettings` trio as the other display toggles.
+  dialog and the page behind scrolled instead (issue #13). Categories:
+  `"map"` (follow-rider toggle, route grade colors), `"hud"`, `"units"`,
+  `"trainer"`, `"screenshots"`, `"data"`.
 - **Map HUD layout (screen manager).** All dynamic map/HUD overlays are laid
   out by `hud/screen-manager.mjs`, which owns four flex regions inside
   `#mapViewport`: **left column**, **center column**, **right column**, and a
@@ -270,14 +246,13 @@ in place).
   order a column (ties keep registration order, deterministic), the region's
   flex `gap` spaces components, hiding an element (the `hidden` attribute)
   collapses its slot, and `align: "end"` pins a component to the far end of
-  its column (the minimap). Current placements: left = clock (10) +
-  training meters (20); center = climb banner (10) + demo chip (20); right =
-  map actions (10) + camera debug (20) + minimap (30, end); bottom = the data
-  dock. The manager publishes the bottom region's measured height as
-  `--fs-dock-height` on the viewport so the side columns end above the dock
-  (no overlap), and the region containers carry the responsive insets — the
-  phone media block adjusts `--hud-inset`/`--hud-bottom-*` once instead of
-  per component. Region containers are `pointer-events: none` with
+  its column. Current placements: left = clock (10) + training meters (20);
+  center = climb banner (10) + demo chip (20); right = map actions (10);
+  bottom = the data dock. The manager publishes the bottom region's measured
+  height as `--fs-dock-height` on the viewport so the side columns end above
+  the dock (no overlap), and the region containers carry the responsive
+  insets — the phone media block adjusts `--hud-inset`/`--hud-bottom-*` once
+  instead of per component. Region containers are `pointer-events: none` with
   `pointer-events: auto` children, so the map stays draggable between
   components. **Never absolutely position a HUD component from its own CSS
   or measure siblings from feature JS** (the old `top: 92px`-style stacking
@@ -310,9 +285,9 @@ in place).
     a four-column `1fr` grid, the separator and road-ahead note are dropped, the
     road plot gets a fixed height (it has no intrinsic height once the body is a
     column), and the collapsed metric strip wraps — otherwise the desktop row
-    layout overflows a phone's width. The corner overlays (minimap, clock,
-    banner, actions) pull in via the HUD region inset variables and the banner
-    loses its desktop `min-width`.
+    layout overflows a phone's width. The corner overlays (clock, banner,
+    actions) pull in via the HUD region inset variables and the banner loses
+    its desktop `min-width`.
   - **Top-left clock chip** (`#fullscreenClock`): elapsed time (from
     `rideLogSummary().timerSeconds`) + ridden distance, at the head of the
     left HUD column (the training-zone meters stack under it).
@@ -332,7 +307,7 @@ in place).
     object (climbs are re-detected each route load, so the cache can't
     go stale). If the user drag-selects a custom profile segment while riding,
     this same banner surface switches to the selected segment stats (start, end,
-    length, ascent, descent) instead of forcing a camera overview.
+    length, ascent, descent) instead of forcing a map overview.
 
   HUD tiles are matched to settings toggles by `data-hud="…"` /
   `data-hud-toggle="…"` keys, which must also exist in `DEFAULT_HUD_ELEMENTS`
@@ -340,10 +315,7 @@ in place).
   `.field-toggle` with a `.switch`; the tile is a `.fs-tile` inside
   `#fullscreenHud` with the matching `data-hud`). `layoutMetricTiles` sizes
   the tiles from the visible count (they flow into two rows and narrow when
-  all eight are on). The minimap toggle uses `visibility` (class
-  `minimap-hidden`), not `display:none`, so the Google map never needs a
-  resize kick when re-shown. Map labels toggle the `Map3DElement.mode`
-  between `SATELLITE` and `HYBRID`.
+  all eight are on).
 - **Route overview (name + classification + climbs)**: `updateRouteOverview`
   in `route-load.mjs` runs once per route load (GPX import or restoring a saved
   ride), not on every ride-progress tick — it only depends on the route's
@@ -393,17 +365,16 @@ in place).
   reused for segment stats: start, stop, length, ascent, and descent. A normal
   click on the profile clears the custom selection and then seeks as usual.
   While stationary in overview, selecting a segment seeks to its start,
-  highlights it on the profile and 3D route, and enters the same focused camera
-  stack used by detected climbs (`static`, `orbit`, or `satellite`, controlled
-  by `climbFocusMode`). While moving, it does not change camera mode; it keeps
-  the rider camera/follow behavior and shows only the segment stats in the map
-  HUD banner. A selected custom segment is not added to `state.climbs` and must
-  not affect climb detection/status.
+  highlights it on the profile and route line, and fits the map to that
+  segment's bounds (the same climb/segment overview `focusedRouteRange()`
+  drives for detected climbs). While moving, it does not change the map mode;
+  it keeps following the rider and shows only the segment stats in the map
+  HUD banner. A selected custom segment is not added to `state.climbs` and
+  must not affect climb detection/status.
 - **First-open auto-load & route deep-link**: with no saved ride and a working
   map, `initGallery` loads the first gallery route automatically
-  (`shouldAutoLoadFirst` in `app.js`'s `startApp`); it is skipped when the map/API key
-  is missing so the first-run key prompt stays front and center. Opening the
-  app with a `?route=<gallery-id>` query (the landing page's "Launch GPX Rider"
+  (`shouldAutoLoadFirst` in `app.js`'s `startApp`). Opening the app with a
+  `?route=<gallery-id>` query (the landing page's "Launch GPX Rider"
   button uses `app.html?route=0050_jested`) forces that specific gallery route
   on load — ahead of both a restored saved ride and the auto-load-first — via
   `getRequestedRouteId` passed to `initGallery`. An absent or unknown id just
@@ -433,330 +404,59 @@ in place).
   FE-C carries no calories field, so calories come from power for those
   trainers. `TACX_FEC_DEFAULT_CRR` (the rolling-resistance coefficient sent
   with each grade) lives in `tuning.yaml`.
-- **3D map geometry**: never render lines with `CLAMP_TO_GROUND` — draped
-  strokes smear down steep slopes into wide blobs. The route line floats at
-  `ROUTE_LINE_ALTITUDE_METERS` (2.5m) with its path densified (`densifyRoute`)
-  so elevated segments follow the terrain.
-  The rider dot is a `Model3DElement` loading the model at
-  `RIDER_DOT_MODEL_PATH` (`tuning.mjs`; see `renderRiderDot`/`updateRiderDot`
-  in `route-render.mjs`), **not** a `Polygon3DElement` and **not** a
-  `Marker3DElement`/`PinElement` billboard — both were tried first, in that
-  order, and both were confirmed by real-browser testing (not just reasoned
-  about) to fail:
-  - `Polygon3DElement`: meant for static terrain-draped areas, not a point
-    that moves every frame. Re-tessellating one every frame produced a
-    solid-black fill at ordinary follow-camera distances — independent of
-    polygon winding, altitude/z-fighting with terrain (tried 1–20m up), and
-    `extruded: true` (a short cylinder instead of a flat disc) — plus a
-    faceted/streaky look from the constant re-triangulation.
-  - `Marker3DElement` + `PinElement`: fixed the black-fill and faceting, but
-    a `PinElement` reads as a map-pin/teardrop, not a location dot, and its
-    `scale` is a screen-space billboard size that doesn't grow/shrink with
-    camera distance the way a real ground object should.
-
-  A real mesh avoids all of that. The shipped model, `app/assets/rider-dot.glb`,
-  is hand-rolled by `scripts/generate_rider_dot_model.py` (no 3D modeling
-  tool available in this environment — the same "encode the binary format by
-  hand" approach `app/ride/fit.mjs` takes for FIT files): a two-material puck,
-  baked to a true 1 meter diameter so `RIDER_DOT_SCALE` in `tuning.mjs` is a
-  plain real-world size multiplier. Both materials use the
-  `KHR_materials_unlit` glTF extension — an ordinary lit PBR material
-  rendered solid black here regardless of normals/winding/doubleSided/
-  texturing (confirmed by testing many variants), and unlit is also the
-  semantically correct choice for a location marker anyway: it must stay
-  clearly visible at any time of day or camera angle, not dim to black in
-  shadow like a real physical object would. `RIDER_DOT_MODEL_PATH`,
-  `RIDER_DOT_ORIENTATION`, `RIDER_DOT_SCALE`, and `RIDER_DOT_ALTITUDE_METERS`
-  (`tuning.mjs`) are all independently tunable specifically so a different
-  model can be dropped into `app/assets/` and pointed at without touching
-  `route-render.mjs` — see the comments on those constants for what to expect when
-  swapping models (orientation and unlit materials both being the most
-  likely things a new model needs). `RIDER_DOT_ALTITUDE_METERS` puts the dot
-  on the ground and is deliberately independent of `ROUTE_LINE_ALTITUDE_METERS`
-  — the route line has to float clear of the terrain because a drawn line
-  clamped to the ground smears down slopes, but a real mesh doesn't have that
-  problem. It's not 0 though: the shipped puck's origin is at its vertical
-  center, so 0 buried its bottom half in the terrain, and clipping didn't
-  fully stop until well past just the model's own half-height — most likely
-  because the terrain mesh itself isn't perfectly smooth/precise at close
-  range (confirmed by testing on a steep switchback, where clipping is most
-  visible). Needs retuning alongside `RIDER_DOT_MODEL_PATH` for a model with
-  different dimensions or an off-center origin — start from that model's own
-  half-height above 0 and increase from there if it still clips. A
-  `Polyline3DElement` ring (via `riderCircleCoordinates`, whose winding must
-  trace counter-clockwise as seen from above — see its comment) is the fallback for
-  browsers without `Model3DElement`. The dot (and the minimap marker) mirrors
-  the brand "GPX Rider" logo dot — a solid amber center with a paler amber
-  ring — via the model's two materials and, for the minimap and fallback
-  ring, the `RIDER_DOT_COLOR` constant in `route-render.mjs`. The rider beacon is a
-  real-world-sized extruded `Polygon3DElement` cylinder with
-  `drawsOccludedSegments` so trees never hide the rider's position; it is
-  **off by default** (`DEFAULT_BEACON_ENABLED`), opt-in from the Rendering
-  settings — unlike the dot, it hasn't shown the same black-fill issue, but
-  it's also large enough that a small-on-screen-footprint problem wouldn't
-  reproduce the same way, and if it ever does, the fix here is the same:
-  switch it to a `Model3DElement` too, not more polygon tweaking.
-- **Camera modes & physical motion**: `state.overviewActive` is true by
-  default after a route loads, and `state.cameraMode` is `"overview"` while the
-  route overview is actually driving the map (whole route framed via
-  `computeRouteOverviewCamera`
-  in `camera.mjs`: the framing axis is the route's *principal axis of spread*
-  — a PCA over all points, not the start→end line, so loops/lollipops/
-  out-and-backs still frame along their real long dimension instead of an
-  arbitrary near-zero start→end axis — with that long axis horizontal, the
-  route's far side facing away, and start-left/end-right for open routes). The
-  overview's tilt, side and distance are tunable in `tuning.mjs`
-  (`OVERVIEW_TILT_DEGREES`, `OVERVIEW_HEADING_OFFSET_DEGREES`,
-  `OVERVIEW_MARGIN_FACTOR`, `OVERVIEW_RANGE_FACTOR`,
-  `OVERVIEW_MIN/MAX_RANGE_METERS`, all passed through from `enterOverviewMode`).
-  `headingOffsetDegrees` rotates the whole view on top of the auto-picked side
-  (180 = view from the exact opposite side, long axis still horizontal; other
-  values swing the azimuth freely — the fit reruns against the final heading so
-  the route stays framed at any offset). The fit always frames the whole route;
-  `rangeFactor` (<1) and
-  `maxRangeMeters` pull the camera in closer at the cost of cropping the route
-  — the lever for a lower, terrain-rich view, since Google's 3D map limits how
-  far it will tilt toward the horizon at the large range a whole-route fit
-  needs (use the Debug camera overlay to see the tilt it actually applies).
-  Grabbing the map while an overview is showing turns the overview **off**:
-  `endUserInteraction` clears `overviewActive`, drops any animated driver, and
-  sets `state.cameraMode` to `"manual"` (the overview button goes inactive).
-  The overview is **never force-disabled by movement**: the
-  automatic transitions are "route loaded → overview on", "movement
-  started (pedal or sim) → overview off" (the auto-off lives in
-  `ensureMovementLoop`, which flips to `"follow"` and clears `overviewActive` /
-  the animated driver once), and "ride just finished → finish-line orbit on"
-  (see below). Any other time — including mid-ride — the user may
-  toggle the overview on or off; showing it while riding is a deliberate choice
-  and does nothing to the ride. A static/satellite overview kept up while riding
-  is driven by the movement loop's own `updateMapCamera`→`stepCameraFlight`
-  chase toward `state.overviewCamera`; an animated one keeps running its own
-  loop (which no longer bails on `movementLoopActive`), and `updateMapCamera`
-  yields whenever `state.overviewAnim` is set so the two never fight. The
-  overview snaps into place instantly on load
-  (`applyCameraNow` — a new route may be across the
-  world); every later camera move chases the target's eye/look-at pair with
-  bounded acceleration (`chaseStep` + `chaseTuning` in `camera.mjs`: the
-  acceleration budget grows with remaining distance, so follow tracking is
-  gentle while transition flights are fast, braking to arrive), stepped by
-  the movement loop while riding and by `ensureCameraFlightLoop` otherwise.
-- **Map overview control.** The map action bar has a split translucent overview
-  control: the plane button toggles `state.overviewActive` and switches between
-  the selected overview and rider camera; the chevron opens the same
-  `"static"`/`"orbit"`/`"flyby"`/`"flyover"`/`"satellite"`/`"satellite-north"`
-  choices as the Camera & view settings select. The split control is amber while
-  overview is active. The toggle button is only disabled when no route is loaded
-  — never during a ride (`canToggle = hasRoute` in `syncOverviewControls`).
-  Picking a mode from the dropdown activates overview whether parked or riding
-  (a deliberate choice); changing the settings select only reframes immediately
-  if overview is already active. The map reset camera button
-  (`#resetCameraViewBtn`) is fully decoupled from the overview: it only resets
-  the follow-camera offsets/zoom/angle and, when the rider camera is the active
-  surface, flies it back — it never activates or deactivates an overview (an
-  active overview is left running). It is **disabled whenever the camera is
-  already at its defaults** (`cameraAtDefaults` in `camera-ui.mjs` — all offsets at
-  default and `cameraMode !== "manual"`, i.e. pressing it would change nothing)
-  and enables once a drag captures new offsets or leaves the camera in
-  `"manual"`. `syncResetCameraButton` (called from `syncOverviewControls` and
-  the camera-slider handler) keeps that state in sync.
-- **Overview motion modes** (`state.overviewMode`, a persisted user setting in
-  Settings › Camera & view, default `DEFAULT_OVERVIEW_MODE` in `tuning.mjs`):
-  `"static"` is the framed still (the `ensureCameraFlightLoop` path above);
-  `"satellite"` and `"satellite-north"` are also static stills but looking
-  nearly straight down (`SATELLITE_TILT_DEGREES`) with the route framed as large
-  as it fits (`SATELLITE_MARGIN_FACTOR`) — `"satellite"` keeps the route's long
-  axis horizontal (the default PCA orientation), `"satellite-north"` forces a
-  due-north heading via `computeRouteOverviewCamera`'s `headingDegrees` override;
-  `"orbit"`, `"flyby"` and `"flyover"` are *animated* and driven through a
-  separate `ensureOverviewAnimationLoop`/`stepOverviewAnimation` loop that writes
-  the map camera **directly** every frame (the motion is already smooth, so
-  there is no chase). `enterOverviewMode` picks per-mode fit params
-  (`overviewCameraParams`) and still computes the static `state.overviewCamera`
-  (orbit spins its heading via `orbitCamera`; it's also the fly modes' fallback),
-  then `startOverviewAnimation` takes over for animated modes — building a
-  `createEllipseFlyby` driver for `"flyby"` or a `createFigureEightFlyover`
-  driver for `"flyover"` (both return `false` and fall back to static if the
-  route is too small to fly). Both animation and the static flight
-  write `state.map` directly, so only one runs at a time (`enterOverviewMode`
-  starts exactly one; `startOverviewAnimation` nulls `state.cameraFlight`). The
-  animated loop self-exits the instant the camera leaves overview — grabbing the
-  map (`endUserInteraction` → `"manual"`) or movement starting (`"follow"`) —
-  and eases in from the current pose over `OVERVIEW_ANIM_INTRO_SECONDS` so
-  switching modes never jumps. The ellipse fly-by (`app/camera/flyby.mjs`, configured by
-  `ELLIPSE_FLYBY` in `tuning.mjs`) fits a PCA-aligned ellipse to the route
-  footprint, scales it independently of the route bounds, enforces
-  `min_turn_radius_meters`, and supports `direction` (`1` clockwise seen from
-  above, `-1` counter-clockwise). Its camera looks along the direction of travel
-  and pitches down by `mount_pitch_degrees`; `seconds_per_lap`, `max_speed_mps`,
-  `fly_height_meters_min`, `fly_height_meters_above_terrain_min`, `camera_fov_degrees`,
-  `inward_look_degrees`, `view_distance_meters`, `ellipse_scale`, `min_semi_major_meters`,
-  `min_semi_minor_meters`, `sample_count`, and `start_angle_degrees` are all tunable.
-  `inward_look_degrees` rotates the horizontal look direction toward the ellipse
-  interior (clockwise = right, counter-clockwise = left), while the route travel
-  direction still drives the baseline heading.
-  The actual fly height is the higher of the baseline height and the height
-  needed to clear the highest terrain along the whole flight path by
-  `fly_height_meters_above_terrain_min`. That highest-terrain figure comes from
-  an injected `terrainSampler` (`buildLoopFlight` in `flyby.mjs` stays pure and
-  takes it as an option): `overview-camera.mjs` and `transition-camera.mjs` pass
-  `onlineTerrainElevationAt` (`follow-camera.mjs`), which reads the online
-  Mapzen tiles, so a hill the route *detours around* is still cleared — the old
-  route-only "highest sample under the ellipse" missed those. With online
-  terrain off (or a tile not yet loaded), it degrades to the route-based
-  footprint estimate. The sampled highest terrain and sample coverage are shown
-  on the camera debug overlay (`path terrain` / `path pts`). `max_bank_degrees` scales the bank angle from
-  the current turn radius
-  (`min_turn_radius_meters` = max bank), and `overview-camera.mjs` applies it to `state.map.roll`.
-  Fly-over (`createFigureEightFlyover`) reuses the exact same footprint fit,
-  `ELLIPSE_FLYBY` config, and camera-frame/pacing driver — only the path differs:
-  a Gerono figure-eight (`along = a·cos u`, `cross = b·sin 2u`) that crosses the
-  footprint center twice per lap. Every tunable above applies identically, with
-  one behavioral twist: because the eight *changes turn direction* between its
-  two lobes, `bankAt`/`inward_look_degrees` follow the **local** turn (via the
-  curve's `signedCurvatureAt` and the `tracksTurnDirection` flag) instead of the
-  ellipse's fixed handedness — so the camera banks and looks into whichever turn
-  it is actually in (right on one lobe, left on the other) and eases smoothly
-  through straight-ahead at each center crossing, where the path is momentarily
-  straight. The ellipse fly-by is unchanged (constant `direction`).
-  The red debug line shown while the camera debug overlay is active is shared
-  by orbit, fly-by and fly-over and tuned by `OVERVIEW_DEBUG_LINE_COLOR`,
-  `OVERVIEW_DEBUG_LINE_WIDTH`, `OVERVIEW_DEBUG_LINE_ALTITUDE_METERS`, and
-  `OVERVIEW_DEBUG_LINE_SAMPLE_COUNT`.
-- **Transition arcs into continuously-moving cameras.** Some camera handoffs
-  are flown as a physically-constrained "missile POV" arc instead of the plain
-  chase / eased entry. Which *targets* get the arc is a declarative policy —
-  `camera_transition.arc_into_modes` in `tuning.yaml` (default `["follow",
-  "flyby", "flyover"]`), read by the `arcsIntoMode(mode)` predicate. The rule
-  behind that list: arc only into a target that represents continuous physical
-  motion you can dock onto with matching velocity. So:
-  - **follow (the rider camera)** — arced into on the overview-off toggle, the
-    movement-start auto-off (overview → follow), and a teleport to the rider
-    (clicking the elevation profile to seek while parked in the rider camera —
-    `seekToMeters` in `movement.mjs`, guarded to skip while moving, in an
-    overview, or in manual mode). The dock is where the rider *will* be.
-  - **fly-by / fly-over** — arced into from any camera when the mode is
-    selected (`startCameraTransitionToFlyPattern`): the entry is the joinable
-    pattern point needing the least head-turn from the current line of sight
-    (`entrySForView` in `flyby.mjs`) — joinable meaning no steeper than
-    `fly_entry_climb_degrees` (default 45°) up from the horizon and never
-    where the directed pattern flies back at the camera. A camera facing the
-    pattern docks at the sight-line crossing dead ahead; one facing away
-    docks at the first qualifying point that comes into view turning toward
-    it. The plain *nearest* pattern point is usually almost straight overhead
-    and forced a contorted joining arc. The arc docks there with that point's
-    velocity, bank and FOV, then hands off to the pattern animation entering
-    at exactly that arc-length (`startOverviewAnimation({ atS })`, no intro
-    ease); the eased (non-arc) pattern entry enters at the same point. Falls
-    back to the eased pattern entry when no arc fits (already on the pattern,
-    too steep a climb, etc.).
-  - **static / orbit / satellite** (whole-route, climb-focus, and finish-line
-    alike) — **never** arced into. They're artificial framings (a held frame
-    or a turntable), so an arc into them reads as two stitched motions; they
-    snap on a fresh load or ease through their own driver.
-  The **reset-camera button** also opts out of the follow arc even though it
-  targets follow (`returnToRiderCamera({ transition: false })`) — a "put it
-  back" reset should ease the plain chase home, not fly a dramatic arc. The
-  pure math lives in
-  `camera/transition-arc.mjs` (tested): the camera eye and its look-at point
-  each fly a time-scaled cubic Hermite curve (executed as a cubic Bezier,
-  control offsets = velocity·T/3) in a local east/north/up frame, so position
-  AND velocity are continuous at both docks — no alignment phase, no angle
-  LERP/SLERP anywhere. Mid-flight the view looks along the flight tangent
-  (rotated as a *direction*, constant-rate, into each dock's real look
-  direction across the `lookat_blend_*` windows), roll banks from the arc's
-  lateral acceleration, and FOV carries between the endpoint cameras. A
-  duration solver scans `camera_transition.min/max_duration_seconds` for the
-  shortest arc satisfying the scale-aware limits: minimum turn radius
-  max(floor, fraction·D) enforced as a lateral-acceleration cap of
-  (D/T)²/radius, a maximum climb/dive angle, and the 0.5·D control-offset
-  loop guardrail (violating candidates are rejected, not clamped — clamping
-  would silently break the exact docking velocity). All knobs live under
-  `camera_transition` in `tuning.yaml`. `camera/transition-camera.mjs` is the
-  app-side driver: `captureCameraTransitionStart` reads the current pose plus
-  the velocity of whichever driver owns the camera (static pose, chase-flight
-  velocities, orbit tangential velocity, fly-by frame speed), the dock state is
-  either a function of the candidate duration (a moving rider is intercepted
-  where they *will* be via `followCameraTargetAt(progress, { terrainLift:
-  false })`) or a fixed pose (the fly pattern's entry frame + velocity/bank/FOV
-  via `flyPatternDockState`), and `state.cameraTransition` + its rAF loop own
-  the map while flying (`updateMapCamera`/`ensureCameraFlightLoop` yield on it,
-  exactly like `state.overviewAnim`). On docking at the rider, the chase flight
-  is seeded with the arc's terminal velocity so follow tracking continues the
-  motion; on docking onto a fly pattern, the pattern animation resumes at the
-  docked arc-length. Every call site keeps its pre-existing behavior as the
-  fallback: when `camera_transition.enabled` is false, the target isn't in
-  `arc_into_modes`, no candidate duration satisfies the limits, or the two
-  cameras are closer than `min_distance_meters`, the classic `chaseStep`
-  flight / eased pattern intro runs unchanged. A manual map grab cancels the
-  flight outright, and `applyCameraNow` (instant snaps) always supersedes it.
-- **Finish-line orbit.** The instant a ride — pedaled, simulated, or demo —
-  reaches the end of the route (the finish check inside `tick`, `movement.mjs`),
-  `enterFinishOrbit` takes the camera into an orbit around the rider's exact
-  final position, instead of freezing on the follow camera's last frame. It
-  reuses the same animated-orbit driver as the overview modes above (same
-  intro ease-in from wherever the camera was, same exit on a manual map drag
-  or the overview toggle) but does not go through `computeRouteOverviewCamera`
-  — the "route" at a finish point has no spread to fit a PCA axis to, so it
-  builds the base camera directly (`center` at the finish point plus
-  `FINISH_ORBIT_LOOKAT_HEIGHT_METERS`, `FINISH_ORBIT_TILT_DEGREES`,
-  `FINISH_ORBIT_RANGE_METERS`), with an initial heading sampled the same way
-  the follow camera does (`HEADING_SAMPLE_METERS` back from the finish point).
-  `state.finishOrbitActive` distinguishes it from a normal whole-route orbit so
-  `stepOverviewAnimation` spins it at its own `FINISH_ORBIT_SECONDS_PER_REV` /
-  `FINISH_ORBIT_DIRECTION` instead of the whole-route or climb-focus orbit
-  speeds; any later call into `enterOverviewMode` (a manual overview toggle, a
-  climb/segment focus, resetting the ride, loading a new route) clears the flag
-  and supersedes it, same as grabbing the map does. Toggle via
-  `DEFAULT_FINISH_ORBIT_ENABLED`; all the geometry knobs above live in
-  `tuning.mjs`.
-- **Camera terrain avoidance** lifts the follow camera when its eye would
-  sink below terrain + clearance and eases it back down as terrain allows
-  (`currentTerrainLift` in `follow-camera.mjs`; pure math in `camera.mjs`'s
-  `applyCameraLift`). The base terrain estimate is `maxElevationNear` over the
-  route's own elevation points — a free, always-available offline floor
-  (deliberately **not** the Google Elevation API, which would cost real money
-  at follow-camera query rates). When **online terrain** is enabled it is
-  augmented with real ground elevation from `map/terrain-tiles.mjs`, blended as
-  the higher of the two (`terrainElevationForSample` in `follow-camera.mjs`), so
-  the camera also clears hillsides the GPX track never climbs; it degrades to
-  the route-only floor whenever a tile has not loaded yet or the setting is off.
-- **Follow-camera rider visibility (swing around a hill).** Follow mode only.
-  Lift handles a hillside the view ray *sinks into*; this handles the other
-  occlusion — a hill squarely between the (already-above-ground) eye and the
-  rider, where lifting further would only tip the view uselessly overhead.
-  `currentVisibilityNudge` (`follow-camera.mjs`) tests the eye→rider sightline
-  for terrain occlusion (same ray-sampling + tapered clearance as the lift,
-  reusing `terrainElevationForSample`) and, when blocked, scans swings out to
-  `rider_visibility.max_nudge_degrees` each way; the pure
-  `pickVisibilityNudge` (`camera.mjs`, tested) picks the least rotation that
-  clears the rider (best-effort least-occluding swing if none fully clears).
-  The chosen angle is added to the camera heading, so the rider stays centered
-  and only the viewing *side* changes; it eases in/out (rise/fall taus) exactly
-  like the lift and is recomputed on `recompute_ms`. Skipped for predicted
-  targets (`terrainLift: false`) and never applied in any other camera mode
-  (overview / orbit / fly / transition). Knobs live under `rider_visibility` in
-  `tuning.yaml`; runtime-only state (`cameraVisNudge*` on `state`), no persisted
-  setting or UI toggle.
-- **Online terrain elevation.** `map/terrain-tiles.mjs` streams public Mapzen
-  Terrarium terrain-RGB tiles from the AWS Open Data bucket (no API key, no
-  cost, anonymous), decodes each PNG's pixels into an elevation grid through an
-  offscreen canvas (`crossOrigin = "anonymous"` so `getImageData` stays
-  untainted), and LRU-caches the grids so `terrainElevationAt(lat, lng)` is a
-  cheap synchronous lookup the follow camera calls every frame — a cache miss
-  kicks off the async fetch and returns `null`, so callers fall back until the
-  tile arrives. A configured tile spans several km, so a whole ride usually
-  stays in one or two cached tiles (that *is* the "only re-fetch on crossing a
-  new tile" throttle the feature asks for); `prefetchTerrainAround` warms the
-  tile plus its eight neighbors on route load. All the pure arithmetic (Web
-  Mercator `tileForLngLat`, `decodeTerrarium`) lives in the tested
-  `map/terrain-tiles-math.mjs`; everything tunable (base URL, zoom, tile size,
-  cache cap, attribution string, default-on toggle) is in the `terrain_tiles`
-  section of `tuning.yaml`. Feature modules gate every call on
-  `state.terrainTilesEnabled`; the module itself never reads app state. Google's
-  own 3D map already streams imagery for the same area, so this exposes no
-  location the map didn't already request. The open-data attribution
-  (`TERRAIN_TILE_ATTRIBUTION`) is shown at the foot of the setup control pane
-  (`#terrainAttribution`) while the feature is on.
+- **Map & rider marker.** GPX Rider renders a plain top-down 2D slippy map —
+  [Leaflet](https://leafletjs.com/) with OpenStreetMap raster tiles — instead
+  of a 3D camera. There is no tilt, range, heading, or camera physics: panning
+  and zooming is exactly what Leaflet gives for free, which is also why this
+  is dramatically simpler than the Google Photorealistic 3D Maps system it
+  replaced (no API key, no follow-camera chase math, no cinematic overview
+  flight patterns, no terrain-avoidance lift). `map-init.mjs#initMap` creates
+  the Leaflet map and a single OpenStreetMap tile layer (`MAP_TILE_URL`,
+  `MAP_ATTRIBUTION`, `MAP_MAX_ZOOM` in `tuning.mjs` — never remove or hide the
+  OpenStreetMap attribution, it's required by the tile usage policy). Leaflet
+  is vendored (`app/vendor/leaflet/`, fetched once from the npm registry's
+  published `dist/` build) rather than pointed at a CDN `<script>` tag: this
+  keeps the map working even when a CDN is unreachable or blocked by a
+  restrictive network policy (as this sandbox's own outbound proxy blocks
+  unpkg.com/jsdelivr/cdnjs — a real risk this app's users could hit too), and
+  since it's just static files with no build step, vendoring costs nothing.
+  The route line (`route-render.mjs#renderRouteLines`) is grade-colored
+  `L.polyline` segments built the same way the old 3D route was —
+  `route-style.mjs`'s pure segment-styling helpers are unchanged, they just
+  feed Leaflet polylines instead of `Polyline3DElement`s. The rider marker
+  (`renderRiderMarker`/`updateRiderMarker`) is an `L.marker` with a `divIcon`:
+  a small circular dot (`.rider-marker-ring`, amber-on-amber-ring matching the
+  brand "GPX Rider" logo dot) with a directional arrow (`.rider-marker-arrow`)
+  that rotates to `headingAt(route, progressMeters)` (`route.mjs`) each frame
+  — CSS `transform: rotate()` on an element that spans the whole icon box, so
+  it turns around the marker's own center. `map-view.mjs` owns the three map
+  modes in `state.mapMode`:
+  - `"follow"` — `updateMapFollow` (called from `ride-ui.mjs` on the slow-UI
+    cadence, not every frame — restarting Leaflet's own `panTo` glide 60
+    times a second looks worse than a few times a second) pans the map to the
+    rider's current position if `state.followRider` is on (the map action bar
+    / Settings "keep rider centered" toggle, `centerRiderInput`/
+    `centerRiderBtn`).
+  - `"overview"` — `enterOverviewMode({ route, instant })` fits the map to a
+    route's bounds (`L.map#fitBounds`, padded by `MAP_OVERVIEW_PADDING_PIXELS`).
+    Passing a climb/segment slice instead of the whole route (from
+    `climbs-ui.mjs#focusClimb`/`focusProfileSegment`) frames just that range —
+    there is no separate "climb camera mode" anymore, it's the same fit
+    against a smaller route array. `instant` skips Leaflet's pan/zoom
+    animation for a fresh route load (a new route can be on the other side of
+    the world).
+  - `"manual"` — the user dragged or zoomed the map by hand
+    (`bindManualMapCapture`'s `dragstart`/`zoomstart` listeners, guarded by
+    `state.programmaticMapMove` so the app's own `panTo`/`fitBounds`/`setView`
+    calls don't trip them). Nothing recenters the map until the user presses
+    the overview toggle or the recenter button.
+  `toggleRouteOverview` drives the map action bar's overview button exactly
+  like before: pressed once frames the whole route, pressed again (from a
+  climb/segment-focused overview) returns to the whole-route overview, pressed
+  from there returns to following the rider. Movement starting (pedal or sim)
+  always calls `returnToFollow()` once via `ensureMovementLoop` — the overview
+  is **never** force-disabled at any other time, matching the old camera's
+  behavior; a user may still toggle it on mid-ride.
 
 ## Persistence
 
@@ -768,51 +468,11 @@ Records saved by older versions in localStorage are migrated into
 IndexedDB on first load; browsers without working IndexedDB fall back to
 localStorage transparently. Keys: `gpx-rider:settings`,
 `gpx-rider:last-ride` (route + progress), `gpx-rider:ride-log` (recorded
-samples), `gpx-rider:last-trainer`, `gpx-rider:last-heart-rate`. The one
-deliberate exception is `gpx-rider:maps-api-key`, which stays in
-localStorage (handled directly in `map-init.mjs`): saving it reloads the page
-immediately, and only a synchronous write is guaranteed to survive that.
-Never send any of these anywhere; the app's privacy story is "everything
-stays in the browser".
-
-## Deployed Maps API key
-
-The live GitHub Pages demo works without a visitor pasting a key: the
-`MAPS_API_KEY` repository secret (an HTTP referrer-restricted key, scoped to
-the Pages origin) is base64-encoded and baked into `app/config.mjs` at
-deploy time by `scripts/inject_maps_api_key.py`, run from `deploy-pages.yml`
-before the Pages artifact is uploaded. The encoding is cosmetic — a webapp's
-key is always visible in the network tab regardless — it just keeps the raw
-key out of the JS source as a greppable literal. `map-init.mjs`'s
-`resolveMapsApiKey()` prefers a key a visitor saved in Settings over this
-default, so self-hosters and forks without the secret get the exact same
-"paste your key" flow as before — `app/config.mjs` just stays empty. When a
-deployed key is present, `startApp()` hides the whole API-key section in
-Settings (`els.apiKeySection`) instead of showing an empty field nobody
-needs. Never widen the referrer restriction beyond the exact deployed
-origin, and don't add a second, unrestricted key anywhere in the client
-bundle. The landing page (`landing.mjs`) resolves the key the same way —
-visitor's saved key, else the baked-in `config.mjs` key — so it lights up on
-the live demo and in local dev without any separate wiring.
-
-`inject_maps_api_key.py` also injects the optional `HEAD` repository variable
-(deployment-only tags such as analytics) right after `<head>` in
-`app/index.html`, which is now the **landing page** — the public entry point,
-so that is where such tags belong.
-
-**Local dev key.** For local development the map needs a key too, but it must
-never be committed. `scripts/dev_server.py` injects a *local* key into the
-`app/config.mjs` it serves (the on-disk file stays the empty default), using
-the same base64 substitution as the deploy script. The key is read from the
-`MAPS_API_KEY` environment variable, or from a `.maps-api-key` file at the repo
-root — both are gitignored (`.maps-api-key` is in `.gitignore`) and must stay
-out of git. With neither present the served config stays empty and the app
-falls back to the Settings "paste your key" prompt, exactly as in a fork.
-**If you're set up on a machine where `.maps-api-key` is missing (a fresh
-clone — the file is intentionally not in git), ask the user for their Google
-Maps API key and write it to `.maps-api-key` at the repo root** (a single line,
-no quotes); then `make run` / the preview server will pick it up. Never paste a
-key into a tracked file or commit it.
+samples), `gpx-rider:last-trainer`, `gpx-rider:last-heart-rate`. Never send
+any of these anywhere; the app's privacy story is "everything stays in the
+browser". There is no API key to manage anywhere: OpenStreetMap tiles are
+free and anonymous, so the map works identically for every visitor, fork,
+and local checkout with zero setup.
 
 ## Documentation duties
 
@@ -822,23 +482,24 @@ key into a tracked file or commit it.
   docs are treated as bugs.
 - **Feature interesting algorithms and architecture decisions in the
   README's "Under the hood" section.** When a change introduces or replaces
-  a non-obvious algorithm (e.g. the camera transition-arc kinematics or the
-  climb-detection fatigue model) or makes an architecture decision worth
-  explaining (an ADR-style "why this approach, not the obvious one"), add or
-  update a subsection there in the same change — short intro, a bullet list
-  of the techniques involved, and links to the pure module(s), their tests,
-  and the relevant `tuning.yaml` section. Match the existing subsections'
-  style. Routine bug fixes and small feature additions don't need this;
-  reserve it for things a contributor would otherwise have to read the code
-  to discover.
+  a non-obvious algorithm (e.g. the climb-detection fatigue model) or makes
+  an architecture decision worth explaining (an ADR-style "why this approach,
+  not the obvious one" — e.g. vendoring Leaflet, or dropping the 3D camera
+  for a top-down map) add or update a subsection there in the same change —
+  short intro, a bullet list of the techniques involved, and links to the
+  pure module(s), their tests, and the relevant `tuning.yaml` section. Match
+  the existing subsections' style. Routine bug fixes and small feature
+  additions don't need this; reserve it for things a contributor would
+  otherwise have to read the code to discover.
 - Keep `AGENTS.md` and `CLAUDE.md` synchronized. Any change to one
   agent-instruction file must be reflected in the other in the same change
   (preserving only filename-specific titles if needed).
 - Keep these files updated when the architecture or conventions change.
-- Gallery route text and preview framing live in `gallery/*/metadata.json`.
-  Use the setup page's Export to gallery card to copy the current map camera
-  into that file, then run `make gallery-data`. The README does not contain a
-  generated route gallery.
+- Gallery route text lives in `gallery/*/metadata.json` (`title`,
+  `description`). Use the setup page's Export to gallery card to copy the
+  current title/description into that file, then run `make gallery-data` —
+  the card preview itself is always auto-framed to the route's bounds, so
+  there is no camera pose to hand-author.
 
 ## Testing & manual verification
 
@@ -852,7 +513,7 @@ key into a tracked file or commit it.
 - **Reproduce before you fix.** For a bug fix, write a failing unit test
   that captures the reported behavior *before* changing implementation code
   — for pure logic (layer 2 modules) this is a real `tests/*.test.mjs` case;
-  for something only reachable through the DOM/3D map, reproduce it manually
+  for something only reachable through the DOM/map, reproduce it manually
   in the browser first (`make run`) and note the exact repro steps. Watch it
   fail for the reason you expect, then implement the fix and watch the same
   test/repro pass. For a new feature, write the test(s) for the pure logic
@@ -861,8 +522,9 @@ key into a tracked file or commit it.
   `timestamp` by the local UTC offset (issue #4) rather than repeating the
   same UTC value — the failing test forced decoding the real encoded bytes
   instead of eyeballing the change.
-- Unit tests cover the pure modules (`camera`, `route`, `units`, `fit`,
-  `eta`). Add tests alongside any new pure logic.
+- Unit tests cover the pure modules (`route`, `units`, `fit`, `eta`,
+  `climbs`, `difficulty`, `demo`, `route-style`, `fec`, `yaml`, `storage`,
+  `profile`). Add tests alongside any new pure logic.
 - Web Bluetooth requires Chrome/Edge; hardware paths can't be unit-tested.
   When changing `trainer.mjs`/`heartrate.mjs`, preserve the existing
   logging (`[trainer]` console.debug lines) — it's the only field

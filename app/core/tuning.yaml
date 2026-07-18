@@ -165,388 +165,50 @@ eta:
   min_history_seconds: 45
   min_history_meters: 150
 
-# --- Camera defaults & bounds ------------------------------------------------
-camera:
-  # Follow-camera defaults (the settings sliders start here; "Reset camera"
-  # returns here). zoom is a multiplier on the base viewing distance,
-  # angle_degrees is the tilt from straight-down, behind_meters is how many
-  # meters the camera trails the rider.
-  follow_defaults:
-    zoom: 2.5
-    angle_degrees: 75
-    behind_meters: 800
+# --- Map (Leaflet + OpenStreetMap top-down view) ------------------------------
+#
+# GPX Rider renders a plain top-down 2D slippy map (Leaflet, loaded via CDN
+# script tags in app.html/index.html — no npm install, no build step) with
+# OpenStreetMap raster tiles. No API key is required: OSM tiles are free and
+# anonymous. There is no 3D camera, tilt, or perspective — panning and zooming
+# is exactly what Leaflet gives you for free.
+map:
+  # Standard OpenStreetMap tile server. "{s}" is a load-balanced subdomain,
+  # "{z}/{x}/{y}" the standard slippy-map tile coordinate.
+  tile_url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+  tile_subdomains: ["a", "b", "c"]
+  # Required by the OpenStreetMap tile usage policy — never remove or hide it.
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  max_zoom: 19
 
-  # First-person camera preset. default_height_meters approximates a seated
-  # rider's eye line; min/max bound the configurable eye height. The camera eye
-  # is placed at the rider and looks look_ahead_meters ahead on the route.
-  # tilt_degrees keeps the ordinary Camera angle slider near the horizon while
-  # the preset is selected.
-  first_person:
-    default_height_meters: 1.7
-    min_height_meters: 0.8
-    max_height_meters: 2.2
-    look_ahead_meters: 20
-    tilt_degrees: 88
+  # Shown before any route is loaded (roughly the Alps, matching the old
+  # default 3D camera's starting point).
+  default_center_lat: 46.8182
+  default_center_lng: 8.2275
+  default_zoom: 6
 
-  # Deliberately huge bounds: they exist only to keep corrupted saved settings
-  # from wedging the camera, not to restrict framing — wide shots for
-  # screenshots need extreme zoom-outs and pans.
-  bounds:
-    zoom_min: 0.001
-    zoom_max: 1000
-    pan_limit_meters: 100000
-    center_altitude_limit_meters: 20000
-    tilt_min: 1
-    tilt_max: 89
+  # Zoom level the follow camera settles at behind the rider while riding.
+  follow_zoom: 16
+
+  # Padding (screen pixels) kept clear around the route when fitting the whole
+  # route (or a focused climb/segment) into view.
+  overview_padding_pixels: 40
 
   # The rider's heading is sampled this many meters behind/ahead of the rider,
-  # so the camera points the way the rider moves rather than at a distant spot.
+  # so the marker points the way the rider moves rather than at a noisy single
+  # GPX segment.
   heading_sample_meters: 4
 
-  # After the user stops touching the map, the app waits this long before
-  # capturing the manual camera and resuming automatic control.
+  # After the user stops dragging/zooming the map, the app waits this long
+  # before resuming automatic follow/overview control.
   interaction_settle_ms: 600
 
-  # Map3DElement's documented default field of view, in degrees. Used to reset
-  # camera modes that do not deliberately tune FOV.
-  default_map_fov_degrees: 35
-
-# --- Route overview framing --------------------------------------------------
-#
-# Route overview shown when a route loads: whole route framed from this tilt.
-overview:
-  # Degrees from straight-down — 0 is top-down, ~89 is nearly at the horizon (a
-  # low, terrain-revealing angle). NOTE: Google's 3D map limits how far it will
-  # tilt toward the horizon when the camera is far out, so at the large range
-  # needed to frame a long route a high tilt may be pulled back toward
-  # top-down. Use the range knobs below to bring the camera closer if a steeper
-  # tilt isn't taking effect (watch the Debug camera overlay).
-  tilt_degrees: 70
-
-  # Which side the overview looks from, as a rotation (degrees) on top of the
-  # side the algorithm auto-picks (which puts the route's bulk away from the
-  # viewer, start-left/end-right). 0 = the auto choice; 180 = the exact opposite
-  # side, still with the route's long axis horizontal — this is how you flip a
-  # route to see it "from the other side". Other values swing the view to any
-  # azimuth (the route then reads diagonally, but it's still fully framed).
-  heading_offset_degrees: 0
-
-  # Slack around the route when fitting it to the viewport. 1.0 hugs the route
-  # to the screen edges; higher leaves more empty margin (camera further out).
-  margin_factor: 0.9
-
-  # Multiplier on the fitted overview range. 1 frames the whole route; below 1
-  # pulls the camera in closer (route edges crop off, but terrain relief reads
-  # much better at a low tilt); above 1 pushes it further out. This is the main
-  # knob for trading "see the whole route" against "see the 3D terrain".
-  range_factor: 0.75
-
-  # Hard bounds (meters) on the overview range, applied after the factor. The
-  # max cap is the other way to force a closer, more terrain-rich view on long
-  # routes (at the cost of not framing the whole thing); leave it at .inf to
-  # always frame the entire route. Min keeps tiny routes from zooming in absurdly.
-  min_range_meters: 250
-  max_range_meters: .inf
-
-# --- Overview motion (static / orbit / ellipse flyby) ------------------------
-overview_motion:
-  # How the whole-route overview behaves when a route loads. This is a user
-  # setting (Settings › Camera & view); the value here is only the default.
-  #   "static"           — the framed still shot (the classic overview)
-  #   "orbit"            — turntable: the static shot slowly rotates around the route
-  #   "flyby"            — a camera flies a PCA-aligned ellipse around the route
-  #   "flyover"          — a camera flies a figure-eight over the route (shares ellipse_flyby)
-  #   "satellite"        — straight-down, north-up view with the route framed as big as fits
-  default_mode: "orbit"
-
-  # Camera behavior after selecting a detected climb: "static" holds the
-  # fitted climb view; "orbit" circles it; "satellite" shows it north-up.
-  default_climb_focus_mode: "orbit"
-
-  # When an animated overview (orbit/flyby) starts from a different camera
-  # pose, ease into the motion over this many seconds instead of jumping.
-  anim_intro_seconds: 1.5
-
-  # Whole-route orbit: seconds for one full revolution, and spin direction
-  # (1 = clockwise seen from above, -1 = counter-clockwise). Longer = statelier.
-  orbit:
-    seconds_per_rev: 75
-    direction: 1
-
-  # Selected climbs are much smaller than whole routes, so their orbit gets its
-  # own faster, user-adjustable revolution time.
-  climb_orbit:
-    default_seconds_per_rev: 30
-    min_seconds_per_rev: 10
-    max_seconds_per_rev: 90
-
-  # Satellite overview: a straight-down (near-vertical), north-up still framing
-  # the whole route as large as it fits. tilt_degrees is how far from vertical
-  # the camera leans — 1 is the closest to true top-down Map3D allows (0 breaks
-  # the framing math). margin_factor is the fit margin: 1 fills the viewport
-  # edge-to-edge, higher leaves more breathing room.
-  satellite:
-    tilt_degrees: 1
-    margin_factor: 1.12
-
-  # Ellipse flyby (also drives the figure-eight "flyover" — same settings, only
-  # the path shape differs): a camera flies along an ellipse aligned to the
-  # route's principal axis and looks along its direction of travel. ellipse_scale
-  # below 1 lets the flight path cut inside the route footprint; higher altitude,
-  # view_distance, and a flatter mount_pitch keep more of the route in view.
-  # seconds_per_lap controls the target time for one complete ellipse circuit,
-  # like orbit's revolution duration. max_speed_mps caps the resulting speed; if
-  # the cap is hit, the actual lap takes longer than seconds_per_lap.
-  # fly_height_meters_min is the baseline height above the route's center
-  # altitude; fly_height_meters_above_terrain_min keeps the camera at least that
-  # far above the highest terrain along the flight path. The actual fly height
-  # uses whichever minimum requires the higher camera. The "highest terrain" is
-  # sampled along the whole flight path from online elevation tiles when they
-  # are enabled (so a hill the route detours around is still cleared); with
-  # tiles off it falls back to the highest *route* point under the ellipse,
-  # which can miss off-route hills. sample_count also sets how many points the
-  # flight path is sampled at for this terrain profile.
-  # camera_fov_degrees is passed to Map3D's `fov` property while the fly-by runs;
-  # 5 is telephoto, 80 is wide-angle, 35 matches the normal Map3D default.
-  # inward_look_degrees rotates the fly-by camera horizontally toward the inside
-  # of the ellipse: clockwise flights look right, counter-clockwise flights left.
-  # The fly-over (figure-eight) reuses this value but, since it changes turn
-  # direction each lobe, looks into whichever turn it is currently in and eases
-  # back to straight-ahead through the center crossings — so the same degrees
-  # read as "slightly left, then straight, then slightly right" over one lap.
-  # direction is 1 for clockwise seen from above, -1 for counter-clockwise.
-  # min_turn_radius_meters is a radius: 2500 m means the tightest possible circle
-  # would be 5 km across. max_bank_degrees is the roll applied at that tightest
-  # turn; broader turns roll proportionally less.
-  ellipse_flyby:
-    ellipse_scale: 0.78
-    min_semi_major_meters: 1200
-    min_semi_minor_meters: 700
-    min_turn_radius_meters: 750
-    direction: 1
-    seconds_per_lap: 40
-    max_speed_mps: 10000
-    fly_height_meters_min: 1400
-    fly_height_meters_above_terrain_min: 300
-    camera_fov_degrees: 60
-    inward_look_degrees: 20
-    mount_pitch_degrees: 15
-    view_distance_meters: 3200
-    max_bank_degrees: 60
-    sample_count: 360
-    start_angle_degrees: 0
-
-# --- Camera transition arcs (overview ↔ chase handoffs) -----------------------
-#
-# The flight the camera takes when it hands over between the route overview
-# and the rider chase camera (both directions): a physically-constrained
-# "missile POV" arc (app/camera/transition-arc.mjs) that matches the position
-# AND velocity of both endpoint cameras, looks along its own flight path
-# mid-flight, and banks into its turns. When no candidate duration can satisfy
-# the physical limits (or enabled is false) the handoff falls back to the
-# ordinary chase flight, exactly as before this feature existed.
-camera_transition:
-  enabled: true
-
-  # Which camera targets are flown into with the physical transition arc, vs.
-  # snapped/eased by their own driver. The arc only makes sense when the target
-  # is a continuously-moving camera you can dock onto with matching velocity:
-  #   "follow"  — the rider camera (the rider is a real moving object)
-  #   "flyby"   — the ellipse fly-by pattern (a natural continuous flight)
-  #   "flyover" — the figure-eight fly-over pattern (likewise)
-  # Deliberately NOT arced into: "static"/"orbit"/"satellite" overviews (incl.
-  # the climb-focus and finish-line variants) — they are artificial framings, so
-  # arcing into them like a real object reads as two stitched motions. A camera
-  # reset also stays off the arc (it is a small "put it back", not a transition).
-  # Remove a mode here to fall its transitions back to the plain chase/eased entry.
-  arc_into_modes: ["follow", "flyby", "flyover"]
-
-  # Where an arc into a fly-by / fly-over pattern docks. A joinable entry must
-  # be no steeper than this many degrees up from the horizon (the plain
-  # nearest pattern point is usually almost straight overhead, which forced a
-  # contorted joining arc) and must not oppose the pattern's travel direction
-  # (the pattern is a directed flight — docking where it heads back at the
-  # camera would whip the view around). Among joinable entries, the one
-  # needing the least head-turn from the current line of sight wins: a
-  # crossing dead ahead when the camera faces the pattern, else the first
-  # qualifying point that comes into view turning toward it. Steeper = allows
-  # entries closer to overhead; shallower = pushes entries further out.
-  fly_entry_climb_degrees: 45
-
-  # Candidate flight durations, in seconds: the solver scans from min upward
-  # in solver_step increments and flies the shortest duration whose curve
-  # passes every physical limit below. min is therefore the typical transition
-  # time; max only matters for awkward geometry (fast/opposed entry
-  # velocities), which sweeps wider, longer arcs before giving up.
-  min_duration_seconds: 7
-  max_duration_seconds: 12
-  solver_step_seconds: 0.5
-
-  # Scale-aware minimum turn radius: max(floor, fraction × straight-line
-  # distance). Short hops are "flown slower", so they may turn tighter — the
-  # limit is enforced as a lateral-acceleration cap of (distance/duration)² /
-  # radius, i.e. the full radius applies at cruise speed and shrinks with v²
-  # below it, the way a real turning aircraft's does. Raise the fraction for
-  # statelier, wider arcs; lower it to allow snappier turns.
-  min_turn_radius_floor_meters: 30
-  min_turn_radius_distance_fraction: 0.08
-
-  # Steepest climb/dive angle (degrees from horizontal) the flight tangent may
-  # reach. An overview sits high above the chase camera, so its dive is
-  # legitimately steep; below ~60 many overview→chase handoffs become
-  # unsolvable and fall back to the chase flight.
-  max_climb_angle_degrees: 75
-
-  # Loop-prevention guardrail from the Hermite fit: the velocity control
-  # offsets (velocity × duration/3) may not exceed this fraction of the
-  # straight-line distance, or the curve could fold back over itself. A
-  # candidate duration needing more is rejected (clamping would silently break
-  # the exact docking velocities).
-  velocity_clamp_distance_fraction: 0.5
-
-  # How much of the flight (fraction of normalized time, from each end) is
-  # used to sweep the view between the endpoint camera's real look direction
-  # and the mid-flight "look along the flight path" POV. Wider = gentler view
-  # rotation, narrower = more of the flight spent in pure missile POV.
-  lookat_blend_in_fraction: 0.25
-  lookat_blend_out_fraction: 0.35
-
-  # Roll applied when the arc turns hard: full bank exactly at the lateral-
-  # acceleration limit, proportionally less in gentler turns (same convention
-  # as the fly-by/fly-over modes: positive banks into a right turn).
-  max_bank_degrees: 25
-
-  # Samples along each candidate curve when checking the physical limits.
-  sample_count: 240
-
-  # Transitions shorter than this (meters between the two camera eyes) are not
-  # worth a flight — the ordinary chase flight handles them better.
-  min_distance_meters: 40
-
-# --- Finish-line orbit -------------------------------------------------------
-#
-# The instant a ride (pedaled, simulated, or demo) reaches the end of the
-# route, the camera leaves the rider and orbits the finish point instead of
-# freezing on the follow camera's last frame. It reuses the same animated
-# orbit driver as the modes above (same intro ease-in, same manual-drag/toggle
-# exit) but is centered directly on the finish point rather than a route-shape
-# fit, since "the route" at the finish line is a single point with nothing to
-# frame.
-finish_orbit:
-  enabled: true
-  range_meters: 1200
-  tilt_degrees: 75
-  seconds_per_rev: 60
-  direction: 1
-  # Height (meters) above the finish point's ground elevation the camera looks
-  # at, so the orbit centers roughly on rider-eye height instead of bare ground.
-  lookat_height_meters: 10
-
-# --- Overview debug travel line ----------------------------------------------
-#
-# Red overview travel line drawn while the camera debug overlay is enabled.
-# Orbit draws the orbit eye ground track; Fly-by draws its fitted ellipse.
-overview_debug_line:
-  color: "#ff2d2d"
-  width: 8
-  altitude_meters: 8
-  sample_count: 240
-
-# --- Camera terrain avoidance ------------------------------------------------
-#
-# Lift the camera when its view ray would sink into a hillside, easing back
-# down once the terrain allows. The terrain estimate comes from the route's
-# own elevation points — deliberately NOT the Google Elevation API, which
-# would cost real money at follow-camera query rates.
-terrain_avoidance:
-  enabled: true
-  clearance_meters: 20
-
-  # Switchback roads (e.g. the Amalfi Coast) fold back on themselves, so a
-  # hairpin's higher hillside can sit a couple of hundred meters away in
-  # straight-line terms while being far along the route path — a narrow radius
-  # only ever sees the (lower) stretch of road right at the sample point and
-  # misses that the ground behind it keeps climbing. Cast a wide net; slightly
-  # overestimating nearby terrain just holds the camera a bit higher; missing
-  # it puts the eye inside the hillside.
-  sample_radius_meters: 400
-
-  # How often the (relatively expensive) terrain scan reruns.
-  lift_recompute_ms: 150
-
-  # Rise fast enough to clear an approaching hill, settle back slowly so the
-  # camera does not pump up and down on rolling terrain. Time constants in
-  # seconds of exponential smoothing.
-  lift_rise_tau_seconds: 0.3
-  lift_fall_tau_seconds: 4
-
-# --- Follow-camera rider visibility ------------------------------------------
-#
-# Follow mode only. Terrain lift (above) raises the camera over a hillside its
-# view ray sinks into; this handles the *other* occlusion case — a hill sitting
-# squarely between the eye and the rider even with the eye well above ground,
-# where lifting further would only tip the view uselessly overhead. Instead the
-# camera swings horizontally around the rider (the rider stays centered, only
-# the viewing side changes), taking the least rotation left or right that clears
-# the hill. It reuses terrain_avoidance's clearance and terrain sources (route
-# elevation, plus online tiles when enabled), and eases in/out like the lift.
-# NOT applied in any other camera mode (overview / orbit / fly / transition).
-rider_visibility:
-  enabled: false
-
-  # Search up to this many degrees each way for a clear line of sight, in these
-  # steps. Wider max lets the camera swing further around a big hill; a finer
-  # step finds a tighter clearing swing at the cost of more terrain lookups.
-  max_nudge_degrees: 72
-  step_degrees: 8
-
-  # Points sampled along the eye→rider sightline when testing for occlusion.
-  ray_samples: 6
-
-  # How often the (relatively expensive) occlusion search reruns. Between runs
-  # the applied swing keeps easing toward the last computed target.
-  recompute_ms: 150
-
-  # Swing toward a clearing angle quickly, ease back to straight-behind slowly,
-  # so the camera does not jitter sideways on broken terrain. Seconds.
-  rise_tau_seconds: 0.35
-  fall_tau_seconds: 2.5
-
-# --- Online terrain elevation (Mapzen Terrarium tiles) -----------------------
-#
-# Real ground elevation streamed from the public Mapzen Terrarium terrain-RGB
-# tiles on the AWS Open Data bucket — no API key, no cost, anonymous requests.
-# It augments the route-based estimate above (the camera lift takes the higher
-# of the two) so the follow camera clears hillsides the GPX track itself never
-# climbs. When off, the app falls back to the route-only estimate and no tiles
-# are ever fetched. Google's own 3D map already streams imagery for the same
-# area, so this exposes no location the map didn't already request.
-terrain_tiles:
-  # Default for the "Use online terrain data" toggle in Rendering settings.
-  enabled: true
-
-  # Slippy-map base URL; "{z}/{x}/{y}.png" is appended. The AWS Open Data
-  # bucket is public and serves the tiles with permissive CORS, so the browser
-  # can read their pixels back off a canvas to decode elevation.
-  base_url: "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/"
-
-  # Fetch zoom level. Higher = finer ground detail but more/larger tiles; 12 is
-  # ~9.5 m per pixel at the equator (finer toward the poles), plenty for keeping
-  # the camera above ridgelines, and one tile spans several km so a whole ride
-  # usually stays inside one or two cached tiles.
-  zoom: 12
-
-  # Terrarium tiles are always 256×256 px.
-  tile_size: 256
-
-  # Max decoded tiles kept in memory (each is tile_size² floats ≈ 256 KB at
-  # 256 px), LRU-evicted past this. The browser's own HTTP cache still avoids
-  # re-downloading evicted tiles.
-  max_cache_tiles: 64
-
-  # Open-data attribution shown at the bottom of the setup panel while online
-  # terrain is on (the compiled SRTM/USGS sources ask for a credit line).
-  attribution: "Elevation data courtesy of Mapzen / AWS Open Data"
+  # The rider marker: a small circular dot with a directional arrow that
+  # rotates to the current heading, echoing the brand "GPX Rider" logo dot
+  # (solid amber center, paler amber ring).
+  marker_size_pixels: 22
+  marker_color: "#f6a52c"
+  marker_ring_color: "rgba(246, 165, 44, 0.35)"
 
 # --- Profile segment selection -----------------------------------------------
 profile_segment_selection:
@@ -559,128 +221,28 @@ profile_segment_selection:
   min_meters: 50
   min_route_fraction: 0.01
 
-# --- Rider beacon (defaults for the Rendering settings) ----------------------
-#
-# A translucent extruded cylinder standing on the rider so the position stays
-# visible when trees or buildings hide the ground dot. Off by default — it's
-# visually heavy; opt in from the Rendering settings.
-rider_beacon:
-  enabled: false
-  diameter_meters: 5
-  height_meters: 20
-  opacity: 0.35
-  color: "#ffffff"
-
-# --- Rider dot ---------------------------------------------------------------
-#
-# The ground marker showing the rider's position is a Model3DElement (see
-# renderRiderDot in map/route-render.mjs), not a filled Polygon3DElement.
-# Polygon3DElement is meant for static terrain-draped areas; re-tessellating
-# one every frame as the rider moves produced two separate failures confirmed
-# in a real browser (not just reasoned about): the fill rendering solid black
-# at ordinary follow-camera distances — independent of polygon winding,
-# altitude/z-fighting with terrain (tried 1m through 20m up), and
-# `extruded: true` (a short cylinder instead of a flat disc), none of which
-# changed it — and a faceted/streaky look from the constant re-triangulation.
-# A real mesh sidesteps both.
-rider_dot:
-  # A path relative to app/, resolved by map/route-render.mjs against the app
-  # root (not the page), so it loads correctly regardless of what path GPX Rider
-  # is served from. Swap this to experiment with other models — a couple of
-  # things to expect when trying a new one, both confirmed by testing, neither
-  # documented anywhere we could find:
-  #   - A model's local "up" axis does not necessarily map to world-up; if a
-  #     new model stands on its edge instead of lying flat, adjust orientation
-  #     below (the shipped puck needed tilt: 90).
-  #   - An ordinary lit PBR material can render solid black on this renderer
-  #     regardless of normals/winding/texturing — if a replacement model
-  #     renders black, look for (or add) a KHR_materials_unlit extension on
-  #     its materials, the same fix the shipped puck needed.
-  model_path: "assets/rider-dot.glb"
-
-  # heading/tilt/roll passed straight to Model3DElement's `orientation`. Not
-  # meaningful in isolation — it corrects for the specific model at model_path's
-  # own local axes, so re-tune this whenever that model changes (see the note
-  # above).
-  orientation:
-    heading: 0
-    tilt: 90
-    roll: 0
-
-  # The model at model_path is baked to a true 1 meter diameter, so this is a
-  # plain real-world size multiplier, not a unitless fudge factor — unlike a
-  # screen-space billboard (Marker3DElement + PinElement, tried and rejected:
-  # doesn't grow/shrink with camera distance the way a real ground object
-  # should, and a map-pin shape doesn't read as a location dot anyway). A
-  # different model baked to a different base size will need this retuned.
-  scale: 5
-
-  # Extra size multiplier while the whole-route overview is active. The camera
-  # is much farther away there, so the normal ride-scale dot can become hard to
-  # spot.
-  overview_scale_factor: 2.4
-
-  # Only used by the Polyline3DElement fallback for browsers without
-  # Model3DElement (see renderRiderDot) — an outlined ring instead of a filled
-  # dot, since Polyline3DElement has no fill. Diameter in meters.
-  diameter_meters: 5
-
-  # How high the dot's origin sits above the terrain, in meters. Independent
-  # of route_line.altitude_meters on purpose: the route line has to float well
-  # clear of the terrain because a thin drawn line clamped to the ground
-  # smears down slopes, but a real mesh (Model3DElement) doesn't have that
-  # problem, so there's no reason to lift it off the ground the way the line
-  # is. Not 0 though (confirmed by testing, not just assumed): the shipped
-  # puck's origin is at its vertical center (0.15m tall, see
-  # scripts/generate_rider_dot_model.py), so at 0 its bottom half was buried
-  # in the terrain — and the model needed clearing by more than just its own
-  # half-height (0.075m) to fully stop clipping on steep terrain, most likely
-  # because the terrain mesh itself isn't perfectly smooth/precise at close
-  # range. 0.5 was the smallest value that cleared cleanly on a steep
-  # switchback in testing. Retune per model at model_path — start from that
-  # model's own half-height above 0 and increase from there if it still clips,
-  # especially on steep terrain.
-  altitude_meters: 0.5
-
 # --- Route line rendering ----------------------------------------------------
 route_line:
   # Color the map route by the same grade buckets as the elevation profile.
   # Turning this off restores the single blue route trace.
   grade_colors_enabled: true
 
-  # The route line floats this high above the terrain instead of being draped
-  # onto it (draped strokes smear down steep slopes into wide blobs).
-  altitude_meters: 2.5
   color: "#0a84ff"
-  width: 14
-  outer_color: "rgba(255, 255, 255, 0.72)"
-  outer_width: 0.35
+  width: 5
 
-  # Selected climbs replace their normal route segments with this wider,
-  # brighter-cased treatment. No second stacked line is used, avoiding z-fight.
-  focus_line_width: 19
-  focus_outer_color: "rgba(255, 255, 255, 0.96)"
-  focus_outer_width: 0.8
-
-  # The path is densified so elevated segments follow the ground between GPX
-  # points; spacing grows on very long routes to cap the vertex count the map
-  # engine has to handle.
-  spacing_meters: 15
-  max_points: 5000
+  # Selected climbs/segments replace their normal route segments with this
+  # wider treatment.
+  focus_width: 8
 
 # --- Gallery previews & mini profiles ----------------------------------------
 gallery:
   preview:
-    # Gallery cards start with lightweight classic satellite maps. fit_padding
-    # keeps each route clear of the thumbnail edges after fitting its bounds.
-    map_type: "satellite"
+    # Gallery cards show a lightweight top-down Leaflet preview map, auto-
+    # framed to the route's bounds. fit_padding keeps the route clear of the
+    # thumbnail edges.
     fit_padding_pixels: 20
-    # Route styling shared by the gallery's classic and opt-in 3D previews.
     route_color: "#0a84ff"
-    route_width_2d: 5
-    route_width_3d: 14
-    route_outer_color_3d: "rgba(255, 255, 255, 0.72)"
-    route_outer_width_3d: 0.35
+    route_width: 3
 
   # Gallery card mini elevation profile (baked into app/gallery.json by
   # scripts/generate_gallery_json.py — rerun `make gallery-data` after changing
@@ -724,17 +286,9 @@ recording:
     climb_banner: false
     demo_chip: false
     controls: false
-    minimap: false
 
 # --- Display & HUD defaults --------------------------------------------------
 display_hud:
-  # Satellite minimap overlay above the fullscreen data dock.
-  show_minimap: false
-
-  # Place labels (roads, towns, POIs) on the main 3D map. Off = clean
-  # satellite imagery, on = Google's hybrid mode with labels.
-  map_labels_enabled: false
-
   # Local clock format used by the fullscreen top-left stats chip. The user's
   # choice is persisted with the other display settings.
   time_format: "24"
@@ -751,19 +305,6 @@ display_hud:
   # notifications remain the data source; this loop republishes the current
   # strap truth to every display even while the ride/map UI is otherwise idle.
   heart_rate_refresh_ms: 1000
-
-  # Developer overlay: a small translucent box on the map showing the live
-  # camera values the 3D map actually applies (tilt/range/heading/center),
-  # plus ride progress. Off by default — it's a diagnostics aid, e.g. for
-  # reading what tilt Google honours after a manual drag versus what we ask
-  # for. The overlay refreshes on refresh_ms while it's visible.
-  camera_debug:
-    enabled: false
-    refresh_ms: 100
-
-  # Keep the gallery metadata camera readout live during animated overviews
-  # without rebuilding its formatted JSON on every animation frame.
-  gallery_metadata_camera_refresh_ms: 100
 
   # Ordered fullscreen bottom-dock data fields. Keys must match the
   # data-hud="…" attributes in app.html. visible_count controls how many
@@ -1109,12 +650,12 @@ ride_recording:
 # --- Landing page hero replay ------------------------------------------------
 #
 # The public landing page (app/index.html, driven by app/landing/landing.mjs)
-# plays a looping cinematic replay of one route over the same Google
-# Photorealistic 3D map the app uses, with a faked HUD, then a summit orbit,
-# then fades and loops. These are that replay's only knobs — the landing has
-# no settings UI, so unlike the rest of this file they are not user-facing
-# defaults, just the one place to retune the hero without touching
-# landing.mjs. All are read through LANDING_HERO in landing.mjs.
+# plays a looping top-down replay of one route over the same Leaflet/OSM map
+# the app uses, with a faked HUD, then a whole-route overview hold, then fades
+# and loops. These are that replay's only knobs — the landing has no settings
+# UI, so unlike the rest of this file they are not user-facing defaults, just
+# the one place to retune the hero without touching landing.mjs. All are read
+# through LANDING_HERO in landing.mjs.
 landing_hero:
   # Background-app treatment behind the headline: how much the map+HUD are
   # dimmed (0–0.75, higher = darker) and blurred (px), plus the strength of
@@ -1134,27 +675,15 @@ landing_hero:
   finale_speed_kmh: 16
   finale_seconds: 40
 
-  # Chase camera during the ride: distance behind (m), tilt toward the
-  # horizon (deg), how far ahead of the rider the camera aims into a turn
-  # (m), and the pan rate/acceleration limits that keep heading changes
-  # smooth (deg/s, deg/s²).
-  chase_range_meters: 440
-  chase_tilt_degrees: 75
-  cam_lookahead_meters: 0
-  cam_turn_rate_deg_per_sec: 40
-  cam_turn_accel_deg_per_sec2: 20
+  # Top-down follow map zoom level while the ride phase plays.
+  chase_zoom: 15
 
-  # Summit orbit after finishing: orbit distance (m), tilt (deg), seconds per
-  # full revolution, and how long the orbit runs before the fade-out and loop.
-  orbit_range_meters: 1000
-  orbit_tilt_degrees: 75
-  orbit_seconds_per_rev: 70
-  orbit_seconds: 22
+  # Whole-route overview after finishing: how long it holds before the
+  # fade-out and loop.
+  overview_seconds: 22
 
-  # Assets the hero pulls in, relative to app/. The rider marker mesh is the
-  # same model the app rides on; set fallback_image_path to a still image when
-  # the 3D map should have an image fallback for no-key/unsupported cases.
-  rider_model_path: "assets/rider-dot.glb"
+  # Set fallback_image_path to a still image shown if the map tiles fail to
+  # load (e.g. no network) so the page still reads.
   fallback_image_path: ""
 
   # Detected climbs on the replayed route, as [start_meters, end_meters] spans

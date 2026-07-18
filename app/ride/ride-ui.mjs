@@ -1,13 +1,11 @@
-// Live ride UI: updateRideUi is the per-tick UI driver — per-frame camera/dot
-// work first, then (on the slow-UI cadence) the DOM stats, progress bars,
-// profile redraw, HUD tiles, dock readouts, climb status/banner, and the
-// trainer grade sample.
+// Live ride UI: updateRideUi is the per-tick UI driver — per-frame rider
+// marker work first, then (on the slow-UI cadence) the DOM stats, progress
+// bars, profile redraw, HUD tiles, dock readouts, climb status/banner, map
+// follow, and the trainer grade sample.
 
-import { updateCameraSettingsLabels } from "../camera/camera-ui.mjs";
-import { isFirstPersonCameraView } from "../camera/camera-ui.mjs";
 import { updateClimbStatus, updateFullscreenClimbBanner } from "../route/climbs-ui.mjs";
 import { estimateRemainingSeconds } from "./eta.mjs";
-import { updateMapCamera } from "../camera/follow-camera.mjs";
+import { updateMapFollow } from "../map/map-view.mjs";
 import { updateGalleryMetadataExport } from "../gallery-ui/gallery-export.mjs";
 import { clamp } from "../core/geo.mjs";
 import { updateFullscreenClock } from "../hud/map-hud.mjs";
@@ -23,12 +21,7 @@ import {
   routeTotalDescent,
   routeTotalDistance,
 } from "../route/route.mjs";
-import {
-  removeRiderMarker,
-  renderRiderDot,
-  updateMinimapPosition,
-  updateRiderDot,
-} from "../map/route-render.mjs";
+import { renderRiderMarker, updateRiderMarker } from "../map/route-render.mjs";
 import { els, state, updateProgressLabel } from "../core/state.mjs";
 import { currentCaloriesKcal, currentRideTimerSeconds } from "./telemetry-ui.mjs";
 import { queueTrainerGradeSample } from "../trainer/trainer.mjs";
@@ -46,14 +39,8 @@ export function updateRideUi(options = {}) {
 
   const point = interpolateRoutePoint(state.route, state.progressMeters);
 
-  if (isFirstPersonCameraView()) {
-    removeRiderMarker();
-  } else if (state.riderDot) {
-    updateRiderDot(point);
-  } else if (state.mapProvider === "google3d" && state.map) {
-    renderRiderDot(point);
-  }
-  updateMapCamera();
+  if (state.riderMarker) updateRiderMarker(point);
+  else if (state.map) renderRiderMarker(point);
 
   // Per-frame work ends here. DOM stats, the profile canvas, and the trainer
   // grade only need a few updates per second while riding.
@@ -93,8 +80,7 @@ export function updateRideUi(options = {}) {
   updateAscentProgress(ascentSoFar, totalAscent);
   updateClimbStatus(point);
   renderProfile(progress);
-  updateMinimapPosition(point);
-  updateCameraSettingsLabels();
+  updateMapFollow(point);
   updateGalleryMetadataExport();
 
   els.hudGradeStat.textContent = `${grade.toFixed(1)}%`;

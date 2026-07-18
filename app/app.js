@@ -5,33 +5,16 @@
 // about to add a function here, it almost certainly belongs in one of those
 // modules instead.
 
-import { deployedMapsApiKey } from "./config.mjs";
 import {
-  closeCameraViewMenu,
-  closeOverviewModeMenu,
-  closeOverviewModeMenuOnOutsideClick,
-  resetCameraView,
   returnFromClimbOverview,
-  selectCameraViewPresetFromMenu,
-  selectClimbOverviewModeFromMenu,
-  selectOverviewModeFromMenu,
-  toggleCameraViewMenu,
-  toggleClimbOverviewModeMenu,
-  toggleOverviewModeMenu,
   toggleRouteOverview,
-  updateCameraSettingsFromControls,
   updateCenterRiderFromControl,
-  updateClimbFocusModeFromControl,
-  updateClimbOrbitSpeedFromControl,
-  updateFirstPersonHeightFromControl,
-  updateOverviewModeFromControl,
-} from "./camera/camera-ui.mjs";
-import { registerCameraDebugHud, toggleCameraDebugCollapsed } from "./camera/camera-debug.mjs";
+} from "./map/map-view.mjs";
 import { registerDemoBannerHud, toggleDemoMode } from "./demo/demo-mode.mjs";
 import { copyGalleryMetadata, syncGalleryMetadataExportAvailability, updateGalleryMetadataExport } from "./gallery-ui/gallery-export.mjs";
 import { initGallery } from "./gallery-ui/gallery.mjs";
 import { connectHeartRate, initHeartRate, reconnectSavedHeartRate } from "./trainer/heartrate.mjs";
-import { getStoredMapsApiKey, initMap, registerMinimapHud, saveMapsApiKey } from "./map/map-init.mjs";
+import { initMap } from "./map/map-init.mjs";
 import {
   adjustHudVisibleCount,
   exitMapFullscreen,
@@ -88,8 +71,6 @@ import {
 } from "./ride/training-zones.mjs";
 import {
   APP_NAME,
-  CLIMB_ORBIT_SECONDS_PER_REV_MAX,
-  CLIMB_ORBIT_SECONDS_PER_REV_MIN,
   DEFAULT_SIMULATION_SPEED_KPH,
   SIMULATION_SPEED_MAX_KPH,
   SIMULATION_SPEED_MIN_KPH,
@@ -120,8 +101,6 @@ async function startApp() {
   els.speedInput.min = String(SIMULATION_SPEED_MIN_KPH);
   els.speedInput.max = String(SIMULATION_SPEED_MAX_KPH);
   els.speedInput.value = String(DEFAULT_SIMULATION_SPEED_KPH);
-  els.climbOrbitSpeedInput.min = String(CLIMB_ORBIT_SECONDS_PER_REV_MIN);
-  els.climbOrbitSpeedInput.max = String(CLIMB_ORBIT_SECONDS_PER_REV_MAX);
 
   // The HUD layout regions must exist before any feature registers its
   // component with the screen manager. Each feature owns and registers its
@@ -132,17 +111,11 @@ async function startApp() {
   registerClimbBannerHud();
   registerDemoBannerHud();
   registerTrainingMetersHud();
-  registerCameraDebugHud();
-  registerMinimapHud();
 
   restoreSettings();
   restoreRideLog();
   state.powerCaloriesKcal = rideLogSummary().caloriesKcal ?? 0;
   updateRecordingUi();
-  els.mapsApiKeyInput.value = getStoredMapsApiKey();
-  // A deployment with its own baked-in key has no need for visitors to see
-  // or manage one — hide the whole control instead of just leaving it empty.
-  els.apiKeySection.hidden = Boolean(deployedMapsApiKey());
   await initMap();
   bindEvents();
   initializeMapHud();
@@ -151,19 +124,16 @@ async function startApp() {
   void reconnectSavedTrainer();
   void reconnectSavedHeartRate();
   // First open with no saved ride: start on the first gallery route instead
-  // of an empty map (only once the map is actually up — a missing API key
-  // keeps the "paste your key" flow front and center instead).
-  // The landing page's "Launch GPX Rider" button deep-links a specific gallery
-  // route via ?route=<id>; that forces the route on load, ahead of any saved
-  // ride or the first-open auto-load (handled in gallery.mjs).
+  // of an empty map. The landing page's "Launch GPX Rider" button deep-links
+  // a specific gallery route via ?route=<id>; that forces the route on load,
+  // ahead of any saved ride or the first-open auto-load (handled in
+  // gallery.mjs).
   const requestedRouteId = new URLSearchParams(location.search).get("route");
   void initGallery(loadGpxFromUrl, {
     shouldAutoLoadFirst: () => state.route.length < 2 && Boolean(state.map),
     getRequestedRouteId: () => requestedRouteId,
     getCurrentRouteName: () => state.routeName,
     getDistanceUnits: () => state.distanceUnits,
-    getMaps3d: () => state.maps3d,
-    getMapLabelsEnabled: () => state.mapLabelsEnabled,
   });
 }
 
@@ -179,13 +149,6 @@ function bindEvents() {
     // A click on the dialog element itself (not its content) is the backdrop.
     if (event.target === els.settingsDialog) els.settingsDialog.close();
   });
-  els.mapsApiKeySaveBtn.addEventListener("click", saveMapsApiKey);
-  els.mapsApiKeyInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      saveMapsApiKey();
-    }
-  });
   els.gpxFile.addEventListener("change", loadGpxFile);
   els.speedInput.addEventListener("input", () => {
     updateSpeedOutput();
@@ -200,44 +163,23 @@ function bindEvents() {
   els.maxHeartRateInput.addEventListener("change", updateRiderProfileFromControls);
   els.ftpInput.addEventListener("change", updateRiderProfileFromControls);
   els.zoneHelpButtons.forEach((button) => button.addEventListener("click", toggleZoneHelp));
-  els.minimapInput.addEventListener("change", updateDisplaySettingsFromControls);
-  els.mapLabelsInput.addEventListener("change", updateDisplaySettingsFromControls);
-  els.cameraDebugInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.theaterHideClockInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.theaterHideMetersInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.theaterHideDockInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.theaterHideClimbBannerInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.theaterHideDemoChipInput.addEventListener("change", updateDisplaySettingsFromControls);
   els.theaterHideControlsInput.addEventListener("change", updateDisplaySettingsFromControls);
-  els.theaterHideMinimapInput.addEventListener("change", updateDisplaySettingsFromControls);
-  els.cameraDebugCollapseBtn.addEventListener("click", toggleCameraDebugCollapsed);
   els.hudLessBtn.addEventListener("click", () => adjustHudVisibleCount(-1));
   els.hudMoreBtn.addEventListener("click", () => adjustHudVisibleCount(1));
   els.hudSettingsBtn.addEventListener("click", () => openSettings("hud"));
   els.hudVisibleLessBtn.addEventListener("click", () => adjustHudVisibleCount(-1));
   els.hudVisibleMoreBtn.addEventListener("click", () => adjustHudVisibleCount(1));
   els.profileSeriesButtons.forEach((button) => button.addEventListener("click", toggleProfileSeries));
-  els.overviewModeSelect.addEventListener("change", updateOverviewModeFromControl);
-  els.climbFocusModeSelect.addEventListener("change", updateClimbFocusModeFromControl);
-  els.climbOrbitSpeedInput.addEventListener("input", updateClimbOrbitSpeedFromControl);
-  els.cameraZoomInput.addEventListener("input", updateCameraSettingsFromControls);
-  els.cameraAngleInput.addEventListener("input", updateCameraSettingsFromControls);
-  els.cameraBehindInput.addEventListener("input", updateCameraSettingsFromControls);
-  els.firstPersonHeightInput.addEventListener("input", updateFirstPersonHeightFromControl);
   els.centerRiderInput.addEventListener("change", updateCenterRiderFromControl);
   els.centerRiderBtn.addEventListener("click", () => {
     els.centerRiderInput.checked = !els.centerRiderInput.checked;
     updateCenterRiderFromControl();
   });
-  els.resetCameraBtn.addEventListener("click", resetCameraView);
-  els.beaconEnabledInput.addEventListener("change", updateRenderingSettingsFromControls);
-  els.beaconDiameterInput.addEventListener("input", updateRenderingSettingsFromControls);
-  els.beaconHeightInput.addEventListener("input", updateRenderingSettingsFromControls);
-  els.beaconOpacityInput.addEventListener("input", updateRenderingSettingsFromControls);
-  els.beaconColorInput.addEventListener("input", updateRenderingSettingsFromControls);
-  els.terrainAvoidInput.addEventListener("change", updateRenderingSettingsFromControls);
-  els.terrainClearanceInput.addEventListener("input", updateRenderingSettingsFromControls);
-  els.terrainTilesInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.routeGradeColorsInput.addEventListener("change", updateRenderingSettingsFromControls);
   els.resetRenderingBtn.addEventListener("click", resetRenderingToDefaults);
   els.connectBtn.addEventListener("click", connectTrainer);
@@ -257,15 +199,8 @@ function bindEvents() {
   els.profile.addEventListener("click", handleProfileClick);
   els.fullscreenBtn.addEventListener("click", toggleMapFullscreen);
   els.dockToggleBtn.addEventListener("click", toggleHudDock);
-  els.resetCameraViewBtn.addEventListener("click", resetCameraView);
-  els.cameraViewMenuBtn.addEventListener("click", toggleCameraViewMenu);
-  els.cameraViewButtons.forEach((button) => button.addEventListener("click", selectCameraViewPresetFromMenu));
   els.overviewToggleBtn.addEventListener("click", toggleRouteOverview);
-  els.overviewMenuBtn.addEventListener("click", toggleOverviewModeMenu);
-  els.overviewModeButtons.forEach((button) => button.addEventListener("click", selectOverviewModeFromMenu));
   els.climbOverviewToggleBtn.addEventListener("click", returnFromClimbOverview);
-  els.climbOverviewMenuBtn.addEventListener("click", toggleClimbOverviewModeMenu);
-  els.climbOverviewModeButtons.forEach((button) => button.addEventListener("click", selectClimbOverviewModeFromMenu));
   els.screenshotBtn.addEventListener("click", takeMapScreenshot);
   els.screenshotButtonInput.addEventListener("change", updateScreenshotSettingsFromControls);
   els.screenshotAspectSelect.addEventListener("change", updateScreenshotSettingsFromControls);
@@ -280,14 +215,6 @@ function bindEvents() {
       event.stopPropagation();
       return;
     }
-    if (event.key === "Escape" && state.overviewMenuOpen) {
-      closeOverviewModeMenu();
-      return;
-    }
-    if (event.key === "Escape" && state.cameraViewMenuOpen) {
-      closeCameraViewMenu();
-      return;
-    }
     if (event.key === "Escape" && state.theaterMode) {
       exitTheaterMode();
       return;
@@ -299,7 +226,6 @@ function bindEvents() {
       !els.settingsDialog.open && !els.galleryDialog.open
     ) exitMapFullscreen();
   });
-  document.addEventListener("click", closeOverviewModeMenuOnOutsideClick);
   document.addEventListener("click", closeZoneHelpOnOutsideClick);
   document.addEventListener("click", closeTheaterModeOnOutsideClick);
   window.addEventListener("beforeunload", () => {

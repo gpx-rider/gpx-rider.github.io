@@ -5,7 +5,7 @@ URL := http://$(HOST):$(PORT)/app/
 # `make` with no target regenerates derived in-app gallery data and runs the
 # tests — the same generation the deploy GitHub Action performs before publishing.
 .DEFAULT_GOAL := all
-.PHONY: all run test gallery-data rider-dot-model
+.PHONY: all run test gallery-data
 
 all: gallery-data test
 
@@ -18,9 +18,3 @@ test:
 
 gallery-data:
 	@python3 scripts/generate_gallery_json.py
-
-# Not part of `all` — app/assets/rider-dot.glb is a deterministic, checked-in
-# asset that only needs regenerating after editing the generator script
-# itself (e.g. to retune the rider dot's color or dimensions).
-rider-dot-model:
-	@python3 scripts/generate_rider_dot_model.py

@@ -4,18 +4,6 @@
       "id": "0050_jested",
       "title": "Ještěd",
       "description": "A short but steady climb toward one of the Czech Republic’s most iconic mountaintop landmarks. The route starts near Záskalí and works its way upward in three distinct steps, saving the steepest section for the final approach to Hotel Ještěd and its unmistakable tower above Liberec.",
-      "previewCamera": {
-        "center": {
-          "lat": 50.732867,
-          "lng": 14.985417,
-          "altitude": 1009.1
-        },
-        "heading": 129.41,
-        "range": 297.6,
-        "tilt": 81.28,
-        "roll": 0,
-        "fov": 35
-      },
       "gpx": "gallery/0050_jested/export.gpx",
       "distanceMeters": 13194,
       "ascentMeters": 593,
@@ -208,18 +196,6 @@
       "id": "0100_goldengate",
       "title": "Golden Gate Bridge",
       "description": "A short scenic ride along the San Francisco coast, heading toward the iconic red towers of the Golden Gate Bridge. Expect big ocean views, rolling hills, glimpses of San Francisco Bay, and a finish near Point Lobos.",
-      "previewCamera": {
-        "center": {
-          "lat": 37.814005,
-          "lng": -122.474482,
-          "altitude": -0.2
-        },
-        "heading": 121.66,
-        "range": 999.8,
-        "tilt": 75.11,
-        "roll": 0,
-        "fov": 35
-      },
       "gpx": "gallery/0100_goldengate/export.gpx",
       "distanceMeters": 10020,
       "ascentMeters": 192,
@@ -412,7 +388,6 @@
       "id": "0200_stelvio_pass",
       "title": "Stelvio Pass",
       "description": "A high-alpine ride from Stilfs over the legendary Stelvio Pass and down toward Bormio. Expect towering mountain views, dramatic switchbacks, exposed slopes, and one of the most recognizable roads in cycling.",
-      "previewCamera": null,
       "gpx": "gallery/0200_stelvio_pass/export.gpx",
       "distanceMeters": 30081,
       "ascentMeters": 1494,
@@ -605,7 +580,6 @@
       "id": "0300_alpe_d_huez",
       "title": "Alpe d’Huez",
       "description": "A classic alpine climb from Le Bourg-d’Oisans to Alpe d’Huez, famous for its 21 hairpins and years of grand-tour drama. Expect tight switchbacks, big valley views, and a final stretch high above the mountains before an easy cooldown.",
-      "previewCamera": null,
       "gpx": "gallery/0300_alpe_d_huez/export.gpx",
       "distanceMeters": 19954,
       "ascentMeters": 1233,
@@ -798,7 +772,6 @@
       "id": "0400_zlate_navrsi",
       "title": "Zlaté návrší",
       "description": "Climb from Semily deep into the Krkonoše mountains, taking on a 40 km ascent toward Zlaté návrší - often claimed to be the longest climb in the Czech Republic. After the main climb, the route crosses the high ridges past Labská bouda, the source of the Elbe, and Vosecká bouda - including a protected stretch that is much easier to enjoy when your bike is virtual.",
-      "previewCamera": null,
       "gpx": "gallery/0400_zlate_navrsi/export.gpx",
       "distanceMeters": 54569,
       "ascentMeters": 1198,
@@ -991,7 +964,6 @@
       "id": "0500_amalfi_coast",
       "title": "Amalfi Coast",
       "description": "A punchy coastal ride along the Amalfi Coast, where the road keeps climbing out of seaside towns and dropping back toward the Mediterranean. Expect cliffside views, tight bends, short hard efforts, and plenty of downhill breaks before finishing at Piazza Giacomo Matteotti.",
-      "previewCamera": null,
       "gpx": "gallery/0500_amalfi_coast/export.gpx",
       "distanceMeters": 31711,
       "ascentMeters": 1480,
@@ -1184,18 +1156,6 @@
       "id": "0600_boulder",
       "title": "Boulder Foothills",
       "description": "A punchy ride through the Colorado foothills around Boulder, where the road keeps kicking up into short climbs before dropping into fast descents. Expect canyon roads, open mountain views, dry Rocky Mountain scenery, and a sawtooth profile that feels made for natural intervals.",
-      "previewCamera": {
-        "center": {
-          "lat": 40.006029,
-          "lng": -105.296015,
-          "altitude": 1891.1
-        },
-        "heading": -64.04,
-        "range": 5465.4,
-        "tilt": 83.69,
-        "roll": 0,
-        "fov": 35
-      },
       "gpx": "gallery/0600_boulder/export.gpx",
       "distanceMeters": 48202,
       "ascentMeters": 1594,
@@ -1388,18 +1348,6 @@
       "id": "0700_los_angeles",
       "title": "Griffith Observatory",
       "description": "Ride from downtown Los Angeles into the Hollywood Hills, passing city landmarks before climbing through Griffith Park to one of LA’s most famous viewpoints. Expect skyline views, dry canyon scenery, rolling park roads, and a finish near Griffith Observatory above the city.",
-      "previewCamera": {
-        "center": {
-          "lat": 34.118049,
-          "lng": -118.300234,
-          "altitude": 345.8
-        },
-        "heading": -36.09,
-        "range": 125.1,
-        "tilt": 81.47,
-        "roll": 0,
-        "fov": 35
-      },
       "gpx": "gallery/0700_los_angeles/export.gpx",
       "distanceMeters": 36167,
       "ascentMeters": 736,
@@ -1592,7 +1540,6 @@
       "id": "0800_kona",
       "title": "Big Island Full-Distance Ride",
       "description": "Ride a full-distance route across Hawaiʻi’s Big Island: lava fields, ocean views, long exposed roads, and a distance that turns “I’ll just try it for a bit” into a very serious conversation with your legs.\n\nNobody expects anyone to finish a 180 km virtual ride in one go. Except Jan, obviously. But the route is there whenever you feel dangerously optimistic.",
-      "previewCamera": null,
       "gpx": "gallery/0800_kona/export.gpx",
       "distanceMeters": 182388,
       "ascentMeters": 896,
@@ -1785,18 +1732,6 @@
       "id": "0900_prague",
       "title": "Prague Landmarks",
       "description": "A compact sightseeing ride through the heart of Prague, linking Vyšehrad, the National Theatre, Old Town Square, the Astronomical Clock, Charles Bridge, Petřín, Prague Castle, Letná, and Vítkov. Expect river views, historic squares, park climbs, castle panoramas, and a steady stream of postcard moments.",
-      "previewCamera": {
-        "center": {
-          "lat": 50.090377,
-          "lng": 14.401329,
-          "altitude": 280.1
-        },
-        "heading": -55.63,
-        "range": 222.5,
-        "tilt": 78.97,
-        "roll": 0,
-        "fov": 35
-      },
       "gpx": "gallery/0900_prague/export.gpx",
       "distanceMeters": 21087,
       "ascentMeters": 201,

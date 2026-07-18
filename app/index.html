@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>GPX Rider — Ride Any Route on Earth</title>
-    <meta name="description" content="Turn any GPX route into a photorealistic 3D ride. Feel every grade on your smart trainer—free, open source, and entirely in your browser.">
+    <meta name="description" content="Turn any GPX route into a live top-down ride. Feel every grade on your smart trainer—free, open source, and entirely in your browser.">
     <meta name="theme-color" content="#060708">
     <link rel="canonical" href="https://gpx-rider.github.io/">
     <meta property="og:locale" content="en_US">
@@ -12,22 +12,24 @@
     <meta property="og:site_name" content="GPX Rider">
     <meta property="og:url" content="https://gpx-rider.github.io/">
     <meta property="og:title" content="GPX Rider — Ride Any Route on Earth">
-    <meta property="og:description" content="Turn any GPX route into a photorealistic 3D ride. Feel every grade on your smart trainer—free, open source, and entirely in your browser.">
+    <meta property="og:description" content="Turn any GPX route into a live top-down ride. Feel every grade on your smart trainer—free, open source, and entirely in your browser.">
     <meta property="og:image" content="https://gpx-rider.github.io/assets/gpx-rider-sharing.jpg">
     <meta property="og:image:secure_url" content="https://gpx-rider.github.io/assets/gpx-rider-sharing.jpg">
     <meta property="og:image:type" content="image/jpeg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="GPX Rider showing a virtual cycling route through photorealistic 3D terrain">
+    <meta property="og:image:alt" content="GPX Rider showing a virtual cycling route on a top-down map">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="GPX Rider — Ride Any Route on Earth">
-    <meta name="twitter:description" content="Turn any GPX route into a photorealistic 3D ride. Feel every grade on your smart trainer—free, open source, and entirely in your browser.">
+    <meta name="twitter:description" content="Turn any GPX route into a live top-down ride. Feel every grade on your smart trainer—free, open source, and entirely in your browser.">
     <meta name="twitter:image" content="https://gpx-rider.github.io/assets/gpx-rider-sharing.jpg">
-    <meta name="twitter:image:alt" content="GPX Rider showing a virtual cycling route through photorealistic 3D terrain">
+    <meta name="twitter:image:alt" content="GPX Rider showing a virtual cycling route on a top-down map">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%23ff6a2b'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
+    <script src="./vendor/leaflet/leaflet.js"></script>
     <style>
       :root {
         --bg: #060708;
@@ -854,8 +856,8 @@
   </head>
   <body>
     <div class="page">
-      <!-- src is set by landing.mjs only if the 3D map can't load, so the happy
-           path never downloads this large still. -->
+      <!-- src is set by landing.mjs only if the map tiles can't load, so the
+           happy path never downloads this large still. -->
       <section id="gpxr-hero" aria-label="GPX Rider live route replay">
         <img id="gpxr-fallback" alt="GPX Rider terrain">
         <div id="gpxr-map"></div>
@@ -966,7 +968,7 @@
 
           <div class="hero-copy">
             <h1>Ride any route<br>on Earth.</h1>
-            <p>Drop in a GPX and ride the real terrain in photorealistic 3D, with the road grade driving your smart trainer. Free, open-source, no install.</p>
+            <p>Drop in a GPX and ride it on a live top-down map, with the road grade driving your smart trainer. Free, open-source, no install.</p>
             <div class="hero-actions">
               <a class="button button-primary hero-cta" href="app.html">
                 <span class="button-title">Ride this route <span class="mono">→</span></span>
@@ -988,7 +990,7 @@
 
       <div class="marquee">
         <span>GPX import</span><span class="marquee-divider">/</span>
-        <span>Photorealistic 3D maps</span><span class="marquee-divider">/</span>
+        <span>Top-down OpenStreetMap</span><span class="marquee-divider">/</span>
         <span>FTMS trainer control</span><span class="marquee-divider">/</span>
         <span>Heart-rate</span><span class="marquee-divider">/</span>
         <span>FIT export</span><span class="marquee-divider">/</span>
@@ -1002,14 +1004,14 @@
 
         <div class="feature-grid">
           <article class="feature-card feature-card-wide feature-card-large">
-            <div class="feature-index">01 · TERRAIN</div>
-            <h3>Photorealistic 3D terrain</h3>
-            <p>Every route rendered on Google Photorealistic 3D Maps with a follow camera, rider beacon, minimap, and cinematic overviews — orbit, ellipse fly-by, figure-eight fly-over, or straight-down satellite.</p>
+            <div class="feature-index">01 · MAP</div>
+            <h3>Live top-down map</h3>
+            <p>Every route rendered on a clean top-down OpenStreetMap, with a rider marker that follows and rotates to your heading, a whole-route overview, and one-click climb/segment framing.</p>
             <div class="tag-row">
-              <span>Orbit</span>
-              <span>Fly-by</span>
-              <span>Fly-over</span>
-              <span>Satellite</span>
+              <span>Follow</span>
+              <span>Overview</span>
+              <span>Climb focus</span>
+              <span>No API key</span>
             </div>
           </article>
 
@@ -1077,7 +1079,7 @@
 
       <footer class="footer">
         <div class="footer-brand"><span class="footer-dot"></span>GPX RIDER · © 2026 GPX Rider contributors</div>
-        <div class="footer-note">Hero replays a real GPX over Google Photorealistic 3D Maps · imagery © Google &amp; data providers. Best in Chrome or Edge.</div>
+        <div class="footer-note">Hero replays a real GPX over a top-down OpenStreetMap · map data © OpenStreetMap contributors.</div>
       </footer>
     </div>
 

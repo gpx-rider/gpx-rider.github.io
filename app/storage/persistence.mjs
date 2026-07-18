@@ -5,51 +5,32 @@
 // the one cross-cutting concern — so when adding a persisted setting, add it
 // to restoreSettings AND saveSettings here, plus the feature's own sync/apply.
 
-import {
-  normalizeClimbFocusMode,
-  normalizeOverviewMode,
-  syncCameraControls,
-  syncCenterRiderButton,
-  updateCameraSettingsLabels,
-} from "../camera/camera-ui.mjs";
+import { syncCenterRiderButton, enterOverviewMode } from "../map/map-view.mjs";
 import { syncDemoModeUi } from "../demo/demo-mode.mjs";
 import { resetGalleryMetadataExportForRoute } from "../gallery-ui/gallery-export.mjs";
 import { clamp, roundCoordinate } from "../core/geo.mjs";
 import { normalizeHudOrder } from "../hud/map-hud.mjs";
 import { updateStartButton } from "../ride/movement.mjs";
-import { enterOverviewMode } from "../camera/overview-camera.mjs";
 import { renderProfile } from "../route/profile-ui.mjs";
 import { updateRideUi } from "../ride/ride-ui.mjs";
 import { enrichRoute, routeTotalDistance } from "../route/route.mjs";
-import { BEACON_COLOR_PATTERN, renderRoute } from "../map/route-render.mjs";
+import { renderRoute } from "../map/route-render.mjs";
 import { updateRouteOverview } from "../route/route-load.mjs";
 import { parseAspectRatio } from "../map/screenshot.mjs";
 import {
   applyDisplaySettings,
   applyScreenshotButtonVisibility,
-  applyTerrainTilesSetting,
   syncDisplayControls,
   syncProfileSeriesButtons,
   syncRenderingControls,
   syncRiderProfileControls,
-  updateRenderingSettingsLabels,
   updateSpeedOutput,
 } from "../settings/settings-ui.mjs";
 import { els, state, updateProgressLabel } from "../core/state.mjs";
 import { readJson, removeStored, writeJson } from "./storage.mjs";
 import { renderZoneSummaries } from "../ride/training-zones.mjs";
 import {
-  CAMERA_CENTER_ALTITUDE_LIMIT_METERS,
-  CAMERA_PAN_LIMIT_METERS,
-  CAMERA_TILT_MAX,
-  CAMERA_TILT_MIN,
-  CAMERA_ZOOM_MAX,
-  CAMERA_ZOOM_MIN,
-  CLIMB_ORBIT_SECONDS_PER_REV_MAX,
-  CLIMB_ORBIT_SECONDS_PER_REV_MIN,
   DEFAULT_HUD_FIELD_ORDER,
-  FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS,
-  FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS,
   GRADE_INTERVAL_MAX_SECONDS,
   GRADE_INTERVAL_MIN_SECONDS,
   HEART_RATE_MAX_AGE_FORMULA_BASE,
@@ -63,76 +44,9 @@ const RIDE_STORAGE_KEY = "gpx-rider:last-ride";
 
 export function restoreSettings() {
   const settings = readJson(SETTINGS_STORAGE_KEY);
-  const zoom = Number(settings?.cameraZoom ?? settings?.cameraDistanceMeters);
-  const angle = Number(settings?.cameraAngleDegrees);
-  const behind = Number(settings?.cameraBehindMeters);
-  const headingOffset = Number(settings?.cameraHeadingOffsetDegrees);
-  const offsetForward = Number(settings?.cameraOffsetForwardMeters);
-  const offsetRight = Number(settings?.cameraOffsetRightMeters);
-  const climbOrbitSeconds = Number(settings?.climbOrbitSecondsPerRev);
-  const firstPersonHeight = Number(settings?.firstPersonCameraHeightMeters);
 
-  state.overviewMode = normalizeOverviewMode(settings?.overviewMode);
-  state.climbFocusMode = normalizeClimbFocusMode(settings?.climbFocusMode);
-  state.cameraViewPreset = settings?.cameraViewPreset === "firstPerson" ? "firstPerson" : null;
-  state.activeOverviewMode = state.overviewMode;
-  if (Number.isFinite(climbOrbitSeconds)) {
-    state.climbOrbitSecondsPerRev = clamp(
-      climbOrbitSeconds,
-      CLIMB_ORBIT_SECONDS_PER_REV_MIN,
-      CLIMB_ORBIT_SECONDS_PER_REV_MAX,
-    );
-  }
-
-  if (Number.isFinite(firstPersonHeight)) {
-    state.firstPersonCameraHeightMeters = clamp(
-      firstPersonHeight,
-      FIRST_PERSON_CAMERA_HEIGHT_MIN_METERS,
-      FIRST_PERSON_CAMERA_HEIGHT_MAX_METERS,
-    );
-  }
-
-  if (Number.isFinite(zoom)) {
-    state.cameraZoom = clamp(zoom, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
-  }
-
-  if (Number.isFinite(angle)) {
-    state.cameraAngleDegrees = clamp(angle, CAMERA_TILT_MIN, CAMERA_TILT_MAX);
-  }
-
-  if (Number.isFinite(behind)) {
-    state.cameraBehindMeters = clamp(behind, Number(els.cameraBehindInput.min), Number(els.cameraBehindInput.max));
-  }
-
-  if (Number.isFinite(headingOffset)) {
-    state.cameraHeadingOffsetDegrees = clamp(headingOffset, -180, 180);
-  }
-
-  if (Number.isFinite(offsetForward)) {
-    state.cameraOffsetForwardMeters = clamp(offsetForward, -CAMERA_PAN_LIMIT_METERS, CAMERA_PAN_LIMIT_METERS);
-  }
-
-  if (Number.isFinite(offsetRight)) {
-    state.cameraOffsetRightMeters = clamp(offsetRight, -CAMERA_PAN_LIMIT_METERS, CAMERA_PAN_LIMIT_METERS);
-  }
-
-  const centerAltitudeOffset = Number(settings?.cameraCenterAltitudeOffsetMeters);
-  if (Number.isFinite(centerAltitudeOffset)) {
-    state.cameraCenterAltitudeOffsetMeters = clamp(
-      centerAltitudeOffset,
-      -CAMERA_CENTER_ALTITUDE_LIMIT_METERS,
-      CAMERA_CENTER_ALTITUDE_LIMIT_METERS,
-    );
-  }
-
-  if (typeof settings?.centerRider === "boolean") {
-    state.centerRider = settings.centerRider;
-  }
-
-  if (state.centerRider) {
-    state.cameraOffsetForwardMeters = 0;
-    state.cameraOffsetRightMeters = 0;
-    state.cameraCenterAltitudeOffsetMeters = 0;
+  if (typeof settings?.followRider === "boolean") {
+    state.followRider = settings.followRider;
   }
 
   const gradeInterval = Number(settings?.gradeUpdateIntervalSeconds);
@@ -173,44 +87,8 @@ export function restoreSettings() {
     state.ftpWatts = Math.round(ftpWatts);
   }
 
-  if (typeof settings?.beaconEnabled === "boolean") {
-    state.beaconEnabled = settings.beaconEnabled;
-  }
-
-  const beaconDiameter = Number(settings?.beaconDiameterMeters);
-  if (Number.isFinite(beaconDiameter)) {
-    state.beaconDiameterMeters = clamp(beaconDiameter, Number(els.beaconDiameterInput.min), Number(els.beaconDiameterInput.max));
-  }
-
-  const beaconHeight = Number(settings?.beaconHeightMeters);
-  if (Number.isFinite(beaconHeight)) {
-    state.beaconHeightMeters = clamp(beaconHeight, Number(els.beaconHeightInput.min), Number(els.beaconHeightInput.max));
-  }
-
-  const beaconOpacity = Number(settings?.beaconOpacity);
-  if (Number.isFinite(beaconOpacity)) {
-    state.beaconOpacity = clamp(beaconOpacity, Number(els.beaconOpacityInput.min), Number(els.beaconOpacityInput.max));
-  }
-
-  if (typeof settings?.beaconColor === "string" && BEACON_COLOR_PATTERN.test(settings.beaconColor)) {
-    state.beaconColor = settings.beaconColor;
-  }
-
-  if (typeof settings?.terrainAvoidEnabled === "boolean") {
-    state.terrainAvoidEnabled = settings.terrainAvoidEnabled;
-  }
-
-  if (typeof settings?.terrainTilesEnabled === "boolean") {
-    state.terrainTilesEnabled = settings.terrainTilesEnabled;
-  }
-
   if (typeof settings?.routeGradeColorsEnabled === "boolean") {
     state.routeGradeColorsEnabled = settings.routeGradeColorsEnabled;
-  }
-
-  const terrainClearance = Number(settings?.terrainClearanceMeters);
-  if (Number.isFinite(terrainClearance)) {
-    state.terrainClearanceMeters = clamp(terrainClearance, Number(els.terrainClearanceInput.min), Number(els.terrainClearanceInput.max));
   }
 
   if (typeof settings?.showScreenshotButton === "boolean") {
@@ -225,22 +103,6 @@ export function restoreSettings() {
   const savedShotWidth = Number(settings?.screenshotWidth);
   if (Number.isFinite(savedShotWidth)) {
     state.screenshotWidth = clamp(Math.round(savedShotWidth), SCREENSHOT_WIDTH_MIN, SCREENSHOT_WIDTH_MAX);
-  }
-
-  if (typeof settings?.showMinimap === "boolean") {
-    state.showMinimap = settings.showMinimap;
-  }
-
-  if (typeof settings?.mapLabelsEnabled === "boolean") {
-    state.mapLabelsEnabled = settings.mapLabelsEnabled;
-  }
-
-  if (typeof settings?.cameraDebugEnabled === "boolean") {
-    state.cameraDebugEnabled = settings.cameraDebugEnabled;
-  }
-
-  if (typeof settings?.cameraDebugCollapsed === "boolean") {
-    state.cameraDebugCollapsed = settings.cameraDebugCollapsed;
   }
 
   if (typeof settings?.theaterHideClock === "boolean") {
@@ -260,9 +122,6 @@ export function restoreSettings() {
   }
   if (typeof settings?.theaterHideControls === "boolean") {
     state.theaterHideControls = settings.theaterHideControls;
-  }
-  if (typeof settings?.theaterHideMinimap === "boolean") {
-    state.theaterHideMinimap = settings.theaterHideMinimap;
   }
 
   if (Array.isArray(settings?.hudFieldOrder)) {
@@ -294,7 +153,6 @@ export function restoreSettings() {
     state.hudDockCollapsed = settings.hudDockCollapsed;
   }
 
-  els.centerRiderInput.checked = state.centerRider;
   syncCenterRiderButton();
   els.gradeIntervalInput.value = String(state.gradeUpdateIntervalSeconds);
   els.gradeIntervalOutput.value = `${state.gradeUpdateIntervalSeconds} s`;
@@ -306,11 +164,7 @@ export function restoreSettings() {
   renderZoneSummaries();
   syncProfileSeriesButtons();
   updateSpeedOutput();
-  syncCameraControls();
-  updateCameraSettingsLabels();
   syncRenderingControls();
-  updateRenderingSettingsLabels();
-  applyTerrainTilesSetting();
   els.screenshotButtonInput.checked = state.showScreenshotButton;
   els.screenshotAspectSelect.value = state.screenshotAspect;
   els.screenshotWidthSelect.value = String(state.screenshotWidth);
@@ -321,28 +175,8 @@ export function restoreSettings() {
 
 export function saveSettings() {
   writeJson(SETTINGS_STORAGE_KEY, {
-    cameraZoom: state.cameraZoom,
-    overviewMode: state.overviewMode,
-    climbFocusMode: state.climbFocusMode,
-    climbOrbitSecondsPerRev: state.climbOrbitSecondsPerRev,
-    cameraAngleDegrees: state.cameraAngleDegrees,
-    cameraBehindMeters: state.cameraBehindMeters,
-    cameraHeadingOffsetDegrees: state.cameraHeadingOffsetDegrees,
-    cameraOffsetForwardMeters: state.cameraOffsetForwardMeters,
-    cameraOffsetRightMeters: state.cameraOffsetRightMeters,
-    cameraCenterAltitudeOffsetMeters: state.cameraCenterAltitudeOffsetMeters,
-    firstPersonCameraHeightMeters: state.firstPersonCameraHeightMeters,
-    cameraViewPreset: state.cameraViewPreset === "firstPerson" ? "firstPerson" : null,
-    centerRider: state.centerRider,
+    followRider: state.followRider,
     routeGradeColorsEnabled: state.routeGradeColorsEnabled,
-    beaconEnabled: state.beaconEnabled,
-    beaconDiameterMeters: state.beaconDiameterMeters,
-    beaconHeightMeters: state.beaconHeightMeters,
-    beaconOpacity: state.beaconOpacity,
-    beaconColor: state.beaconColor,
-    terrainAvoidEnabled: state.terrainAvoidEnabled,
-    terrainTilesEnabled: state.terrainTilesEnabled,
-    terrainClearanceMeters: state.terrainClearanceMeters,
     showScreenshotButton: state.showScreenshotButton,
     screenshotAspect: state.screenshotAspect,
     screenshotWidth: state.screenshotWidth,
@@ -354,17 +188,12 @@ export function saveSettings() {
     restingHeartRateBpm: state.restingHeartRateBpm,
     maxHeartRateBpm: state.maxHeartRateBpm,
     ftpWatts: state.ftpWatts,
-    showMinimap: state.showMinimap,
-    mapLabelsEnabled: state.mapLabelsEnabled,
-    cameraDebugEnabled: state.cameraDebugEnabled,
-    cameraDebugCollapsed: state.cameraDebugCollapsed,
     theaterHideClock: state.theaterHideClock,
     theaterHideMeters: state.theaterHideMeters,
     theaterHideDock: state.theaterHideDock,
     theaterHideClimbBanner: state.theaterHideClimbBanner,
     theaterHideDemoChip: state.theaterHideDemoChip,
     theaterHideControls: state.theaterHideControls,
-    theaterHideMinimap: state.theaterHideMinimap,
     hudFieldOrder: [...state.hudFieldOrder],
     hudVisibleCount: state.hudVisibleCount,
     hudDockCollapsed: state.hudDockCollapsed,
@@ -406,12 +235,10 @@ export function restoreSavedRide() {
   state.galleryMetadata = savedRide.galleryMetadata && typeof savedRide.galleryMetadata === "object"
     ? structuredClone(savedRide.galleryMetadata)
     : null;
-  state.lastGalleryMetadataRefreshMs = 0;
   state.progressMeters = clamp(Number(savedRide.progressMeters) || 0, 0, routeTotalDistance(state.route));
   state.simulating = false;
   state.lastTick = 0;
 
-  state.overviewActive = true;
   resetGalleryMetadataExportForRoute();
   enterOverviewMode({ instant: true });
   updateStartButton();

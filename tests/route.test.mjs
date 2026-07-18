@@ -6,8 +6,8 @@ import {
   descentAt,
   enrichRoute,
   gradeAt,
+  headingAt,
   interpolateRoutePoint,
-  maxElevationNear,
   routeTotalAscent,
   routeTotalDescent,
   routeTotalDistance,
@@ -125,14 +125,13 @@ test("gradeAt reports climbing and descending", () => {
   assert.ok(gradeAt(route, (route[1].distance + route[2].distance) / 2) < 0, "second leg descends");
 });
 
-test("maxElevationNear reports the highest nearby track point", () => {
+test("headingAt reports the compass direction of travel", () => {
   const route = enrichRoute(points);
 
-  // Right on the middle (highest) point.
-  assert.equal(maxElevationNear(route, { lat: 50.001, lng: 14.400 }, 50), 105);
+  // The route heads due north throughout.
+  assert.ok(Math.abs(headingAt(route, route[1].distance) - 0) < 1);
 
-  // A wide radius sees the whole route; a tiny one near nothing sees nothing.
-  assert.equal(maxElevationNear(route, { lat: 50.001, lng: 14.400 }, 500), 105);
-  assert.equal(maxElevationNear(route, { lat: 50.000, lng: 14.400 }, 50), 100);
-  assert.equal(maxElevationNear(route, { lat: 51.000, lng: 14.400 }, 100), null);
+  // Clamped sampling at the very start/end still reads the route's direction.
+  assert.ok(Math.abs(headingAt(route, 0) - 0) < 1);
+  assert.ok(Math.abs(headingAt(route, routeTotalDistance(route)) - 0) < 1);
 });

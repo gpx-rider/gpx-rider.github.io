@@ -1,9 +1,10 @@
-import { clamp, haversine, lerp } from "../core/geo.mjs";
+import { bearing, clamp, haversine, lerp } from "../core/geo.mjs";
 import {
   CLIMB_NOISE_THRESHOLD_METERS,
   GRADE_LOOKAROUND_METERS,
   GRADE_MAX_PERCENT,
   GRADE_MIN_PERCENT,
+  HEADING_SAMPLE_METERS,
 } from "../core/tuning.mjs";
 
 // Returns `{ points, name }`: track/route points plus the GPX's own name
@@ -159,18 +160,15 @@ export function sliceRoute(route, startDistance, endDistance) {
   return enrichRoute(points);
 }
 
-// Highest route elevation within `radiusMeters` of a location, or null when
-// no track point is that close. Used as a free, offline terrain estimate for
-// camera terrain avoidance: on switchback climbs — where the follow camera is
-// most likely to clip into a hillside — the road itself covers the hill, so
-// nearby track points approximate the ground elevation off the route line.
-export function maxElevationNear(route, location, radiusMeters) {
-  let maxEle = null;
-  for (const point of route) {
-    if (haversine(point, location) > radiusMeters) continue;
-    if (maxEle === null || point.ele > maxEle) maxEle = point.ele;
-  }
-  return maxEle;
+// Compass heading (0-360) the rider is moving at `progressMeters`, sampled a
+// short window behind/ahead so it reflects the actual travel direction
+// instead of a single noisy GPX segment. Drives the rider marker's rotation.
+export function headingAt(route, progressMeters, { sampleMeters = HEADING_SAMPLE_METERS } = {}) {
+  if (route.length < 2) return 0;
+  const total = routeTotalDistance(route);
+  const from = interpolateRoutePoint(route, clamp(progressMeters - sampleMeters, 0, total));
+  const to = interpolateRoutePoint(route, clamp(progressMeters + sampleMeters, 0, total));
+  return (bearing(from, to) + 360) % 360;
 }
 
 export function gradeAt(route, distance, {
