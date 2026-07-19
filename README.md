@@ -265,8 +265,10 @@ When **online terrain** is enabled (on by default), the app anonymously fetches 
 
 The primary development and real-ride setup is:
 
-- **Wahoo KICKR v4** — smart trainer (FTMS);
-- **Wahoo TICKR** — Bluetooth heart-rate monitor;
+- **Wahoo KICKR v4** — smart trainer (FTMS)
+- **Wahoo KICKR v6** - smart trainer
+- **Wahoo TICKR** — Bluetooth heart-rate monitor
+- **Polar H10** - Bluetooth heart-rate monitor
 - **Tacx Flow (smart)** — smart trainer (ANT+ FE-C); verified: pairing, grade/resistance control, and speed and power telemetry.
 
 Other FTMS-compatible trainers and standard Bluetooth heart-rate sensors are expected to work, but this is the reference hardware tested against the app.
