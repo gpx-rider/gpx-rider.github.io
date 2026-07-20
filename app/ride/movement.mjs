@@ -252,6 +252,7 @@ function tick(now) {
       heartRateBpm: currentHeartRate(),
       caloriesKcal: currentCaloriesKcal(),
       routeProgressMeters: state.progressMeters,
+      cadenceRpm: state.trainerCadenceRpm,
     });
   }
 

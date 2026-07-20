@@ -105,6 +105,7 @@ function handleFecNotification(event) {
   callbacks.onTelemetry({
     speedKph: fec.telemetry.speedKph,
     powerWatts: fec.telemetry.powerWatts,
+    cadenceRpm: fec.telemetry.cadenceRpm,
     totalCaloriesKcal: null, // FE-C carries no accumulated calories; the app derives it from power
     heartRateBpm: fec.telemetry.heartRateBpm,
   });

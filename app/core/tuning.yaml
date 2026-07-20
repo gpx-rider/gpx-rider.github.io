@@ -813,6 +813,18 @@ training_zones:
   heart_rate_max_age_formula_base: 220
   profile_history_sample_limit: 1800
 
+  # Cadence meter (fullscreen left-side HUD): a fixed rpm scale with green in
+  # the target pedaling range and yellow/red bands outside it — unlike
+  # power/HR this isn't derived from a rider profile, so the bounds are plain
+  # constants rather than a formula.
+  cadence_meter_min_rpm: 40
+  cadence_meter_max_rpm: 140
+  cadence_zone_green_min_rpm: 90
+  cadence_zone_green_max_rpm: 110
+  cadence_zone_yellow_min_rpm: 75
+  cadence_zone_yellow_max_rpm: 125
+  cadence_zone_colors: { red: "#d9542f", yellow: "#e8b74e", green: "#57b877" }
+
   # Gross metabolic efficiency for converting measured cycling work into active
   # human calories. Power meters report mechanical work at the pedals; humans
   # spend more chemical energy than that to produce it. 0.24 means 24% of the
@@ -1049,6 +1061,20 @@ demo_ride:
   min_power_watts: 85
   max_power_watts: 360
   power_smoothing_tau_seconds: 7
+
+  # Target cadence model: a real rider grinds a lower cadence climbing and
+  # spins a higher one descending — a single negative slope against grade
+  # covers both (climbing: positive grade * negative slope = lower cadence;
+  # descending: negative grade * negative slope = higher cadence). Smoothed
+  # the same way power is, plus a little noise so it doesn't read as a
+  # perfectly flat line — exercises the cadence zone meter (green/yellow/red)
+  # across a route's grade changes.
+  flat_cadence_rpm: 88
+  cadence_rpm_per_grade_percent: -1.5
+  min_cadence_rpm: 55
+  max_cadence_rpm: 105
+  cadence_smoothing_tau_seconds: 5
+  cadence_noise_rpm: 2
 
   # Cycling physics inputs for solving speed from power and road grade.
   # drag_area is intentionally upright/hoods-ish so the demo feels like a

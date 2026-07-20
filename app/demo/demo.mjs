@@ -11,6 +11,8 @@ export function createDemoRideModel(config = DEMO_RIDE) {
     elapsedSeconds: 0,
     speedKph: 0,
     powerWatts: config.flat_power_watts,
+    cadenceRpm: config.flat_cadence_rpm,
+    cadenceNoiseRpm: 0,
     heartRateCoreBpm: config.resting_heart_rate_bpm,
     heartRateBpm: config.resting_heart_rate_bpm,
     lastHeartRateUpdateSeconds: -Infinity,
@@ -28,6 +30,12 @@ export function demoTargetPowerWatts(gradePercent, config = DEMO_RIDE) {
     ? config.flat_power_watts + grade * config.climb_watts_per_grade_percent
     : config.flat_power_watts + grade * config.descent_watts_per_grade_percent;
   return clamp(watts, config.min_power_watts, config.max_power_watts);
+}
+
+export function demoTargetCadenceRpm(gradePercent, config = DEMO_RIDE) {
+  const grade = Number.isFinite(gradePercent) ? gradePercent : 0;
+  const rpm = config.flat_cadence_rpm + grade * config.cadence_rpm_per_grade_percent;
+  return clamp(rpm, config.min_cadence_rpm, config.max_cadence_rpm);
 }
 
 export function demoSpeedForPower(powerWatts, gradePercent, config = DEMO_RIDE) {
@@ -66,6 +74,10 @@ export function advanceDemoRide(model, {
   const targetSpeedKph = demoSpeedForPower(model.powerWatts, gradePercent, config);
   model.speedKph = smoothToward(model.speedKph || targetSpeedKph, targetSpeedKph, dt, config.speed_smoothing_tau_seconds);
 
+  const targetCadenceRpm = demoTargetCadenceRpm(gradePercent, config);
+  model.cadenceRpm = smoothToward(model.cadenceRpm, targetCadenceRpm, dt, config.cadence_smoothing_tau_seconds);
+  model.cadenceNoiseRpm = (Math.random() * 2 - 1) * config.cadence_noise_rpm;
+
   if (Number.isFinite(caloriesFromPower)) {
     model.caloriesKcal += Math.max(0, caloriesFromPower);
   }
@@ -78,6 +90,7 @@ export function advanceDemoRide(model, {
   return {
     speedKph: Math.round(model.speedKph * 10) / 10,
     powerWatts: Math.round(model.powerWatts),
+    cadenceRpm: Math.round(clamp(model.cadenceRpm + model.cadenceNoiseRpm, config.min_cadence_rpm, config.max_cadence_rpm)),
     heartRateBpm: Math.round(model.heartRateBpm),
     caloriesKcal: Math.round(model.caloriesKcal),
   };
@@ -193,6 +206,7 @@ function pushDemoHistorySample(model, { point, routeProgressMeters, metersAdvanc
     distance: Math.round(Math.max(0, (model.historySamples.at(-1)?.distance ?? 0) + Math.max(0, metersAdvanced)) * 10) / 10,
     speedKph: Math.round(model.speedKph * 10) / 10,
     powerWatts: Math.round(model.powerWatts),
+    cadenceRpm: Math.round(model.cadenceRpm),
     heartRateBpm: Math.round(model.heartRateBpm),
     caloriesKcal: Math.round(model.caloriesKcal),
     routeProgressMeters: Math.round(routeProgressMeters * 10) / 10,

@@ -286,6 +286,7 @@ function handleBikeData(event) {
   const telemetry = {
     speedKph: null,
     powerWatts: null,
+    cadenceRpm: null,
     totalCaloriesKcal: null,
     heartRateBpm: null,
   };
@@ -298,7 +299,12 @@ function handleBikeData(event) {
   }
 
   if (flags & 0x0002) index += 2; // average speed
-  if (flags & 0x0004) index += 2; // instantaneous cadence
+
+  if ((flags & 0x0004) && index + 2 <= data.byteLength) {
+    // Instantaneous cadence: uint16 in units of 0.5 rpm.
+    telemetry.cadenceRpm = data.getUint16(index, true) / 2;
+    index += 2;
+  }
   if (flags & 0x0008) index += 2; // average cadence
   if (flags & 0x0010) index += 3; // total distance (uint24)
   if (flags & 0x0020) index += 2; // resistance level

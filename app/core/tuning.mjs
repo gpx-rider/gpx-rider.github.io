@@ -246,6 +246,13 @@ export const HEART_RATE_ZONE_DEFINITIONS = req("training_zones", "heart_rate_zon
 export const HEART_RATE_MAX_AGE_FORMULA_BASE = req("training_zones", "heart_rate_max_age_formula_base");
 export const PROFILE_HISTORY_SAMPLE_LIMIT = req("training_zones", "profile_history_sample_limit");
 export const CYCLING_GROSS_EFFICIENCY = req("training_zones", "cycling_gross_efficiency");
+export const CADENCE_METER_MIN_RPM = req("training_zones", "cadence_meter_min_rpm");
+export const CADENCE_METER_MAX_RPM = req("training_zones", "cadence_meter_max_rpm");
+export const CADENCE_ZONE_GREEN_MIN_RPM = req("training_zones", "cadence_zone_green_min_rpm");
+export const CADENCE_ZONE_GREEN_MAX_RPM = req("training_zones", "cadence_zone_green_max_rpm");
+export const CADENCE_ZONE_YELLOW_MIN_RPM = req("training_zones", "cadence_zone_yellow_min_rpm");
+export const CADENCE_ZONE_YELLOW_MAX_RPM = req("training_zones", "cadence_zone_yellow_max_rpm");
+export const CADENCE_ZONE_COLORS = req("training_zones", "cadence_zone_colors");
 
 // Climb banner
 export const CLIMB_BANNER_APPROACH_METERS = req("climb_banner", "approach_meters");
