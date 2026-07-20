@@ -3,7 +3,8 @@
 // session, activity) that Strava, Garmin Connect, and intervals.icu accept.
 //
 // samples: [{ t (unix seconds), lat, lng, ele (m), distance (m),
-//             speedKph, powerWatts, heartRateBpm }] — nullable fields allowed.
+//             speedKph, powerWatts, heartRateBpm, cadenceRpm }] — nullable
+//             fields allowed.
 // summary: { startTimeMs, totalElapsedSeconds, totalTimerSeconds,
 //            totalDistanceMeters, totalCalories (kcal, nullable) }
 
@@ -74,6 +75,7 @@ const RECORD_FIELDS = [
   [6, BASE_TYPE.uint16], // speed (m/s, scale 1000)
   [7, BASE_TYPE.uint16], // power (W)
   [3, BASE_TYPE.uint8], // heart_rate (bpm)
+  [4, BASE_TYPE.uint8], // cadence (rpm)
 ];
 const LAP_FIELDS = [
   [253, BASE_TYPE.uint32], // timestamp (lap end)
@@ -227,6 +229,7 @@ export function encodeFitActivity({ samples, summary }) {
       encodeScaled(Number.isFinite(sample.speedKph) ? sample.speedKph / 3.6 : NaN, 1000),
       Number.isFinite(sample.powerWatts) ? Math.max(0, Math.round(sample.powerWatts)) : null,
       Number.isFinite(sample.heartRateBpm) ? Math.round(sample.heartRateBpm) : null,
+      Number.isFinite(sample.cadenceRpm) ? Math.round(sample.cadenceRpm) : null,
     ]);
   }
 

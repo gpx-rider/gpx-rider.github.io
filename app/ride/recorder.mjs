@@ -11,7 +11,7 @@ import { RIDE_PERSIST_INTERVAL_MS, RIDE_SAMPLE_INTERVAL_MS } from "../core/tunin
 const RIDE_LOG_STORAGE_KEY = "gpx-rider:ride-log";
 
 // Samples are stored as compact arrays to keep the persisted log small:
-// [unixSeconds, lat, lng, ele, distanceMeters, speedKph, powerWatts, heartRateBpm, caloriesKcal, routeProgressMeters]
+// [unixSeconds, lat, lng, ele, distanceMeters, speedKph, powerWatts, heartRateBpm, caloriesKcal, routeProgressMeters, cadenceRpm]
 const log = emptyLog();
 
 function emptyLog() {
@@ -45,6 +45,7 @@ export function recordRideTick({
   heartRateBpm,
   caloriesKcal,
   routeProgressMeters,
+  cadenceRpm,
 }) {
   const now = Date.now();
   if (log.startedAtMs === null) log.startedAtMs = now;
@@ -65,6 +66,7 @@ export function recordRideTick({
     Number.isFinite(heartRateBpm) ? Math.round(heartRateBpm) : null,
     Number.isFinite(caloriesKcal) ? Math.round(caloriesKcal) : null,
     Number.isFinite(routeProgressMeters) ? Math.round(routeProgressMeters * 10) / 10 : null,
+    Number.isFinite(cadenceRpm) ? Math.round(cadenceRpm) : null,
   ]);
 
   if (now - log.lastPersistAtMs >= RIDE_PERSIST_INTERVAL_MS) persistRideLog();
@@ -119,7 +121,7 @@ function findLastCalories() {
 }
 
 export function rideLogSamples() {
-  return log.samples.map(([t, lat, lng, ele, distance, speedKph, powerWatts, heartRateBpm, caloriesKcal, routeProgressMeters]) => ({
+  return log.samples.map(([t, lat, lng, ele, distance, speedKph, powerWatts, heartRateBpm, caloriesKcal, routeProgressMeters, cadenceRpm]) => ({
     t,
     lat,
     lng,
@@ -130,6 +132,7 @@ export function rideLogSamples() {
     heartRateBpm,
     caloriesKcal,
     routeProgressMeters: Number.isFinite(routeProgressMeters) ? routeProgressMeters : distance,
+    cadenceRpm: Number.isFinite(cadenceRpm) ? cadenceRpm : null,
   }));
 }
 

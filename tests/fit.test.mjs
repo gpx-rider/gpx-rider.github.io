@@ -13,9 +13,9 @@ function sampleRide() {
   const startSeconds = START_MS / 1000;
   return {
     samples: [
-      { t: startSeconds, lat: 50.087, lng: 14.421, ele: 200, distance: 0, speedKph: 0, powerWatts: 0, heartRateBpm: 90 },
-      { t: startSeconds + 1, lat: 50.0871, lng: 14.4211, ele: 200.4, distance: 12, speedKph: 25.4, powerWatts: 180, heartRateBpm: 120 },
-      { t: startSeconds + 2, lat: 50.0872, lng: 14.4212, ele: 200.9, distance: 25, speedKph: null, powerWatts: null, heartRateBpm: null },
+      { t: startSeconds, lat: 50.087, lng: 14.421, ele: 200, distance: 0, speedKph: 0, powerWatts: 0, heartRateBpm: 90, cadenceRpm: 0 },
+      { t: startSeconds + 1, lat: 50.0871, lng: 14.4211, ele: 200.4, distance: 12, speedKph: 25.4, powerWatts: 180, heartRateBpm: 120, cadenceRpm: 88 },
+      { t: startSeconds + 2, lat: 50.0872, lng: 14.4212, ele: 200.9, distance: 25, speedKph: null, powerWatts: null, heartRateBpm: null, cadenceRpm: null },
     ],
     summary: {
       startTimeMs: START_MS,
@@ -76,6 +76,35 @@ test("encoded activity carries the app product name", () => {
   const bytes = encodeFitActivity(sampleRide());
   const text = new TextDecoder().decode(bytes);
   assert.ok(text.includes("GPX Rider"));
+});
+
+test("record message definition declares a cadence field carrying rpm", () => {
+  const bytes = encodeFitActivity(sampleRide());
+
+  // Record definition is local type 2 (header byte 0x42): reserved,
+  // architecture, global_msg_num (20 = record), field_count, then
+  // [field_number, size, base_type] triples. field_number 4 is cadence
+  // (uint8, base type 0x02); the sample with cadenceRpm 88 must appear as
+  // a raw 88 (0x58) byte in the following record data.
+  const defHeaderIndex = bytes.findIndex((byte, i) =>
+    byte === 0x42 && bytes[i + 1] === 0 && bytes[i + 2] === 0 && bytes[i + 3] === 20 && bytes[i + 4] === 0
+  );
+  assert.notEqual(defHeaderIndex, -1, "record definition message not found");
+
+  const fieldCount = bytes[defHeaderIndex + 5];
+  const fieldsStart = defHeaderIndex + 6;
+  let cadenceFieldFound = false;
+  for (let i = 0; i < fieldCount; i += 1) {
+    const [fieldNumber, size, baseType] = bytes.slice(fieldsStart + i * 3, fieldsStart + i * 3 + 3);
+    if (fieldNumber === 4) {
+      assert.equal(size, 1, "cadence is a 1-byte field");
+      assert.equal(baseType, 0x02, "cadence is uint8");
+      cadenceFieldFound = true;
+    }
+  }
+  assert.ok(cadenceFieldFound, "record definition must declare field 4 (cadence)");
+
+  assert.ok(bytes.includes(88), "cadence value 88 rpm must appear in the encoded record data");
 });
 
 test("encoding refuses an empty ride", () => {
