@@ -86,18 +86,15 @@ function hasElevation(point) {
 // Route positions stay on the horizontal axis. Convert only at boundaries
 // where a caller needs meters traveled along the road.
 export function roadDistanceAt(route, progress) {
-  return cumulativeFieldAt(route, progress, roadDistanceAxis(route));
+  return cumulativeFieldAt(route, progress, "roadDistance");
 }
 
-function roadDistanceAxis(route) {
-  return Number.isFinite(route.at(-1)?.roadDistance) ? "roadDistance" : "distance";
-}
-
-export function advanceAlongRoad(route, progress, meters) {
+export function advanceAlongRoad(route, progress, meters, targetProgress = routeTotalDistance(route)) {
   const start = roadDistanceAt(route, progress);
-  const end = Math.min(roadDistanceAt(route, routeTotalDistance(route)), start + Math.max(0, meters));
+  const limit = roadDistanceAt(route, targetProgress);
+  const end = Math.min(limit, start + Math.max(0, meters));
   return {
-    progress: cumulativeFieldAt(route, end, "distance", roadDistanceAxis(route)),
+    progress: end === limit ? targetProgress : cumulativeFieldAt(route, end, "distance", "roadDistance"),
     metersAdvanced: end - start,
   };
 }
@@ -227,7 +224,10 @@ export function gradeAt(route, distance, {
   if (route.at(-1)?.missingElevations) {
     const left = firstPointAtOrAfter(route, lookBehind);
     const start = route[left].distance > lookBehind ? left - 1 : left;
-    const end = firstPointAtOrAfter(route, lookAhead);
+    // Interpolation uses the final point at the finish, even when coordinates repeat.
+    const end = lookAhead >= routeTotalDistance(route)
+      ? route.length - 1
+      : firstPointAtOrAfter(route, lookAhead);
     if (route[end].missingElevations > (route[start - 1]?.missingElevations ?? 0)) return 0;
   }
   const from = interpolateRoutePoint(route, lookBehind);

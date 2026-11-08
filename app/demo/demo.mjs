@@ -1,5 +1,5 @@
 import { clamp, roundCoordinate } from "../core/geo.mjs";
-import { advanceAlongRoad, gradeAt, roadDistanceAt, interpolateRoutePoint } from "../route/route.mjs";
+import { advanceAlongRoad, gradeAt, interpolateRoutePoint, roadDistanceAt } from "../route/route.mjs";
 import { CYCLING_GROSS_EFFICIENCY, DEMO_RIDE } from "../core/tuning.mjs";
 import { activeCaloriesFromPower } from "../core/units.mjs";
 
@@ -108,7 +108,7 @@ export function seedDemoHistory(model, {
   }
 
   const targetMeters = clamp(progressMeters, 0, route.at(-1).distance ?? 0);
-  const startSeconds = nowSeconds - Math.max(1, Math.ceil(targetMeters / Math.max(1, config.min_speed_kph / 3.6)));
+  const startSeconds = nowSeconds - Math.max(1, Math.ceil(roadDistanceAt(route, targetMeters) / Math.max(1, config.min_speed_kph / 3.6)));
   let distanceMeters = 0;
 
   while (distanceMeters < targetMeters) {
@@ -129,10 +129,9 @@ export function seedDemoHistory(model, {
       config,
     });
 
-    const remainingMeters = roadDistanceAt(route, targetMeters) - roadDistanceAt(route, distanceMeters);
-    const step = advanceAlongRoad(route, distanceMeters, (model.speedKph / 3.6) * sampleSeconds);
-    const metersAdvanced = Math.min(step.metersAdvanced, remainingMeters);
-    distanceMeters = step.metersAdvanced >= remainingMeters ? targetMeters : step.progress;
+    const stepMeters = (model.speedKph / 3.6) * sampleSeconds;
+    const { progress, metersAdvanced } = advanceAlongRoad(route, distanceMeters, stepMeters, targetMeters);
+    distanceMeters = progress;
     advanceDemoRide(model, {
       elapsedSeconds: 0,
       gradePercent: gradeAt(route, distanceMeters),

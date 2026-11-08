@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   advanceAlongRoad,
-
   ascentAt,
   densifyRoute,
   descentAt,
@@ -11,7 +10,6 @@ import {
   interpolateRoutePoint,
   maxElevationNear,
   roadDistanceAt,
-
   routeTotalAscent,
   routeTotalDescent,
   routeTotalDistance,
@@ -157,6 +155,13 @@ test("road distance includes both slopes and grade still uses horizontal distanc
   assert.equal(gradeAt(gap, horizontal / 2), 0);
   assert.equal(gradeAt(gap, horizontal), 0);
   assert.equal(routeTotalDescent(gap), 0);
+
+  const duplicateFinish = enrichRoute([
+    start,
+    { ...finish, ele: start.ele },
+    { ...finish, ele: 0, elevationMissing: true },
+  ]);
+  assert.equal(gradeAt(duplicateFinish, total - 5), 0);
 });
 
 test("road travel advances across a summit and credits only the distance to the finish", () => {

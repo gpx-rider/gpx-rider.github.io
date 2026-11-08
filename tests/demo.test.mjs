@@ -9,6 +9,7 @@ import {
   demoTargetPowerWatts,
   seedDemoHistory,
 } from "../app/demo/demo.mjs";
+import { enrichRoute, roadDistanceAt } from "../app/route/route.mjs";
 
 // A pinned rider profile so the tests exercise the physics/HR model, never
 // the shipped DEMO_RIDE tuning — retuning demo mode must not break this suite.
@@ -130,11 +131,11 @@ test("demo heart rate publishes at most once a second", () => {
 
 test("demo history can be seeded up to the current route position", () => {
   const model = createDemoRideModel(TEST_RIDE);
-  const route = [
-    { lat: 50, lng: 14, ele: 300, distance: 0 },
-    { lat: 50.005, lng: 14.005, ele: 330, distance: 500 },
-    { lat: 50.01, lng: 14.01, ele: 310, distance: 1000 },
-  ];
+  const route = enrichRoute([
+    { lat: 50, lng: 14, ele: 300 },
+    { lat: 50.005, lng: 14.005, ele: 330 },
+    { lat: 50.01, lng: 14.01, ele: 310 },
+  ]);
 
   seedDemoHistory(model, {
     route,
@@ -143,7 +144,8 @@ test("demo history can be seeded up to the current route position", () => {
   });
 
   assert.ok(model.historySamples.length > 2);
-  assert.ok(model.historySamples.at(-1).routeProgressMeters >= 749);
+  assert.equal(model.historySamples.at(-1).routeProgressMeters, 750);
+  assert.ok(Math.abs(model.historySamples.at(-1).distance - roadDistanceAt(route, 750)) < 1);
   assert.ok(model.elapsedSeconds > 0);
   assert.ok(model.caloriesKcal > 0);
   assert.ok(Number.isFinite(model.historySamples.at(-1).speedKph));
