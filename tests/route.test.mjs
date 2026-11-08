@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  advanceAlongRoad,
   ascentAt,
   densifyRoute,
   descentAt,
@@ -8,6 +9,7 @@ import {
   gradeAt,
   interpolateRoutePoint,
   maxElevationNear,
+  roadDistanceAt,
   routeTotalAscent,
   routeTotalDescent,
   routeTotalDistance,
@@ -135,4 +137,43 @@ test("maxElevationNear reports the highest nearby track point", () => {
   assert.equal(maxElevationNear(route, { lat: 50.001, lng: 14.400 }, 500), 105);
   assert.equal(maxElevationNear(route, { lat: 50.000, lng: 14.400 }, 50), 100);
   assert.equal(maxElevationNear(route, { lat: 51.000, lng: 14.400 }, 100), null);
+});
+
+test("road distance includes both slopes and grade still uses horizontal distance", () => {
+  const [start, summit, finish] = points;
+  const horizontal = routeTotalDistance(enrichRoute([start, summit]));
+  const rise = horizontal / 10;
+  const track = [start, { ...summit, ele: start.ele + rise }, { ...finish, ele: start.ele }];
+  const route = enrichRoute(track);
+  const total = routeTotalDistance(route);
+  assert.ok(Math.abs(roadDistanceAt(route, total) - Math.hypot(total, 2 * rise)) < 1e-6);
+  assert.ok(Math.abs(gradeAt(route, horizontal / 2) - 10) < 1e-6);
+  assert.ok(Math.abs(gradeAt(route, horizontal * 1.5) + 10) < 1e-6);
+
+  const gap = enrichRoute([start, { ...track[1], ele: 0, elevationMissing: true }, track[2]]);
+  assert.equal(roadDistanceAt(gap, total), total);
+  assert.equal(gradeAt(gap, horizontal / 2), 0);
+  assert.equal(gradeAt(gap, horizontal), 0);
+  assert.equal(routeTotalDescent(gap), 0);
+
+  const duplicateFinish = enrichRoute([
+    start,
+    { ...finish, ele: start.ele },
+    { ...finish, ele: 0, elevationMissing: true },
+  ]);
+  assert.equal(gradeAt(duplicateFinish, total - 5), 0);
+});
+
+test("road travel advances across a summit and credits only the distance to the finish", () => {
+  const route = enrichRoute(points);
+  const horizontal = routeTotalDistance(route);
+  const road = roadDistanceAt(route, horizontal);
+  const first = advanceAlongRoad(route, 0, horizontal);
+  assert.ok(first.progress > route[1].distance && first.progress < horizontal);
+  assert.equal(first.metersAdvanced, horizontal);
+  assert.ok(Math.abs(roadDistanceAt(route, first.progress) - horizontal) < 1e-6);
+
+  const last = advanceAlongRoad(route, first.progress, 1);
+  assert.equal(last.progress, horizontal);
+  assert.ok(Math.abs(last.metersAdvanced - (road - horizontal)) < 1e-6);
 });

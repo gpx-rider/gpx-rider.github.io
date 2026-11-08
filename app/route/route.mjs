@@ -14,18 +14,23 @@ export function parseGpx(text) {
   const parserError = doc.querySelector("parsererror");
   if (parserError) return { points: [], name: null };
 
-  const points = [...doc.querySelectorAll("trkpt, rtept")].map((point) => ({
-    lat: Number(point.getAttribute("lat")),
-    lng: Number(point.getAttribute("lon")),
-    ele: Number(point.querySelector("ele")?.textContent ?? 0),
-  })).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+  const points = [...doc.querySelectorAll("trkpt, rtept")].map((point) => {
+    const text = point.querySelector("ele")?.textContent.trim();
+    const ele = text ? Number(text) : NaN;
+    return {
+      lat: Number(point.getAttribute("lat")),
+      lng: Number(point.getAttribute("lon")),
+      ele: Number.isFinite(ele) ? ele : 0,
+      ...(Number.isFinite(ele) ? {} : { elevationMissing: true }),
+    };
+  }).filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
 
   const name = doc.querySelector("metadata > name, trk > name, rte > name")?.textContent.trim() || null;
 
   return { points, name };
 }
 
-// Adds cumulative track fields to each point: `distance` ridden so far plus
+// Adds cumulative horizontal `distance` and `roadDistance` to each point, plus
 // `ascent`/`descent` climbed and dropped so far. Ascent and descent are
 // noise-filtered: an elevation trend only counts once it exceeds
 // CLIMB_NOISE_THRESHOLD_METERS in one direction, so meter-level GPX jitter
@@ -37,12 +42,23 @@ export function enrichRoute(points, {
   noiseThresholdMeters = CLIMB_NOISE_THRESHOLD_METERS,
 } = {}) {
   let distance = 0;
+  let roadDistance = 0;
+  let missingElevations = 0;
   let ascent = 0;
   let descent = 0;
   let anchorEle = null;
   return points.map((point, index) => {
-    if (index > 0) distance += haversine(points[index - 1], point);
-    if (Number.isFinite(point.ele)) {
+    const knownElevation = hasElevation(point);
+    if (!knownElevation) missingElevations += 1;
+    if (index > 0) {
+      const previous = points[index - 1];
+      const horizontal = haversine(previous, point);
+      distance += horizontal;
+      roadDistance += horizontal > 0 && knownElevation && hasElevation(previous)
+        ? Math.hypot(horizontal, point.ele - previous.ele)
+        : horizontal;
+    }
+    if (knownElevation) {
       if (anchorEle === null) anchorEle = point.ele;
       const delta = point.ele - anchorEle;
       if (delta >= noiseThresholdMeters) {
@@ -52,13 +68,35 @@ export function enrichRoute(points, {
         descent -= delta;
         anchorEle = point.ele;
       }
+    } else {
+      anchorEle = null;
     }
-    return { ...point, distance, ascent, descent };
+    return { ...point, distance, roadDistance, ascent, descent, missingElevations };
   });
 }
 
 export function routeTotalDistance(route) {
   return route.length ? route.at(-1).distance : 0;
+}
+
+function hasElevation(point) {
+  return !point.elevationMissing && Number.isFinite(point.ele);
+}
+
+// Route positions stay on the horizontal axis. Convert only at boundaries
+// where a caller needs meters traveled along the road.
+export function roadDistanceAt(route, progress) {
+  return cumulativeFieldAt(route, progress, "roadDistance");
+}
+
+export function advanceAlongRoad(route, progress, meters, targetProgress = routeTotalDistance(route)) {
+  const start = roadDistanceAt(route, progress);
+  const limit = roadDistanceAt(route, targetProgress);
+  const end = Math.min(limit, start + Math.max(0, meters));
+  return {
+    progress: end === limit ? targetProgress : cumulativeFieldAt(route, end, "distance", "roadDistance"),
+    metersAdvanced: end - start,
+  };
 }
 
 export function routeTotalAscent(route) {
@@ -79,23 +117,26 @@ export function descentAt(route, distance) {
   return cumulativeFieldAt(route, distance, "descent");
 }
 
-function cumulativeFieldAt(route, distance, field) {
-  if (!route.length) return 0;
-  if (distance <= route[0].distance) return route[0][field];
-  if (distance >= route.at(-1).distance) return route.at(-1)[field];
-
+function firstPointAtOrAfter(route, value, axis = "distance") {
   let low = 0;
   let high = route.length - 1;
-  while (high - low > 1) {
+  while (low < high) {
     const mid = (low + high) >> 1;
-    if (route[mid].distance < distance) low = mid;
+    if (route[mid][axis] < value) low = mid + 1;
     else high = mid;
   }
+  return low;
+}
 
-  const previous = route[low];
-  const next = route[high];
-  const span = next.distance - previous.distance || 1;
-  return lerp(previous[field], next[field], (distance - previous.distance) / span);
+function cumulativeFieldAt(route, value, field, axis = "distance") {
+  if (!route.length) return 0;
+  if (value <= route[0][axis]) return route[0][field];
+  if (value >= route.at(-1)[axis]) return route.at(-1)[field];
+
+  const index = firstPointAtOrAfter(route, value, axis);
+  const previous = route[index - 1];
+  const next = route[index];
+  return lerp(previous[field], next[field], (value - previous[axis]) / (next[axis] - previous[axis]));
 }
 
 export function interpolateRoutePoint(route, distance) {
@@ -180,6 +221,15 @@ export function gradeAt(route, distance, {
 } = {}) {
   const lookBehind = Math.max(0, distance - lookaroundMeters);
   const lookAhead = Math.min(routeTotalDistance(route), distance + lookaroundMeters);
+  if (route.at(-1)?.missingElevations) {
+    const left = firstPointAtOrAfter(route, lookBehind);
+    const start = route[left].distance > lookBehind ? left - 1 : left;
+    // Interpolation uses the final point at the finish, even when coordinates repeat.
+    const end = lookAhead >= routeTotalDistance(route)
+      ? route.length - 1
+      : firstPointAtOrAfter(route, lookAhead);
+    if (route[end].missingElevations > (route[start - 1]?.missingElevations ?? 0)) return 0;
+  }
   const from = interpolateRoutePoint(route, lookBehind);
   const to = interpolateRoutePoint(route, lookAhead);
   const horizontal = Math.max(1, lookAhead - lookBehind);
