@@ -103,6 +103,22 @@ const DEFAULT_OPTIONS = {
  * @returns {Array} Detected climb objects with start/end metrics.
  */
 export function detectClimbs(route, options = {}) {
+  // Smooth and detect climbs within each continuous stretch of known elevation.
+  if (route.at(-1)?.missingElevations) {
+    const climbs = [];
+    let start = 0;
+    for (let i = 0; i <= route.length; i += 1) {
+      const point = route[i];
+      if (point && !point.elevationMissing && Number.isFinite(point.ele)) continue;
+      if (i - start >= 2) climbs.push(...detectClimbsWithElevation(route.slice(start, i), options));
+      start = i + 1;
+    }
+    return climbs;
+  }
+  return detectClimbsWithElevation(route, options);
+}
+
+function detectClimbsWithElevation(route, options) {
   const {
     resampleStepMeters,
     elevationMedianWindowMeters,

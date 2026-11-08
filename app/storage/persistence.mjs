@@ -391,6 +391,7 @@ export function restoreSavedRide() {
       lat: Number(point.lat),
       lng: Number(point.lng),
       ele: Number(point.ele),
+      ...(point.elevationMissing ? { elevationMissing: true } : {}),
     }))
     .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
 
@@ -442,6 +443,7 @@ export function saveRide() {
     lat: roundCoordinate(point.lat),
     lng: roundCoordinate(point.lng),
     ele: Math.round(point.ele * 10) / 10,
+    ...(point.elevationMissing || !Number.isFinite(point.ele) ? { elevationMissing: true } : {}),
   }));
 
   const saved = writeJson(RIDE_STORAGE_KEY, {

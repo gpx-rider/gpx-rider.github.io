@@ -17,7 +17,7 @@
         "fov": 35
       },
       "gpx": "gallery/0050_jested/export.gpx",
-      "distanceMeters": 13194,
+      "distanceMeters": 13236,
       "ascentMeters": 593,
       "descentMeters": 123,
       "bars": [
@@ -221,7 +221,7 @@
         "fov": 35
       },
       "gpx": "gallery/0100_goldengate/export.gpx",
-      "distanceMeters": 10020,
+      "distanceMeters": 10058,
       "ascentMeters": 192,
       "descentMeters": 192,
       "bars": [
@@ -414,7 +414,7 @@
       "description": "A high-alpine ride from Stilfs over the legendary Stelvio Pass and down toward Bormio. Expect towering mountain views, dramatic switchbacks, exposed slopes, and one of the most recognizable roads in cycling.",
       "previewCamera": null,
       "gpx": "gallery/0200_stelvio_pass/export.gpx",
-      "distanceMeters": 30081,
+      "distanceMeters": 30244,
       "ascentMeters": 1494,
       "descentMeters": 880,
       "bars": [
@@ -607,7 +607,7 @@
       "description": "A classic alpine climb from Le Bourg-d’Oisans to Alpe d’Huez, famous for its 21 hairpins and years of grand-tour drama. Expect tight switchbacks, big valley views, and a final stretch high above the mountains before an easy cooldown.",
       "previewCamera": null,
       "gpx": "gallery/0300_alpe_d_huez/export.gpx",
-      "distanceMeters": 19954,
+      "distanceMeters": 20070,
       "ascentMeters": 1233,
       "descentMeters": 183,
       "bars": [
@@ -789,7 +789,7 @@
         }
       ],
       "classification": {
-        "distanceClass": "XS",
+        "distanceClass": "S",
         "terrainClass": "Mountainous",
         "difficulty": "Easy"
       }
@@ -800,7 +800,7 @@
       "description": "Climb from Semily deep into the Krkonoše mountains, taking on a 40 km ascent toward Zlaté návrší - often claimed to be the longest climb in the Czech Republic. After the main climb, the route crosses the high ridges past Labská bouda, the source of the Elbe, and Vosecká bouda - including a protected stretch that is much easier to enjoy when your bike is virtual.",
       "previewCamera": null,
       "gpx": "gallery/0400_zlate_navrsi/export.gpx",
-      "distanceMeters": 54569,
+      "distanceMeters": 54650,
       "ascentMeters": 1198,
       "descentMeters": 745,
       "bars": [
@@ -993,7 +993,7 @@
       "description": "A punchy coastal ride along the Amalfi Coast, where the road keeps climbing out of seaside towns and dropping back toward the Mediterranean. Expect cliffside views, tight bends, short hard efforts, and plenty of downhill breaks before finishing at Piazza Giacomo Matteotti.",
       "previewCamera": null,
       "gpx": "gallery/0500_amalfi_coast/export.gpx",
-      "distanceMeters": 31711,
+      "distanceMeters": 32262,
       "ascentMeters": 1480,
       "descentMeters": 1541,
       "bars": [
@@ -1197,7 +1197,7 @@
         "fov": 35
       },
       "gpx": "gallery/0600_boulder/export.gpx",
-      "distanceMeters": 48202,
+      "distanceMeters": 48429,
       "ascentMeters": 1594,
       "descentMeters": 1859,
       "bars": [
@@ -1401,7 +1401,7 @@
         "fov": 35
       },
       "gpx": "gallery/0700_los_angeles/export.gpx",
-      "distanceMeters": 36167,
+      "distanceMeters": 36261,
       "ascentMeters": 736,
       "descentMeters": 492,
       "bars": [
@@ -1594,7 +1594,7 @@
       "description": "Ride a full-distance route across Hawaiʻi’s Big Island: lava fields, ocean views, long exposed roads, and a distance that turns “I’ll just try it for a bit” into a very serious conversation with your legs.\n\nNobody expects anyone to finish a 180 km virtual ride in one go. Except Jan, obviously. But the route is there whenever you feel dangerously optimistic.",
       "previewCamera": null,
       "gpx": "gallery/0800_kona/export.gpx",
-      "distanceMeters": 182388,
+      "distanceMeters": 182417,
       "ascentMeters": 896,
       "descentMeters": 896,
       "bars": [
@@ -1798,7 +1798,7 @@
         "fov": 35
       },
       "gpx": "gallery/0900_prague/export.gpx",
-      "distanceMeters": 21087,
+      "distanceMeters": 21110,
       "ascentMeters": 201,
       "descentMeters": 232,
       "bars": [

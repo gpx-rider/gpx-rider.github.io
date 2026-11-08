@@ -120,15 +120,15 @@ def parse_gpx(path):
             lng = float(el.get("lon"))
         except (TypeError, ValueError):
             continue
-        ele = 0.0
+        ele = None
         for child in el:
             if child.tag.rpartition("}")[2] == "ele":
                 try:
                     ele = float(child.text)
                 except (TypeError, ValueError):
-                    ele = 0.0
+                    ele = None
                 break
-        points.append((lat, lng, ele))
+        points.append((lat, lng, ele if ele is not None and math.isfinite(ele) else None))
     return points
 
 
@@ -136,13 +136,23 @@ def route_stats(points):
     """Total distance, noise-filtered ascent/descent (mirrors enrichRoute),
     and the ready-to-draw mini-profile bars."""
     distance = 0.0
+    road_distance = 0.0
     cumulative = [0.0]
     ascent = 0.0
     descent = 0.0
     anchor = points[0][2]
     for prev, cur in zip(points, points[1:]):
-        distance += haversine(prev[:2], cur[:2])
+        horizontal = haversine(prev[:2], cur[:2])
+        distance += horizontal
+        road_distance += (
+            math.hypot(horizontal, cur[2] - prev[2])
+            if horizontal > 0 and prev[2] is not None and cur[2] is not None
+            else horizontal
+        )
         cumulative.append(distance)
+        if cur[2] is None or anchor is None:
+            anchor = cur[2]
+            continue
         delta = cur[2] - anchor
         if delta >= CLIMB_NOISE_THRESHOLD_METERS:
             ascent += delta
@@ -160,7 +170,9 @@ def route_stats(points):
             index += 1
         span = cumulative[index + 1] - cumulative[index]
         t = (target - cumulative[index]) / span if span > 0 else 0.0
-        ele = points[index][2] + (points[index + 1][2] - points[index][2]) * t
+        start_ele = points[index][2] or 0.0
+        end_ele = points[index + 1][2] or 0.0
+        ele = start_ele + (end_ele - start_ele) * t
         elevations.append(ele)
 
     lo = min(elevations)
@@ -172,7 +184,7 @@ def route_stats(points):
         height = 8 + (ele - lo) / span * 92
         bars.append({"h": round(height, 1), "c": mini_bar_color(grade)})
 
-    return round(distance), round(ascent), round(descent), bars
+    return road_distance, ascent, descent, bars
 
 
 def parse_metadata(path):
@@ -211,9 +223,9 @@ def main():
         points = parse_gpx(gpx_file)
         if len(points) >= 2:
             distance, ascent, descent, bars = route_stats(points)
-            route["distanceMeters"] = distance
-            route["ascentMeters"] = ascent
-            route["descentMeters"] = descent
+            route["distanceMeters"] = round(distance)
+            route["ascentMeters"] = round(ascent)
+            route["descentMeters"] = round(descent)
             route["bars"] = bars
             classification = classify_route(distance, ascent)
             if classification:

@@ -21,6 +21,7 @@ import {
   interpolateRoutePoint,
   routeTotalAscent,
   routeTotalDescent,
+  roadDistanceAt,
   routeTotalDistance,
 } from "../route/route.mjs";
 import {
@@ -61,17 +62,20 @@ export function updateRideUi(options = {}) {
   if (!options.force && isMoving() && now - state.lastSlowUiAt < SLOW_UI_INTERVAL_MS) return;
   state.lastSlowUiAt = now;
 
-  const totalDistance = routeTotalDistance(state.route);
+  const horizontalDistance = routeTotalDistance(state.route);
+  const totalDistance = roadDistanceAt(state.route, horizontalDistance);
+  const riddenDistance = roadDistanceAt(state.route, state.progressMeters);
+  const remainingDistance = totalDistance - riddenDistance;
   const grade = gradeAt(state.route, state.progressMeters);
-  const progress = totalDistance ? state.progressMeters / totalDistance : 0;
+  const progress = totalDistance ? riddenDistance / totalDistance : 0;
   const totalAscent = routeTotalAscent(state.route);
   const totalDescent = routeTotalDescent(state.route);
   const ascentSoFar = ascentAt(state.route, state.progressMeters);
   const ascentLeft = Math.max(0, totalAscent - ascentSoFar);
-  const riddenText = formatDistance(state.progressMeters, state.distanceUnits);
-  const remainingText = formatDistance(totalDistance - state.progressMeters, state.distanceUnits);
+  const riddenText = formatDistance(riddenDistance, state.distanceUnits);
+  const remainingText = formatDistance(remainingDistance, state.distanceUnits);
   const ascentLeftText = formatAltitude(ascentLeft, state.distanceUnits);
-  const etaSeconds = currentEtaSeconds(totalDistance, totalAscent, totalDescent);
+  const etaSeconds = currentEtaSeconds(remainingDistance, totalAscent, totalDescent);
   const etaText = etaSeconds === null ? "--" : formatDuration(etaSeconds, state.durationFormat);
   const ascentText = formatAltitude(ascentSoFar, state.distanceUnits);
   const elapsedText = formatDuration(currentRideTimerSeconds(), state.durationFormat);
@@ -88,11 +92,11 @@ export function updateRideUi(options = {}) {
   els.altitudeStat.textContent = formatAltitude(point.ele, state.distanceUnits);
   els.progress.value = progress;
   updateProgressLabel(
-    `${formatDistance(state.progressMeters, state.distanceUnits)} of ${formatDistance(totalDistance, state.distanceUnits)}`,
+    `${formatDistance(riddenDistance, state.distanceUnits)} of ${formatDistance(totalDistance, state.distanceUnits)}`,
   );
   updateAscentProgress(ascentSoFar, totalAscent);
   updateClimbStatus(point);
-  renderProfile(progress);
+  renderProfile(horizontalDistance ? state.progressMeters / horizontalDistance : 0);
   updateMinimapPosition(point);
   updateCameraSettingsLabels();
   updateGalleryMetadataExport();
@@ -147,8 +151,7 @@ function updateAscentProgress(ascentSoFar, totalAscent) {
 
 // Estimated seconds to the finish (see eta.mjs for the model), or null when
 // there is nothing to base an estimate on yet.
-function currentEtaSeconds(totalDistance, totalAscent, totalDescent) {
-  const remainingMeters = totalDistance - state.progressMeters;
+function currentEtaSeconds(remainingMeters, totalAscent, totalDescent) {
   if (remainingMeters <= 0) return 0;
 
   // The simulation rides at a constant slider speed — plain arithmetic is

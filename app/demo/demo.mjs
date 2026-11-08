@@ -1,5 +1,5 @@
 import { clamp, roundCoordinate } from "../core/geo.mjs";
-import { gradeAt, interpolateRoutePoint } from "../route/route.mjs";
+import { advanceAlongRoad, gradeAt, roadDistanceAt, interpolateRoutePoint } from "../route/route.mjs";
 import { CYCLING_GROSS_EFFICIENCY, DEMO_RIDE } from "../core/tuning.mjs";
 import { activeCaloriesFromPower } from "../core/units.mjs";
 
@@ -129,11 +129,10 @@ export function seedDemoHistory(model, {
       config,
     });
 
-    const metersAdvanced = Math.min(
-      targetMeters - distanceMeters,
-      (model.speedKph / 3.6) * sampleSeconds,
-    );
-    distanceMeters += metersAdvanced;
+    const remainingMeters = roadDistanceAt(route, targetMeters) - roadDistanceAt(route, distanceMeters);
+    const step = advanceAlongRoad(route, distanceMeters, (model.speedKph / 3.6) * sampleSeconds);
+    const metersAdvanced = Math.min(step.metersAdvanced, remainingMeters);
+    distanceMeters = step.metersAdvanced >= remainingMeters ? targetMeters : step.progress;
     advanceDemoRide(model, {
       elapsedSeconds: 0,
       gradePercent: gradeAt(route, distanceMeters),

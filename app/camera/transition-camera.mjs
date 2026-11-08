@@ -29,8 +29,8 @@ import { clearOverviewAnimation, orbitSpin, startOverviewAnimation } from "./ove
 import { createEllipseFlyby, createFigureEightFlyover } from "./flyby.mjs";
 import { orbitCamera } from "./flyover.mjs";
 import { updateGalleryMetadataExport } from "../gallery-ui/gallery-export.mjs";
-import { bearing, clamp, haversine, toRad } from "../core/geo.mjs";
-import { gradeAt, interpolateRoutePoint, routeTotalDistance } from "../route/route.mjs";
+import { bearing, haversine, toRad } from "../core/geo.mjs";
+import { advanceAlongRoad, gradeAt, interpolateRoutePoint, routeTotalDistance } from "../route/route.mjs";
 import { updateRiderDot } from "../map/route-render.mjs";
 import { els, state } from "../core/state.mjs";
 import { CAMERA_TRANSITION, DEFAULT_MAP_FOV_DEGREES, ELLIPSE_FLYBY } from "../core/tuning.mjs";
@@ -199,13 +199,13 @@ function applyTransitionPose(pose) {
 function followDockStateAt(durationSeconds) {
   const total = routeTotalDistance(state.route);
   const speed = riderSpeedMps();
-  const progress = clamp(state.progressMeters + speed * durationSeconds, 0, total);
+  const { progress } = advanceAlongRoad(state.route, state.progressMeters, speed * durationSeconds);
   const target = followCameraTargetAt(progress, { terrainLift: false });
   if (!target) return null;
 
-  const dockSpeed = progress >= total - 0.01 ? 0 : speed;
   const heading = toRad(currentRouteHeading(progress));
   const gradeRatio = (Number(gradeAt(state.route, progress)) || 0) / 100;
+  const dockSpeed = progress >= total - 0.01 ? 0 : speed / Math.hypot(1, gradeRatio);
   const velocity = [
     dockSpeed * Math.sin(heading),
     dockSpeed * Math.cos(heading),
